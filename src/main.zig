@@ -248,6 +248,8 @@ pub fn main() !void {
             }
         }
 
+        const before = sdl.getPerformanceCounter();
+
         { // render
             const dt = @as(f32, @floatFromInt(sdl.getTicks() - lastTime)) / 1000.0;
             dz += 0;
@@ -287,6 +289,9 @@ pub fn main() !void {
 
             lastTime = sdl.getTicks();
         }
+
+        const after = sdl.getPerformanceCounter();
+        std.debug.print("render ms: {any}\n", .{1000*(@as(f32, @floatFromInt(after-before))/@as(f32, @floatFromInt(sdl.getPerformanceFrequency())))});
 
         { // upload and present
             try texture.update(null, &framebuffer, width * @sizeOf(u32));
