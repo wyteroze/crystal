@@ -27,21 +27,38 @@ const vertices = [8] Vec3_f32 {
 };
 
 const index_buffer = [_] u32 {
-    0, 1, 2, 3,
-    4, 5, 6, 7,
-    0, 4,
-    1, 5,
-    2, 6,
-    3, 7
+    // front
+    0, 1, 2,
+    0, 2, 3,
+
+    // back
+    4, 6, 5,
+    4, 7, 6,
+
+    // left
+    1, 5, 6,
+    1, 6, 2,
+
+    // right
+    4, 0, 3,
+    4, 3, 7,
+
+    // top
+    4, 5, 1,
+    4, 1, 0,
+
+    // bottom
+    3, 2, 6,
+    3, 6, 7,
 };
 
 const faces = [_] Face {
-    .{ .start = 0,  .count = 4 },
-    .{ .start = 4,  .count = 4 },
-    .{ .start = 8,  .count = 2 },
-    .{ .start = 10, .count = 2 },
-    .{ .start = 12, .count = 2 },
-    .{ .start = 14, .count = 2 },
+    .{ .start = 0,  .count = 6 },  // front
+    .{ .start = 6,  .count = 6 },  // back
+    .{ .start = 12, .count = 6 },  // left
+    .{ .start = 18, .count = 6 },  // right
+    .{ .start = 24, .count = 6 },  // top
+    .{ .start = 30, .count = 6 },  // bottom
 };
 
 fn clearBackground(fb: *Framebuffer) void {
