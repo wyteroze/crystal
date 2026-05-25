@@ -19,7 +19,7 @@ pub const Renderer = struct {
     sdl_window: *sdl.Window,
     sdl_renderer: *sdl.Renderer,
     sdl_texture: *sdl.Texture,
-    background_color: types.Color3RGB = .{ .r = 0, .g = 0, .b = 0 },
+    background_color: types.Color3RGB = .{ .r = 138, .g = 170, .b = 255 },
     framebuffer: []u32,
     width: c_int,
     height: c_int,
@@ -61,7 +61,7 @@ pub const Renderer = struct {
                     | (@as(u32, self.background_color.r) << 16)
                     | (@as(u32, self.background_color.g) << 8)
                     | (@as(u32, self.background_color.b));
-        
+
         @memset(self.framebuffer, color);
     }
 
