@@ -37,16 +37,41 @@ pub const Camera = struct {
         }};
     }
 
-    pub fn getViewMatrix(self: Camera) Mat4 {
-        const up = Vec3_SIMD{ 0.0, 1.0, 0.0 };
+    pub fn getLookDirection(self: Camera) Vec3_SIMD {
         const pitch = self.transform.rotation[0] * (std.math.pi / 180.0);
         const yaw = self.transform.rotation[1] * (std.math.pi / 180.0);
-
         const look_dir = Vec3_SIMD{
             @sin(yaw) * @cos(pitch),
             -@sin(pitch),
             @cos(yaw) * @cos(pitch)
         };
+
+        return look_dir;
+    }
+
+    pub fn getRightDirection(self: Camera) Vec3_SIMD {
+        const yaw = self.transform.rotation[1] * (std.math.pi / 180.0);
+        const look_dir = Vec3_SIMD{
+            @cos(yaw),
+            0,
+            -@sin(yaw)
+        };
+
+        return look_dir;
+    }
+
+    pub fn getUpDirection(self: Camera) Vec3_SIMD {
+        const up = math.cross(
+            self.getLookDirection(),
+            self.getRightDirection()
+        );
+
+        return up;
+    }
+
+    pub fn getViewMatrix(self: Camera) Mat4 {
+        const up = Vec3_SIMD{ 0.0, 1.0, 0.0 };
+        const look_dir = self.getLookDirection();
 
         const target = self.transform.position + look_dir;
         const camera_matrix = math.pointAt(self.transform.position, target, up);

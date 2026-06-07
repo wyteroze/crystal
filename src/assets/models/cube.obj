@@ -1,0 +1,42 @@
+# Cube mesh
+# 8 vertices, 12 triangles
+
+# vertices
+v 0 0 0
+v 0 1 0
+v 1 0 0
+v 1 1 0
+v 0 0 1
+v 0 1 1
+v 1 0 1
+v 1 1 1
+
+# texture coordinates
+vt 0 0
+vt 0 1
+vt 1 1
+vt 1 0
+
+# front face
+f 1/1 2/2 4/3
+f 1/1 4/3 3/4
+
+# left face
+f 5/1 6/2 2/3
+f 5/1 2/3 1/4
+
+# right face
+f 3/1 4/2 8/3
+f 3/1 8/3 7/4
+
+# top face
+f 2/1 6/2 8/3
+f 2/1 8/3 4/4
+
+# bottom face
+f 1/2 7/4 5/1
+f 1/2 3/3 7/4
+
+# back face
+f 7/1 8/2 6/3
+f 7/1 6/3 5/4

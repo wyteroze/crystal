@@ -3,23 +3,27 @@
 const std = @import("std");
 const types = @import("types.zig");
 const obj_parser = @import("parsers/obj.zig");
+const Sprite = @import("Sprite.zig").Sprite;
 
 const Vec3_SIMD = types.Vec3_SIMD;
+const Vertex = types.Vertex;
 const Face = types.Face;
 
 pub const Mesh = struct {
     allocator: std.mem.Allocator,
-    vertices: []Vec3_SIMD,
+    vertices: []Vertex,
     indices: []usize,
     faces: []types.Face,
+    texture: ?*Sprite,
 
     pub fn init(
         allocator: std.mem.Allocator,
-        vertices: []const Vec3_SIMD,
+        vertices: []const Vertex,
         indices: []const usize,
-        faces: []const Face
+        faces: []const Face,
+        texture: ?*Sprite
     ) !Mesh {
-        const v = try allocator.dupe(Vec3_SIMD, vertices);
+        const v = try allocator.dupe(Vertex, vertices);
         errdefer allocator.free(v);
 
         const i = try allocator.dupe(usize, indices);
@@ -32,7 +36,8 @@ pub const Mesh = struct {
             .allocator = allocator,
             .vertices = v,
             .indices = i,
-            .faces = f
+            .faces = f,
+            .texture = texture
         };
     }
 

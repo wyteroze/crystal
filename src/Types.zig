@@ -8,15 +8,22 @@ pub const Vec2 = struct { x: f32, y: f32 };
 pub const Vec2_u16 = struct { x: u16, y: u16 };
 pub const Vec2_u32 = struct { x: u32, y: u32 };
 pub const Vec4_SIMD = @Vector(4, f32);
-pub const Vec3_SIMD = @Vector(3, f32); // ignore fourth component, this is for optimization <- nvm
+pub const Vec3_SIMD = @Vector(3, f32);
+pub const Vec2_SIMD = @Vector(2, f32);
 pub const Face = struct {
     start: usize, // index into indices
     length: usize
 };
+
+pub const Vertex = struct {
+    position: Vec3_SIMD,
+    uv: Vec2_SIMD
+};
+
 pub const Triangle = struct {
-    pa: Vec3_SIMD,
-    pb: Vec3_SIMD,
-    pc: Vec3_SIMD,
+    pa: Vertex,
+    pb: Vertex,
+    pc: Vertex,
     color: u32, // 0x_AA_RR_GG_BB
     depth: f32
 };

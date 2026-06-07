@@ -6,11 +6,14 @@ const sdl = @import("zsdl2");
 const math      = @import("math.zig");
 const types     = @import("types.zig");
 const Mesh      = @import("Mesh.zig").Mesh;
+const Sprite    = @import("Sprite.zig").Sprite;
 const Camera    = @import("Camera.zig").Camera;
 
 const Mat4 = types.Mat4;
+const Vertex = types.Vertex;
 const Triangle  = types.Triangle;
 const Transform = types.Transform;
+const Vec2_SIMD = types.Vec2_SIMD;
 const Vec3_SIMD = types.Vec3_SIMD;
 const Vec4_SIMD = types.Vec4_SIMD;
 pub const Vec2_cint = struct { x: c_int, y: c_int };
@@ -23,6 +26,7 @@ pub const Renderer = struct {
     renderer: *sdl.Renderer,
     texture: *sdl.Texture,
     framebuffer: []u32,
+    depthbuffer: []f32,
     size: Vec2_cint,
     camera: *Camera,
     tri_buffer: std.ArrayList(Triangle),
@@ -37,6 +41,7 @@ pub const Renderer = struct {
             .renderer = renderer,
             .texture = texture,
             .framebuffer = try allocator.alloc(u32, @as(usize, @intCast(size.x * size.y))),
+            .depthbuffer = try allocator.alloc(f32, @as(usize, @intCast(size.x * size.y))),
             .size = size,
             .camera = camera,
             .tri_buffer = std.ArrayList(Triangle).empty,
@@ -48,6 +53,7 @@ pub const Renderer = struct {
         self.renderer.destroy();
         self.texture.destroy();
         self.allocator.free(self.framebuffer);
+        self.allocator.free(self.depthbuffer);
         self.tri_buffer.deinit(self.allocator);
         self.tri_raster_list.deinit(self.allocator);
     }
@@ -64,6 +70,7 @@ pub const Renderer = struct {
     // rendering methods
     pub fn drawBackground(self: *Renderer) void {
         @memset(self.framebuffer, clear_color);
+        @memset(self.depthbuffer, 0.0);
     }
 
     pub fn drawMesh(self: *Renderer, mesh: *const Mesh, transform: *const Transform) !void {
@@ -112,13 +119,13 @@ pub const Renderer = struct {
             var i = @as(usize, 0);
 
             while (i < face.length) : (i += 3) {
-                const ia = mesh.indices[face.start + i];
-                const ib = mesh.indices[face.start + i + 1];
-                const ic = mesh.indices[face.start + i + 2];
+                const ia = mesh.vertices[mesh.indices[face.start + i]];
+                const ib = mesh.vertices[mesh.indices[face.start + i + 1]];
+                const ic = mesh.vertices[mesh.indices[face.start + i + 2]];
 
-                const va = math.multiplyMatrixVector(world_matrix, mesh.vertices[ia]);
-                const vb = math.multiplyMatrixVector(world_matrix, mesh.vertices[ib]);
-                const vc = math.multiplyMatrixVector(world_matrix, mesh.vertices[ic]);
+                const va = math.multiplyMatrixVector(world_matrix, ia.position);
+                const vb = math.multiplyMatrixVector(world_matrix, ib.position);
+                const vc = math.multiplyMatrixVector(world_matrix, ic.position);
 
                 // culling
                 const world_normal = math.normal(va, vb, vc);
@@ -131,21 +138,27 @@ pub const Renderer = struct {
                 const color = math.luminanceToRGB(light_normal);
 
                 // world space to view space
-                const view_space = [3]Vec3_SIMD{
-                    math.multiplyMatrixVector(view_matrix, va),
-                    math.multiplyMatrixVector(view_matrix, vb),
-                    math.multiplyMatrixVector(view_matrix, vc)
+                var view_space = Triangle{
+                    .pa = Vertex{
+                        .position = math.multiplyMatrixVector(view_matrix, va),
+                        .uv = ia.uv
+                    },
+                    .pb = Vertex{
+                        .position = math.multiplyMatrixVector(view_matrix, vb),
+                        .uv = ib.uv
+                    },
+                    .pc = Vertex{
+                        .position = math.multiplyMatrixVector(view_matrix, vc),
+                        .uv = ic.uv
+                    },
+
+                    .color = color,
+                    .depth = 0 // we will set this below
                 };
 
-                const depth = (view_space[0][2] + view_space[1][2] + view_space[2][2]) / 3.0;
+                view_space.depth = (view_space.pa.position[2] + view_space.pb.position[2] + view_space.pc.position[2]) / 3.0;
 
-                const clip = math.clipTriangleAgainstPlane(Vec3_SIMD{ 0.0, 0.0, 0.1 }, Vec3_SIMD{ 0.0, 0.0, 1.0 }, .{
-                    .color = color,
-                    .depth = depth,
-                    .pa = view_space[0],
-                    .pb = view_space[1],
-                    .pc = view_space[2]
-                });
+                const clip = math.clipTriangleAgainstPlane(Vec3_SIMD{ 0.0, 0.0, 0.1 }, Vec3_SIMD{ 0.0, 0.0, 1.0 }, view_space);
 
                 for (0..clip.n) |n| {
                     const clipped = switch (n) {
@@ -156,10 +169,20 @@ pub const Renderer = struct {
                     };
 
                     // project from 3d to 2d
+                    const proj_a = math.multiplyMatrixVectorW(projection_matrix, clipped.pa.position);
+                    const proj_b = math.multiplyMatrixVectorW(projection_matrix, clipped.pb.position);
+                    const proj_c = math.multiplyMatrixVectorW(projection_matrix, clipped.pc.position);
+
+                    // divide UVs by W before dividing position
+                    const uv_a = clipped.pa.uv / @as(Vec2_SIMD, @splat(proj_a.w));
+                    const uv_b = clipped.pb.uv / @as(Vec2_SIMD, @splat(proj_b.w));
+                    const uv_c = clipped.pc.uv / @as(Vec2_SIMD, @splat(proj_c.w));
+
+                    // now divide position by W
                     var p = [3]Vec3_SIMD{
-                        math.multiplyMatrixVector(projection_matrix, clipped.pa),
-                        math.multiplyMatrixVector(projection_matrix, clipped.pb),
-                        math.multiplyMatrixVector(projection_matrix, clipped.pc)
+                        proj_a.xyz / @as(Vec3_SIMD, @splat(proj_a.w)),
+                        proj_b.xyz / @as(Vec3_SIMD, @splat(proj_b.w)),
+                        proj_c.xyz / @as(Vec3_SIMD, @splat(proj_c.w)),
                     };
 
                     // scale into view
@@ -173,9 +196,18 @@ pub const Renderer = struct {
 
                     // add to buffer to be rendered later
                     try self.tri_buffer.append(self.allocator, .{
-                        .pa = p[0],
-                        .pb = p[1],
-                        .pc = p[2],
+                        .pa = Vertex{
+                            .position = Vec3_SIMD{ p[0][0], p[0][1], 1.0 / proj_a.w },
+                            .uv = uv_a
+                        },
+                        .pb = Vertex{
+                            .position = Vec3_SIMD{ p[1][0], p[1][1], 1.0 / proj_b.w },
+                            .uv = uv_b
+                        },
+                        .pc = Vertex{
+                            .position = Vec3_SIMD{ p[2][0], p[2][1], 1.0 / proj_c.w },
+                            .uv = uv_c
+                        },
                         .color = clipped.color,
                         .depth = clipped.depth
                     });
@@ -183,12 +215,6 @@ pub const Renderer = struct {
             }
         }
 
-        // sort: far triangles first
-        std.sort.pdq(Triangle, self.tri_buffer.items, {}, struct {
-            fn lessThan(_: void, a: Triangle, b: Triangle) bool {
-                return a.depth > b.depth;
-            }
-        }.lessThan);
 
         const f_width  = @as(f32, @floatFromInt(self.size.x));
         const f_height = @as(f32, @floatFromInt(self.size.y));
@@ -228,9 +254,15 @@ pub const Renderer = struct {
                 self.tri_raster_list.replaceRangeAssumeCapacity(0, tris_to_process, &.{});
             }
 
-            for (self.tri_raster_list.items) |final_tri| {
-                self.drawTriangle(final_tri.pa, final_tri.pb, final_tri.pc, final_tri.color);
-                //self.drawTriangleWireframe(final_tri.pa, final_tri.pb, final_tri.pc, 0xFF_00_00_00);
+            if (mesh.texture) |t| {
+                for (self.tri_raster_list.items) |final_tri| {
+                    self.drawTexturedTriangle(final_tri, t.*);
+                }
+            } else {
+                for (self.tri_raster_list.items) |final_tri| {
+                    self.drawTriangle(final_tri.pa.position, final_tri.pb.position, final_tri.pc.position, final_tri.color);
+                    //self.drawTriangleWireframe(final_tri.pa.position, final_tri.pb.position, final_tri.pc.position, 0xFF_FF_FF_FF);
+                }
             }
         }
     }
@@ -392,14 +424,14 @@ pub const Renderer = struct {
                         Vec3_SIMD{ 0.0, 0.0, 1.0 },
                         p0_view,
                         p1_view
-                    );
+                    ).intersect;
                 } else if (d1 < 0.0) { // clip end point if behind near plane
                     end = math.vectorIntersectPlane(
                         Vec3_SIMD{ 0.0, 0.0, near_z },
                         Vec3_SIMD{ 0.0, 0.0, 1.0 },
                         p0_view,
                         p1_view
-                    );
+                    ).intersect;
                 }
 
                 const proj_start = math.multiplyMatrixVector(proj, start);
@@ -417,5 +449,174 @@ pub const Renderer = struct {
         LineClipper.drawClippedLine(self, view_origin, view_x, projection_matrix, sx, sy, 0xFF_FF_00_00); // x = red
         LineClipper.drawClippedLine(self, view_origin, view_y, projection_matrix, sx, sy, 0xFF_00_FF_00); // y = green
         LineClipper.drawClippedLine(self, view_origin, view_z, projection_matrix, sx, sy, 0xFF_00_00_FF); // z = blue
+    }
+
+    // I'm sorry
+    pub fn drawTexturedTriangle(self: *Renderer, tri: Triangle, sprite: Sprite) void {
+        var pa = tri.pa;
+        var pb = tri.pb;
+        var pc = tri.pc;
+
+        if (pb.position[1] < pa.position[1]) std.mem.swap(Vertex, &pa, &pb);
+        if (pc.position[1] < pa.position[1]) std.mem.swap(Vertex, &pa, &pc);
+        if (pc.position[1] < pb.position[1]) std.mem.swap(Vertex, &pb, &pc);
+
+        const x1 = @as(i32, @intFromFloat(pa.position[0]));
+        const y1 = @as(i32, @intFromFloat(pa.position[1]));
+        const tu1 = pa.uv[0];
+        const tv1 = pa.uv[1];
+        const tw1 = pa.position[2];
+
+        const x2 = @as(i32, @intFromFloat(pb.position[0]));
+        const y2 = @as(i32, @intFromFloat(pb.position[1]));
+        const tu2 = pb.uv[0];
+        const tv2 = pb.uv[1];
+        const tw2 = pb.position[2];
+
+        const x3 = @as(i32, @intFromFloat(pc.position[0]));
+        const y3 = @as(i32, @intFromFloat(pc.position[1]));
+        const tu3 = pc.uv[0];
+        const tv3 = pc.uv[1];
+        const tw3 = pc.position[2];
+
+        // top half
+        var dy1: i32 = y2 - y1;
+        var dx1: i32 = x2 - x1;
+        var dv1: f32 = tv2 - tv1;
+        var du1: f32 = tu2 - tu1;
+        var dw1: f32 = tw2 - tw1;
+
+        const dy2 = y3 - y1;
+        const dx2 = x3 - x1;
+        const dv2 = tv3 - tv1;
+        const du2 = tu3 - tu1;
+        const dw2 = tw3 - tw1;
+
+        var dax_step: f32 = 0;
+        var dbx_step: f32 = 0;
+        var du1_step: f32 = 0;
+        var dv1_step: f32 = 0;
+        var dw1_step: f32 = 0;
+        var du2_step: f32 = 0;
+        var dv2_step: f32 = 0;
+        var dw2_step: f32 = 0;
+
+        if (dy1 != 0) dax_step = @as(f32, @floatFromInt(dx1)) / @as(f32, @floatFromInt(@abs(dy1)));
+        if (dy2 != 0) dbx_step = @as(f32, @floatFromInt(dx2)) / @as(f32, @floatFromInt(@abs(dy2)));
+
+        if (dy1 != 0) du1_step = du1 / @as(f32, @floatFromInt(@abs(dy1)));
+        if (dy1 != 0) dv1_step = dv1 / @as(f32, @floatFromInt(@abs(dy1)));
+        if (dy1 != 0) dw1_step = dw1 / @as(f32, @floatFromInt(@abs(dy1)));
+
+        if (dy2 != 0) du2_step = du2 / @as(f32, @floatFromInt(@abs(dy2)));
+        if (dy2 != 0) dv2_step = dv2 / @as(f32, @floatFromInt(@abs(dy2)));
+        if (dy2 != 0) dw2_step = dw2 / @as(f32, @floatFromInt(@abs(dy2)));
+
+        if (dy1 != 0) {
+            var i: i32 = y1;
+            while (i <= y2) : (i += 1) {
+                const fi = @as(f32, @floatFromInt(i - y1));
+
+                var ax: i32 = x1 + @as(i32, @intFromFloat(fi * dax_step));
+                var bx: i32 = x1 + @as(i32, @intFromFloat(fi * dbx_step));
+
+                var tex_su: f32 = tu1 + fi * du1_step;
+                var tex_sv: f32 = tv1 + fi * dv1_step;
+                var tex_sw: f32 = tw1 + fi * dw1_step;
+
+                var tex_eu: f32 = tu1 + fi * du2_step;
+                var tex_ev: f32 = tv1 + fi * dv2_step;
+                var tex_ew: f32 = tw1 + fi * dw2_step;
+
+                if (ax > bx) {
+                    std.mem.swap(i32, &ax, &bx);
+                    std.mem.swap(f32, &tex_su, &tex_eu);
+                    std.mem.swap(f32, &tex_sv, &tex_ev);
+                    std.mem.swap(f32, &tex_sw, &tex_ew);
+                }
+
+                const tstep = 1.0 / @as(f32, @floatFromInt(bx - ax));
+                var t: f32 = 0.0;
+
+                var j: i32 = ax;
+                while (j < bx) : (j += 1) {
+                    const tex_u = (1.0 - t) * tex_su + t * tex_eu;
+                    const tex_v = (1.0 - t) * tex_sv + t * tex_ev;
+                    const tex_w = (1.0 - t) * tex_sw + t * tex_ew;
+
+                    if (i < 0 or j < 0) continue;
+                    const idx = @as(usize, @intCast(i)) * @as(usize, @intCast(self.size.x)) + @as(usize, @intCast(j));
+                    if (idx >= self.depthbuffer.len) continue;
+                    if (tex_w > self.depthbuffer[idx]) {
+                        self.drawPoint(@floatFromInt(j), @floatFromInt(i), sprite.sample(tex_u / tex_w, tex_v / tex_w));
+                       self.depthbuffer[idx] = tex_w;
+                    }
+
+                    t += tstep;
+                }
+            }
+        }
+
+        // bottom half
+        dy1 = y3 - y2;
+        dx1 = x3 - x2;
+        dv1 = tv3 - tv2;
+        du1 = tu3 - tu2;
+        dw1 = tw3 - tw2;
+
+        if (dy1 != 0) dax_step = @as(f32, @floatFromInt(dx1)) / @as(f32, @floatFromInt(@abs(dy1)));
+        if (dy2 != 0) dbx_step = @as(f32, @floatFromInt(dx2)) / @as(f32, @floatFromInt(@abs(dy2)));
+
+        du1_step = 0;
+        dv1_step = 0;
+        if (dy1 != 0) du1_step = du1 / @as(f32, @floatFromInt(@abs(dy1)));
+        if (dy1 != 0) dv1_step = dv1 / @as(f32, @floatFromInt(@abs(dy1)));
+        if (dy1 != 0) dw1_step = dw1 / @as(f32, @floatFromInt(@abs(dy1)));
+
+        if (dy1 != 0) {
+            var i: i32 = y2;
+            while (i <= y3) : (i += 1) {
+                const fi_top = @as(f32, @floatFromInt(i - y2));
+                const fi_bot = @as(f32, @floatFromInt(i - y1));
+
+                var ax: i32 = x2 + @as(i32, @intFromFloat(fi_top * dax_step));
+                var bx: i32 = x1 + @as(i32, @intFromFloat(fi_bot * dbx_step));
+
+                var tex_su: f32 = tu2 + fi_top * du1_step;
+                var tex_sv: f32 = tv2 + fi_top * dv1_step;
+                var tex_sw: f32 = tw2 + fi_top * dw1_step;
+
+                var tex_eu: f32 = tu1 + fi_bot * du2_step;
+                var tex_ev: f32 = tv1 + fi_bot * dv2_step;
+                var tex_ew: f32 = tw1 + fi_bot * dw2_step;
+
+                if (ax > bx) {
+                    std.mem.swap(i32, &ax, &bx);
+                    std.mem.swap(f32, &tex_su, &tex_eu);
+                    std.mem.swap(f32, &tex_sv, &tex_ev);
+                    std.mem.swap(f32, &tex_sw, &tex_ew);
+                }
+
+                const tstep: f32 = 1.0 / @as(f32, @floatFromInt(bx - ax));
+                var t: f32 = 0.0;
+
+                var j: i32 = ax;
+                while (j < bx) : (j += 1) {
+                    const tex_u = (1.0 - t) * tex_su + t * tex_eu;
+                    const tex_v = (1.0 - t) * tex_sv + t * tex_ev;
+                    const tex_w = (1.0 - t) * tex_sw + t * tex_ew;
+
+                    if (i < 0 or j < 0) continue;
+                    const idx = @as(usize, @intCast(i)) * @as(usize, @intCast(self.size.x)) + @as(usize, @intCast(j));
+                    if (idx >= self.depthbuffer.len) continue;
+                    if (tex_w > self.depthbuffer[idx]) {
+                        self.drawPoint(@floatFromInt(j), @floatFromInt(i), sprite.sample(tex_u / tex_w, tex_v / tex_w));
+                       self.depthbuffer[idx] = tex_w;
+                    }
+
+                    t += tstep;
+                }
+            }
+        }
     }
 };

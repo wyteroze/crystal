@@ -3,9 +3,11 @@
 const types = @import("types.zig");
 
 const Mat4 = types.Mat4;
+const Vec2_SIMD = types.Vec2_SIMD;
 const Vec3_SIMD = types.Vec3_SIMD;
 const Vec4_SIMD = types.Vec4_SIMD;
 const Triangle = types.Triangle;
+const Vertex = types.Vertex;
 
 pub const ClipResult = struct {
     n: usize,
@@ -70,6 +72,20 @@ pub fn multiplyMatrixVector(self: Mat4, vec: Vec3_SIMD) Vec3_SIMD {
     return output;
 }
 
+pub fn multiplyMatrixVectorW(self: Mat4, vec: Vec3_SIMD) struct { xyz: Vec3_SIMD, w: f32 } {
+    const r = self.rows;
+
+    const xyz = Vec3_SIMD{
+        vec[0] * r[0][0] + vec[1] * r[1][0] + vec[2] * r[2][0] + r[3][0],
+        vec[0] * r[0][1] + vec[1] * r[1][1] + vec[2] * r[2][1] + r[3][1],
+        vec[0] * r[0][2] + vec[1] * r[1][2] + vec[2] * r[2][2] + r[3][2],
+    };
+
+    const w = vec[0] * r[0][3] + vec[1] * r[1][3] + vec[2] * r[2][3] + r[3][3];
+
+    return .{ .xyz = xyz, .w = w };
+}
+
 pub fn multiplyMatrices(a: Mat4, b: Mat4) Mat4 {
     var out = Mat4.initZero();
     const b_transposed = Mat4{ .rows = .{
@@ -126,7 +142,7 @@ pub fn vectorIntersectPlane(
     plane_normal: Vec3_SIMD,
     line_start: Vec3_SIMD,
     line_end: Vec3_SIMD
-) Vec3_SIMD {
+) struct{ intersect: Vec3_SIMD, t: f32 } {
     const normalized = normalize(plane_normal);
     const plane_dot = -dot(normalized, plane_point);
     const ad = dot(line_start, normalized);
@@ -137,7 +153,10 @@ pub fn vectorIntersectPlane(
     const start_to_end = line_end - line_start;
     const intersect = start_to_end * @as(Vec3_SIMD, @splat(t));
 
-    return line_start + intersect;
+    return .{
+        .intersect = line_start + intersect,
+        .t = t
+    };
 }
 
 pub fn clipTriangleAgainstPlane(
@@ -148,37 +167,60 @@ pub fn clipTriangleAgainstPlane(
     const normalized = normalize(plane_normal);
     const plane_dp = dot(normalized, plane_point);
 
-    const d0 = dot(normalized, triangle.pa) - plane_dp;
-    const d1 = dot(normalized, triangle.pb) - plane_dp;
-    const d2 = dot(normalized, triangle.pc) - plane_dp;
+    const d0 = dot(normalized, triangle.pa.position) - plane_dp;
+    const d1 = dot(normalized, triangle.pb.position) - plane_dp;
+    const d2 = dot(normalized, triangle.pc.position) - plane_dp;
 
     var inside_points: [3]Vec3_SIMD = undefined;
     var outside_points: [3]Vec3_SIMD = undefined;
     var inside_point_count: usize = 0;
     var outside_point_count: usize = 0;
 
+    var inside_texes: [3]Vec2_SIMD = undefined;
+    var outside_texes: [3]Vec2_SIMD = undefined;
+    var inside_tex_count: usize = 0;
+    var outside_tex_count: usize = 0;
+
     if (d0 >= 0) {
-        inside_points[inside_point_count] = triangle.pa;
+        inside_points[inside_point_count] = triangle.pa.position;
         inside_point_count += 1;
+
+        inside_texes[inside_tex_count] = triangle.pa.uv;
+        inside_tex_count += 1;
     } else {
-        outside_points[outside_point_count] = triangle.pa;
+        outside_points[outside_point_count] = triangle.pa.position;
         outside_point_count += 1;
+
+        outside_texes[outside_tex_count] = triangle.pa.uv;
+        outside_tex_count += 1;
     }
 
     if (d1 >= 0) {
-        inside_points[inside_point_count] = triangle.pb;
+        inside_points[inside_point_count] = triangle.pb.position;
         inside_point_count += 1;
+
+        inside_texes[inside_tex_count] = triangle.pb.uv;
+        inside_tex_count += 1;
     } else {
-        outside_points[outside_point_count] = triangle.pb;
+        outside_points[outside_point_count] = triangle.pb.position;
         outside_point_count += 1;
+
+        outside_texes[outside_tex_count] = triangle.pb.uv;
+        outside_tex_count += 1;
     }
 
     if (d2 >= 0) {
-        inside_points[inside_point_count] = triangle.pc;
+        inside_points[inside_point_count] = triangle.pc.position;
         inside_point_count += 1;
+
+        inside_texes[inside_tex_count] = triangle.pc.uv;
+        inside_tex_count += 1;
     } else {
-        outside_points[outside_point_count] = triangle.pc;
+        outside_points[outside_point_count] = triangle.pc.position;
         outside_point_count += 1;
+
+        outside_texes[outside_tex_count] = triangle.pc.uv;
+        outside_tex_count += 1;
     }
 
     if (inside_point_count == 0) {
@@ -189,31 +231,77 @@ pub fn clipTriangleAgainstPlane(
         return .{ .n = 1, .t1 = triangle, .t2 = null };
     } else if (inside_point_count == 1 and outside_point_count == 2) {
         // tri should be clipped. makes one triangle
+        const p1 = vectorIntersectPlane(plane_point, plane_normal, inside_points[0], outside_points[0]);
+        const p2 = vectorIntersectPlane(plane_point, plane_normal, inside_points[0], outside_points[1]);
+
         const t1 = Triangle{
             .color = triangle.color,
             .depth = triangle.depth,
-            .pa = inside_points[0],
-            .pb = vectorIntersectPlane(plane_point, plane_normal, inside_points[0], outside_points[0]),
-            .pc = vectorIntersectPlane(plane_point, plane_normal, inside_points[0], outside_points[1])
+            .pa = Vertex{
+                .position = inside_points[0],
+                .uv = inside_texes[0]
+            },
+            .pb = Vertex {
+                .position = p1.intersect,
+                .uv = Vec2_SIMD{
+                    p1.t * (outside_texes[0][0] - inside_texes[0][0]) + inside_texes[0][0],
+                    p1.t * (outside_texes[0][1] - inside_texes[0][1]) + inside_texes[0][1]
+                }
+            },
+            .pc = Vertex {
+                .position = p2.intersect,
+                .uv = Vec2_SIMD{
+                    p2.t * (outside_texes[1][0] - inside_texes[0][0]) + inside_texes[0][0],
+                    p2.t * (outside_texes[1][1] - inside_texes[0][1]) + inside_texes[0][1]
+                }
+            },
         };
 
         return .{ .n = 1, .t1 = t1, .t2 = null };
     } else if (inside_point_count == 2 and outside_point_count == 1) {
         // tri should be clipped. makes a quad in the form of two tris
+        const p1 = vectorIntersectPlane(plane_point, plane_normal, inside_points[0], outside_points[0]);
+        const p2 = vectorIntersectPlane(plane_point, plane_normal, inside_points[1], outside_points[0]);
+        const uv1 = Vec2_SIMD{
+            p1.t * (outside_texes[0][0] - inside_texes[0][0]) + inside_texes[0][0],
+            p1.t * (outside_texes[0][1] - inside_texes[0][1]) + inside_texes[0][1],
+        };
+
         const t1 = Triangle{
             .color = triangle.color,
             .depth = triangle.depth,
-            .pa = inside_points[0],
-            .pb = inside_points[1],
-            .pc = vectorIntersectPlane(plane_point, plane_normal, inside_points[0], outside_points[0])
+            .pa = Vertex{
+                .position = inside_points[0],
+                .uv = inside_texes[0]
+            },
+            .pb = Vertex{
+                .position = inside_points[1],
+                .uv = inside_texes[1]
+            },
+            .pc = Vertex{
+                .position = p1.intersect,
+                .uv = uv1
+            }
         };
 
         const t2 = Triangle{
             .color = triangle.color,
             .depth = triangle.depth,
-            .pa = inside_points[1],
-            .pb = t1.pc,
-            .pc = vectorIntersectPlane(plane_point, plane_normal, inside_points[1], outside_points[0])
+            .pa = Vertex{
+                .position = inside_points[1],
+                .uv = inside_texes[1]
+            },
+            .pb = Vertex{
+                .position = p1.intersect,
+                .uv = uv1
+            },
+            .pc = Vertex{
+                .position = p2.intersect,
+                .uv = Vec2_SIMD{
+                    p2.t * (outside_texes[0][0] - inside_texes[1][0]) + inside_texes[1][0],
+                    p2.t * (outside_texes[0][1] - inside_texes[1][1]) + inside_texes[1][1]
+                }
+            }
         };
 
         return .{ .n = 2, .t1 = t1, .t2 = t2 };

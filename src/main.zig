@@ -7,6 +7,7 @@ const types     = @import("types.zig");
 const Platform  = @import("Platform.zig").Platform;
 const Renderer  = @import("Renderer.zig").Renderer;
 const Mesh      = @import("Mesh.zig").Mesh;
+const Sprite    = @import("Sprite.zig").Sprite;
 const Camera    = @import("Camera.zig").Camera;
 const Instance  = @import("Instance.zig").Instance;
 
@@ -33,8 +34,13 @@ pub fn main(init: std.process.Init) !void {
     var renderer = try Renderer.init(allocator, window, .{ .x = width, .y = height }, &camera, true);
     defer renderer.deinit();
 
-    var cubeMesh = try Mesh.loadFromFile(allocator, io, "src/assets/models/utah_teapot.obj");
+    var texture = try Sprite.loadFromFile(allocator, io, "src/assets/images/bullymoon.bmp");
+    defer texture.deinit(allocator);
+
+    var cubeMesh = try Mesh.loadFromFile(allocator, io, "src/assets/models/bullymoon.obj");
     defer cubeMesh.deinit();
+
+    cubeMesh.texture = &texture;
 
     var cube = Instance{
         .mesh = &cubeMesh,
@@ -55,26 +61,47 @@ pub fn main(init: std.process.Init) !void {
         // events
         var event: sdl.Event = undefined;
         while (sdl.pollEvent(&event)) {
-            if (event.type == .quit) {
-                running = false;
-            } else if (event.type == .mousemotion) {
-                camera.transform.rotation[0] += @as(f32, @floatFromInt(event.motion.yrel));
-                camera.transform.rotation[1] += @as(f32, @floatFromInt(event.motion.xrel));
+            switch (event.type) {
+                .quit => running = false,
+                .mousemotion => {
+                    camera.transform.rotation[0] += @as(f32, @floatFromInt(event.motion.yrel));
+                    camera.transform.rotation[1] += @as(f32, @floatFromInt(event.motion.xrel));
+                },
+                .keydown => {
+                    switch (event.key.keysym.sym) {
+                        .escape => {
+                            try sdl.showCursor(.disable);
+                        },
+
+                        else => {}
+                    }
+                },
+                .mousebuttondown => {
+                    if (event.button.state == .pressed) {
+                        try sdl.showCursor(.enable);
+                    }
+                },
+
+                else => {}
             }
         }
 
         const state = sdl.getKeyboardState();
         const factor = 2;
 
-        if (isPressed(state, .w))      camera.transform.position[2] += dt * factor;
-        if (isPressed(state, .s))      camera.transform.position[2] -= dt * factor;
-        if (isPressed(state, .a))      camera.transform.position[0] -= dt * factor;
-        if (isPressed(state, .d))      camera.transform.position[0] += dt * factor;
-        if (isPressed(state, .space))  camera.transform.position[1] += dt * factor;
-        if (isPressed(state, .lshift)) camera.transform.position[1] -= dt * factor;
+        const ratio = @as(types.Vec3_SIMD, @splat(dt * factor));
+        if (isPressed(state, .w))                               camera.transform.position += camera.getLookDirection() * ratio;
+        if (isPressed(state, .s))                               camera.transform.position -= camera.getLookDirection() * ratio;
+        if (isPressed(state, .a))                               camera.transform.position -= camera.getRightDirection() * ratio;
+        if (isPressed(state, .d))                               camera.transform.position += camera.getRightDirection() * ratio;
+        if (isPressed(state, .space) or isPressed(state, .e))   camera.transform.position += camera.getUpDirection() * ratio;
+        if (isPressed(state, .lshift) or isPressed(state, .q))  camera.transform.position -= camera.getUpDirection() * ratio;
 
         // object updates
         //cube.transform.rotation += types.Vec3_SIMD{ dt * 45, 0, dt * 45 };
+
+        // make sure the camera isn't funky
+        std.debug.print("{any}\n", .{camera.transform.rotation[0]});
 
         // rendering
         renderer.drawBackground();
