@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const types = @import("../types.zig");
+const log = @import("../log.zig").obj;
 const Mesh = @import("../Mesh.zig").Mesh;
 
 const Vec2_SIMD = types.Vec2_SIMD;
@@ -17,6 +18,8 @@ pub const ParseError = error{
 };
 
 pub fn parseObj(allocator: std.mem.Allocator, reader: *std.Io.Reader) !Mesh {
+    log.debug("parsing obj", .{});
+
     var raw_positions = std.ArrayList(Vec3_SIMD).empty;
     defer raw_positions.deinit(allocator);
     var raw_uvs = std.ArrayList(Vec2_SIMD).empty;
@@ -51,6 +54,7 @@ pub fn parseObj(allocator: std.mem.Allocator, reader: *std.Io.Reader) !Mesh {
         }
     }
 
+    log.info("parsed obj: {d} vertices, {d} faces", .{ vertices.items.len, faces.items.len });
     return Mesh.init(
         allocator,
         vertices.items,
@@ -76,7 +80,11 @@ fn parseVertexLine(line: []const u8) ParseError!Vec3_SIMD {
         index += 1;
     }
 
-    if (index < 3) return ParseError.MissingComponents;
+    if (index < 3) {
+        log.warn("vertex line missing components: '{s}'", .{ line });
+        return ParseError.MissingComponents;
+    }
+
     return Vec3_SIMD{ vertex[0], vertex[1], vertex[2] };
 }
 
@@ -104,8 +112,10 @@ fn parseFaceLine(allocator: std.mem.Allocator,
         const v_idx = std.fmt.parseInt(usize, v_str, 10)
             catch return ParseError.InvalidInt;
 
-        if (v_idx == 0 or v_idx > raw_positions.len)
+        if (v_idx == 0 or v_idx > raw_positions.len) {
+            log.warn("face references out of range vertex index {d} (max is {d})", .{ v_idx, raw_positions.len });
             return ParseError.InvalidFaceData;
+        }
         const pos = raw_positions[v_idx - 1];
 
         // uv index
@@ -115,8 +125,10 @@ fn parseFaceLine(allocator: std.mem.Allocator,
                 const vt_idx = std.fmt.parseInt(usize, vt_str, 10)
                     catch return ParseError.InvalidFaceData;
 
-                if (vt_idx == 0 or vt_idx > raw_uvs.len)
+                if (vt_idx == 0 or vt_idx > raw_uvs.len) {
+                    log.warn("face references out-of-range uv index {d} (max is {d})", .{ vt_idx, raw_uvs.len });
                     return ParseError.InvalidFaceData;
+                }
 
                 uv = raw_uvs[vt_idx - 1];
             }
@@ -130,7 +142,10 @@ fn parseFaceLine(allocator: std.mem.Allocator,
         corner_count += 1;
     }
 
-    if (corner_count < 3) return ParseError.InvalidFaceData;
+    if (corner_count < 3) {
+        log.warn("face line has fewer than 3 corners: '{s}'", .{line});
+        return ParseError.InvalidFaceData;
+    }
 }
 
 
@@ -150,6 +165,9 @@ fn parseTextureLine(line: []const u8) ParseError!Vec2_SIMD {
         index += 1;
     }
 
-    if (index < 2) return ParseError.MissingComponents;
+    if (index < 2) {
+        log.warn("texture line has fewer than 2 components: '{s}'", .{line});
+        return ParseError.MissingComponents;
+    }
     return Vec2_SIMD{ uv[0], 1.0 - uv[1] }; // flip V
 }

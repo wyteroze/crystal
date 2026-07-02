@@ -5,6 +5,7 @@ const sdl = @import("zsdl2");
 const zlua = @import("zlua");
 
 const types         = @import("types.zig");
+const log           = @import("log.zig").engine;
 const Platform      = @import("Platform.zig").Platform;
 const Renderer      = @import("Renderer.zig").Renderer;
 const Mesh          = @import("Mesh.zig").Mesh;
@@ -18,11 +19,27 @@ const fps_ms = 1000 / fps;
 const width = 384;
 const height = 360;
 
+// You can customize this to filter what types of logs
+// are actually seen in the output
+pub const std_options: std.Options = .{
+    // Default log level
+    .log_level = .info,
+
+    // Filters for scopes
+    .log_scope_levels = &.{
+        .{ .scope = .lua, .level = .debug },
+        .{ .scope = .render, .level = .info },
+        .{ .scope = .parse, .level = .warn },
+        .{ .scope = .engine, .level = .info }
+    }
+};
+
 fn isPressed(state: []const u8, scancode: sdl.Scancode) bool {
     return state[@intFromEnum(scancode)] != 0;
 }
 
 pub fn main(init: std.process.Init) !void {
+    log.info("Initializing...", .{});
     const allocator = init.gpa;
     //const io = init.io;
 
@@ -40,11 +57,13 @@ pub fn main(init: std.process.Init) !void {
     defer scriptEngine.deinit();
 
     scriptEngine.runFile("src/assets/scripts/main.lua");
+    log.info("Initialized", .{});
 
     var running = true;
     var lastTimeMs: u64 = sdl.getPerformanceCounter();
     //const frequency = @as(f32, @floatFromInt(sdl.getPerformanceFrequency()));
 
+    log.info("Starting loop", .{});
     while (running) {
         const currentTime = sdl.getPerformanceCounter();
         //const dt = @as(f32, @floatFromInt(currentTime - lastTimeMs)) / frequency;

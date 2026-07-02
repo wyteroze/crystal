@@ -1,6 +1,7 @@
 // Copyright 2026 wyteroze. Licensed under the Apache License, Version 2.0.
 const std = @import("std");
 const types = @import("../types.zig");
+const log = @import("../log.zig").bmp;
 const Sprite = @import("../Sprite.zig").Sprite;
 
 pub const ParseError = error{
@@ -18,8 +19,10 @@ pub fn parseBmp(allocator: std.mem.Allocator, reader: *std.Io.Reader) !Sprite {
     reader.readSliceAll(&file_header)
         catch return ParseError.UnexpectedEof;
 
-    if (!std.mem.eql(u8, file_header[0..2], "BM"))
+    if (!std.mem.eql(u8, file_header[0..2], "BM")) {
+        log.warn("invalid bmp magic bytes: {x} {x}", .{ file_header[0], file_header[1] });
         return ParseError.InvalidMagic;
+    }
 
     const pixel_offset = std.mem.readInt(u32, file_header[10..14], .little);
 
@@ -28,10 +31,12 @@ pub fn parseBmp(allocator: std.mem.Allocator, reader: *std.Io.Reader) !Sprite {
     var dib_size_buf: [4]u8 = undefined;
     reader.readSliceAll(&dib_size_buf)
         catch return ParseError.UnexpectedEof;
-    const dib_size = std.mem.readInt(u32, &dib_size_buf, .little);
 
-    if (dib_size != 40)
+    const dib_size = std.mem.readInt(u32, &dib_size_buf, .little);
+    if (dib_size != 40) {
+        log.warn("unsupported dib header size: {d} (expected 40)", .{dib_size});
         return ParseError.UnsupportedDibHeader;
+    }
 
     var dib_rest: [36]u8 = undefined;
     reader.readSliceAll(&dib_rest)
@@ -41,15 +46,24 @@ pub fn parseBmp(allocator: std.mem.Allocator, reader: *std.Io.Reader) !Sprite {
     const height      = std.mem.readInt(i32, dib_rest[4..8],   .little);
     const bpp         = std.mem.readInt(u16, dib_rest[10..12], .little);
     const compression = std.mem.readInt(u32, dib_rest[12..16], .little);
+    log.debug("bmp header: {d}x{d}, {d}bpp, compression={d}", .{ width, height, bpp, compression });
 
-    if (width <= 0 or width > 65535)
+    if (width <= 0 or width > 65535) {
+        log.warn("invalid bmp width: {d}", .{width});
         return ParseError.InvalidDimensions;
-    if (height == 0 or height < -65535 or height > 65535)
+    }
+    if (height == 0 or height < -65535 or height > 65535) {
+        log.warn("invalid bmp height: {d}", .{height});
         return ParseError.InvalidDimensions;
-    if (bpp != 24 and bpp != 32)
+    }
+    if (bpp != 24 and bpp != 32) {
+        log.warn("unsupported bmp bit depth: {d}", .{bpp});
         return ParseError.UnsupportedBitDepth;
-    if (compression != 0)
+    }
+    if (compression != 0) {
+        log.warn("unsupported bmp compression mode: {d}", .{compression});
         return ParseError.UnsupportedCompression;
+    }
 
     const img_width  = @as(u32, @intCast(width));
     const img_height = @as(u32, @intCast(if (height < 0) -height else height));
@@ -93,6 +107,7 @@ pub fn parseBmp(allocator: std.mem.Allocator, reader: *std.Io.Reader) !Sprite {
         }
     }
 
+    log.info("parsed bmp: {d}x{d}, {d}bpp", .{ img_width, img_height, bpp });
     return Sprite{
         .width  = img_width,
         .height = img_height,

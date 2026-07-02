@@ -1,0 +1,28 @@
+// Copyright 2026 wyteroze. Licensed under the Apache License, Version 2.0.
+
+const std = @import("std");
+
+pub fn Tagged(comptime scope: @EnumLiteral(), comptime tag: []const u8) type {
+    const base = std.log.scoped(scope);
+
+    return struct {
+        pub fn debug(comptime fmt: []const u8, args: anytype) void { base.debug("[" ++ tag ++ "] " ++ fmt, args); }
+        pub fn info(comptime fmt: []const u8, args: anytype) void { base.info("[" ++ tag ++ "] " ++ fmt, args); }
+        pub fn warn(comptime fmt: []const u8, args: anytype) void { base.warn("[" ++ tag ++ "] " ++ fmt, args); }
+        pub fn err(comptime fmt: []const u8, args: anytype) void { base.err("[" ++ tag ++ "] " ++ fmt, args); }
+    };
+}
+
+// Lua
+pub const lua       = std.log.scoped(.lua);
+
+// Render
+pub const render    = std.log.scoped(.render);
+
+// Parse
+pub const parse     = std.log.scoped(.parse);
+pub const obj       = Tagged(.parse, "obj");
+pub const bmp       = Tagged(.parse, "bmp");
+
+// Engine
+pub const engine    = std.log.scoped(.engine);
