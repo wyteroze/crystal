@@ -27,7 +27,7 @@ pub const std_options: std.Options = .{
 
     // Filters for scopes
     .log_scope_levels = &.{
-        .{ .scope = .lua, .level = .debug },
+        .{ .scope = .script, .level = .debug },
         .{ .scope = .render, .level = .info },
         .{ .scope = .parse, .level = .warn },
         .{ .scope = .engine, .level = .info }

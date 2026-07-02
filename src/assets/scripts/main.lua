@@ -3,9 +3,10 @@ Copyright 2026 wyteroze. Licensed under the Apache License, Version 2.0.
 --]]
 
 local vec1 = Vec3.new(5, 10, 20)
-local vec2 = Vec3.new(-5, -10, -20)
+local vec2 = Vec3.new(-5, -10, -50)
 
-print(vec1, vec2)
+print(vec1 + vec2)
+error("aaaa")
 
 -- local myScene = Scene.new()
 

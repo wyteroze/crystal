@@ -14,10 +14,17 @@ const vec3Lib = [_]zlua.FnReg{
 };
 
 const vec3Methods = [_]zlua.FnReg{
+    // methods
     .{ .name = "add", .func = zlua.wrap(vec3Add) },
     .{ .name = "sub", .func = zlua.wrap(vec3Subtract) },
     .{ .name = "mul", .func = zlua.wrap(vec3Multiply) },
-    .{ .name = "div", .func = zlua.wrap(vec3Divide) }
+    .{ .name = "div", .func = zlua.wrap(vec3Divide) },
+
+    // metamethods
+    .{ .name = "__add", .func = zlua.wrap(vec3Add) },
+    .{ .name = "__sub", .func = zlua.wrap(vec3Subtract) },
+    .{ .name = "__mul", .func = zlua.wrap(vec3Multiply) },
+    .{ .name = "__div", .func = zlua.wrap(vec3Divide) }
 };
 
 const vec2Lib = [_]zlua.FnReg{
@@ -25,10 +32,17 @@ const vec2Lib = [_]zlua.FnReg{
 };
 
 const vec2Methods = [_]zlua.FnReg{
+    // methods
     .{ .name = "add", .func = zlua.wrap(vec2Add) },
     .{ .name = "sub", .func = zlua.wrap(vec2Subtract) },
     .{ .name = "mul", .func = zlua.wrap(vec2Multiply) },
-    .{ .name = "div", .func = zlua.wrap(vec2Divide) }
+    .{ .name = "div", .func = zlua.wrap(vec2Divide) },
+
+    // metamethods
+    .{ .name = "__add", .func = zlua.wrap(vec2Add) },
+    .{ .name = "__sub", .func = zlua.wrap(vec2Subtract) },
+    .{ .name = "__mul", .func = zlua.wrap(vec2Multiply) },
+    .{ .name = "__div", .func = zlua.wrap(vec2Divide) }
 };
 
 // Vec3
@@ -52,7 +66,7 @@ fn vec3Get(l: *Lua) i32 {
     } else if (std.mem.eql(u8, key, "y")) {
         l.pushNumber(self.*[1]);
         return 1;
-    } else if (std.mem.eql(u8, key, "y")) {
+    } else if (std.mem.eql(u8, key, "z")) {
         l.pushNumber(self.*[2]);
         return 1;
     }
@@ -182,7 +196,7 @@ fn vec2Get(l: *Lua) i32 {
     if (std.mem.eql(u8, key, "x")) {
         l.pushNumber(self.*[0]);
         return 1;
-    } else if (std.mem.eql(u8, key, "x")) {
+    } else if (std.mem.eql(u8, key, "y")) {
         l.pushNumber(self.*[1]);
         return 1;
     }
@@ -229,6 +243,7 @@ pub fn register(l: *Lua) !void {
     l.setField(-2, "__index");
     l.pushFunction(zlua.wrap(vec3String));
     l.setField(-2, "__tostring");
+    l.setFuncs(&vec3Methods, 0);
     l.pop(1);
 
     // Vec3 library
@@ -244,6 +259,7 @@ pub fn register(l: *Lua) !void {
     l.setField(-2, "__index");
     l.pushFunction(zlua.wrap(vec2String));
     l.setField(-2, "__tostring");
+    l.setFuncs(&vec2Methods, 0);
     l.pop(1);
 
     // Vec2 library

@@ -13,8 +13,9 @@ pub fn Tagged(comptime scope: @EnumLiteral(), comptime tag: []const u8) type {
     };
 }
 
-// Lua
-pub const lua       = std.log.scoped(.lua);
+// ScriptEngine
+pub const script    = std.log.scoped(.script);
+pub const lua       = Tagged(.script, "lua");
 
 // Render
 pub const render    = std.log.scoped(.render);
