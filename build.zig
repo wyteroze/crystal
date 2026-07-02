@@ -17,10 +17,12 @@ pub fn build(b: *std.Build) void {
         }),
     });
 
-    exe.root_module.linkSystemLibrary("sdl2", .{ .use_pkg_config = .force });
-
     const zsdl = b.dependency("zsdl", .{});
     exe.root_module.addImport("zsdl2", zsdl.module("zsdl2"));
+    linkSDLLibs(target, exe);
+
+    const lua = b.dependency("zlua", .{ .target = target, .optimize = optimize, .lang = .lua54 });
+    exe.root_module.addImport("zlua", lua.module("zlua"));
 
     b.installArtifact(exe);
 
@@ -43,4 +45,19 @@ pub fn build(b: *std.Build) void {
 
     const test_step = b.step("test", "Run tests");
     test_step.dependOn(&run_exe_tests.step);
+}
+
+fn linkSDLLibs(t: std.Build.ResolvedTarget, e: *std.Build.Step.Compile) void {
+    const tag = t.result.os.tag;
+
+    if (tag == .windows) {
+        e.root_module.linkSystemLibrary("SDL2", .{});
+        e.root_module.linkSystemLibrary("SDL2main", .{});
+    } else if (tag == .linux) {
+        e.root_module.linkSystemLibrary("SDL2", .{});
+    } else if (tag.isDarwin()) {
+        e.root_module.addIncludePath(.{ .cwd_relative = "/opt/homebrew/include/" });
+        e.root_module.addIncludePath(.{ .cwd_relative = "/opt/homebrew/lib/" });
+        e.root_module.linkSystemLibrary("SDL2", .{});
+    }
 }
