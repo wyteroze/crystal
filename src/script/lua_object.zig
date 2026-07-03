@@ -10,8 +10,10 @@ const Object = @import("../Object.zig").Object;
 const Mesh = @import("../Mesh.zig").Mesh;
 const Sprite = @import("../Sprite.zig").Sprite;
 const Lua = zlua.Lua;
+var allocator: std.mem.Allocator = undefined;
 
 const scene_object_methods = [_]zlua.FnReg{};
+
 const object_lib = [_]zlua.FnReg{
     .{ .name = "mesh", .func = zlua.wrap(objectMesh) },
     .{ .name = "image", .func = zlua.wrap(objectImage) }
@@ -64,13 +66,33 @@ fn objectImage(l: *Lua) i32 {
     return 1;
 }
 
-pub fn register(l: *Lua) !void {
+pub fn objectGc(l: *Lua) i32 {
+    const obj = l.checkUserdata(Object, 1, "Object");
+    switch (obj.data) {
+        .mesh => |m| {
+            m.mesh.deinit();
+            m.texture.?.deinit(allocator);
+        },
+        .image => |i| {
+            i.image.deinit(allocator);
+        }
+    }
+
+    return 0;
+}
+
+pub fn register(l: *Lua, a: std.mem.Allocator) !void {
+    allocator = a;
+
     // Object object
     try l.newMetatable("Object");
     l.pushFunction(zlua.wrap(objectIndex));
     l.setField(-2, "__index");
     l.pushFunction(zlua.wrap(objectNewIndex));
     l.setField(-2, "__newindex");
+    l.pushFunction(zlua.wrap(objectGc));
+    l.setField(-2, "__gc");
+
     // for any shared methods in the future, we don't have any
     l.setFuncs(&scene_object_methods, 0);
     l.pop(1);

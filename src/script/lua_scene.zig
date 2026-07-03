@@ -4,10 +4,13 @@ const std = @import("std");
 const zlua = @import("zlua");
 const log = @import("../log.zig").lua;
 const Scene = @import("../Scene.zig").Scene;
+const SceneRegistry = @import("../SceneRegistry.zig").SceneRegistry;
 const Object = @import("../Object.zig").Object;
 const Lua = zlua.Lua;
 var allocator: std.mem.Allocator = undefined;
+var sceneRegistry: *SceneRegistry = undefined;
 
+const RefCtx = struct { lua: *Lua, ref: i32 };
 const UpdateHandler = struct {
     lua: *Lua,
     ref: i32,
@@ -32,17 +35,38 @@ const scene_lib = [_]zlua.FnReg{
 };
 
 const scene_methods = [_]zlua.FnReg{
+    // Methods
     .{ .name = "OnUpdate", .func = zlua.wrap(sceneOnUpdate) },
     .{ .name = "AddObject", .func = zlua.wrap(sceneAddObject) },
-    .{ .name = "RemoveObject", .func = zlua.wrap(sceneRemoveObject) }
+    .{ .name = "RemoveObject", .func = zlua.wrap(sceneRemoveObject) },
+
+    // Metamethods
+    .{ .name = "__gc", .func = zlua.wrap(sceneGc) }
 };
 
 pub fn sceneNew(l: *Lua) i32 {
     const name = l.optString(1);
     const scene = l.newUserdata(Scene, 0);
     scene.* = Scene.init(allocator, name);
-
     l.setMetatableRegistry("Scene");
+
+    l.pushValue(-1);
+    const ref = l.ref(zlua.registry_index);
+    const ref_ctx = allocator.create(RefCtx) catch {
+        l.raiseErrorStr("out of memory registering scene", .{});
+        return 0;
+    };
+    ref_ctx.* = .{ .lua = l, .ref = ref };
+
+    sceneRegistry.addScene(.{
+        .scene = scene,
+        .cleanup_ctx = ref_ctx,
+        .cleanup_fn = unrefScene
+    }) catch |e| {
+        l.raiseErrorStr("failed to add scene to registry: '%s'", .{ @errorName(e).ptr });
+        return 0;
+    };
+
     return 1;
 }
 
@@ -59,7 +83,11 @@ pub fn sceneOnUpdate(l: *Lua) i32 {
     };
 
     handler.* = .{ .lua = l, .ref = callback_ref };
-    self.addUpdateCallback(.{ .ctx = handler, .func = UpdateHandler.call }) catch {
+    self.addUpdateCallback(.{
+        .ctx = handler,
+        .func = UpdateHandler.call,
+        .destroy_fn = destroyHandler
+    }) catch {
         l.raiseErrorStr("out of memory registering OnUpdate callback", .{});
         return 0;
     };
@@ -90,6 +118,13 @@ pub fn sceneRemoveObject(l: *Lua) i32 {
     return 0;
 }
 
+pub fn sceneGc(l: *Lua) i32 {
+    const self = l.checkUserdata(Scene, 1, "Scene");
+    self.deinit();
+
+    return 0;
+}
+
 pub fn disconnectUpdate(l: *Lua) i32 {
     const scene = l.toUserdata(Scene, Lua.upvalueIndex(1)) catch unreachable;
     const handler = @as(*UpdateHandler, @ptrCast(@alignCast(
@@ -97,21 +132,37 @@ pub fn disconnectUpdate(l: *Lua) i32 {
     )));
 
     if (!handler.disconnected) {
-        handler.disconnected = true;
         scene.removeUpdateCallback(handler);
-
-        l.unref(zlua.registry_index, handler.ref);
-        allocator.destroy(handler);
+        destroyHandler(handler);
     }
 
     return 0;
 }
 
-pub fn register(l: *Lua, a: std.mem.Allocator) !void {
+pub fn unrefScene(ctx: ?*anyopaque) void {
+    const data = @as(*RefCtx, @ptrCast(@alignCast(ctx.?)));
+    data.lua.unref(zlua.registry_index, data.ref);
+    allocator.destroy(data);
+}
+
+pub fn destroyHandler(ctx: ?*anyopaque) void {
+    const handler = @as(*UpdateHandler, @ptrCast(@alignCast(ctx.?)));
+    if (!handler.disconnected) {
+        handler.disconnected = true;
+        handler.lua.unref(zlua.registry_index, handler.ref);
+    }
+
+    allocator.destroy(handler);
+}
+
+pub fn register(l: *Lua, a: std.mem.Allocator, s: *SceneRegistry) !void {
     allocator = a;
+    sceneRegistry = s;
 
     // Scene object
     try l.newMetatable("Scene");
+    l.pushValue(-1);
+    l.setField(-2, "__index");
     l.setFuncs(&scene_methods, 0);
     l.pop(1);
 

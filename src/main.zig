@@ -13,6 +13,7 @@ const Sprite        = @import("Sprite.zig").Sprite;
 const Camera        = @import("Camera.zig").Camera;
 const Object        = @import("Object.zig").Object;
 const ScriptEngine  = @import("script/ScriptEngine.zig").ScriptEngine;
+const SceneRegistry = @import("SceneRegistry.zig").SceneRegistry;
 
 const fps = 120;
 const fps_ms = 1000 / fps;
@@ -41,7 +42,7 @@ fn isPressed(state: []const u8, scancode: sdl.Scancode) bool {
 pub fn main(init: std.process.Init) !void {
     log.info("Initializing...", .{});
     const allocator = init.gpa;
-    //const io = init.io;
+    const io = init.io;
 
     var platform = try Platform.init();
     defer platform.deinit();
@@ -53,8 +54,10 @@ pub fn main(init: std.process.Init) !void {
     var renderer = try Renderer.init(allocator, window, .{ .x = width, .y = height }, &camera, true);
     defer renderer.deinit();
 
-    var scriptEngine = try ScriptEngine.init(allocator);
+    var sceneRegistry = SceneRegistry.init(allocator);
+    var scriptEngine = try ScriptEngine.init(allocator, io, &sceneRegistry);
     defer scriptEngine.deinit();
+    defer sceneRegistry.deinit();
 
     scriptEngine.runFile("src/assets/scripts/main.lua");
     log.info("Initialized", .{});
@@ -80,6 +83,10 @@ pub fn main(init: std.process.Init) !void {
 
         // rendering
         renderer.drawBackground();
+        for (sceneRegistry.scenes.items) |s| {
+            log.info("{s}", .{ s.scene.name.? });
+            try renderer.drawScene(s.scene);
+        }
 
         try renderer.present();
     }

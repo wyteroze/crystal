@@ -9,18 +9,22 @@ const lua_vec = @import("lua_vec.zig");
 const lua_log = @import("lua_log.zig");
 const lua_scene = @import("lua_scene.zig");
 const lua_object = @import("lua_object.zig");
+const lua_assets = @import("lua_assets.zig");
+
+const SceneRegistry = @import("../SceneRegistry.zig").SceneRegistry;
 
 pub const ScriptEngine = struct {
     lua: *Lua,
 
-    pub fn init(allocator: std.mem.Allocator) !ScriptEngine {
+    pub fn init(allocator: std.mem.Allocator, io: std.Io, sceneRegistry: *SceneRegistry) !ScriptEngine {
         var lua = try Lua.init(allocator);
         lua.openLibs();
 
         try lua_vec.register(lua);
         try lua_log.register(lua, allocator);
-        try lua_scene.register(lua, allocator);
-        try lua_object.register(lua);
+        try lua_scene.register(lua, allocator, sceneRegistry);
+        try lua_object.register(lua, allocator);
+        try lua_assets.register(lua, allocator, io);
 
         return .{
             .lua = lua

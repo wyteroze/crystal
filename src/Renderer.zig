@@ -8,6 +8,8 @@ const types     = @import("types.zig");
 const Mesh      = @import("Mesh.zig").Mesh;
 const Sprite    = @import("Sprite.zig").Sprite;
 const Camera    = @import("Camera.zig").Camera;
+const Scene     = @import("Scene.zig").Scene;
+const Object    = @import("Object.zig").Object;
 
 const Mat4 = types.Mat4;
 const Vertex = types.Vertex;
@@ -73,7 +75,21 @@ pub const Renderer = struct {
         @memset(self.depthbuffer, 0.0);
     }
 
-    pub fn drawMesh(self: *Renderer, mesh: *const Mesh, transform: *const Transform) !void {
+    pub fn drawScene(self: *Renderer, scene: *Scene) !void {
+        for (scene.objects.items) |obj| {
+            switch (obj.data) {
+                .mesh => |m| {
+                    try self.drawMesh(m.mesh, m.texture, &obj.transform);
+                },
+                .image => |i| {
+                    // standalone image rendering is not supported yet
+                    _ = i;
+                }
+            }
+        }
+    }
+
+    pub fn drawMesh(self: *Renderer, mesh: *const Mesh, texture: ?*const Sprite, transform: *const Transform) !void {
         const camera_transform = self.camera.transform;
         const projection_matrix = self.camera.getProjectionMatrix();
         const view_matrix = self.camera.getViewMatrix();
@@ -254,7 +270,7 @@ pub const Renderer = struct {
                 self.tri_raster_list.replaceRangeAssumeCapacity(0, tris_to_process, &.{});
             }
 
-            if (mesh.texture) |t| {
+            if (texture) |t| {
                 for (self.tri_raster_list.items) |final_tri| {
                     self.drawTexturedTriangle(final_tri, t.*);
                 }
