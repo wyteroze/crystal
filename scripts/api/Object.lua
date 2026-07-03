@@ -18,8 +18,9 @@ Object = {}
 
 --- Returns a Mesh, which can be put in a scene unlike MeshData
 --- @param mesh MeshData
+--- @param texture? ImageData
 --- @return Mesh
-function Object.mesh(mesh) end
+function Object.mesh(mesh, texture) end
 
 --- Returns an image, which can be put in a scene unlike ImageData
 --- @param image ImageData

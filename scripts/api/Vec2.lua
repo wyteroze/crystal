@@ -7,12 +7,19 @@ Copyright 2026 wyteroze. Licensed under the Apache License, Version 2.0.
 
 --- Represents a 2D vector
 --- @class Vec2
---- @field x number
---- @field y number
---- @field add fun(self: Vec2, addend: Vec2)
---- @field subtract fun(self: Vec2, subtrahend: Vec2)
---- @field multiply fun(self: Vec2, multiplier: Vec2)
---- @field divide fun(self: Vec2, divisor: Vec2)
+--- @field X number
+--- @field Y number
+--- Adds `addend` to this vector in place. Equivalent to `+=` in other languages, but Lua doesn't have this.
+--- @field Add fun(self: Vec2, addend: Vec2)
+---
+--- Subtracts `subtrahend` to this vector in place. Equivalent to `-=` in other languages, but Lua doesn't have this.
+--- @field Subtract fun(self: Vec2, subtrahend: Vec2)
+---
+--- Multiplies this vector by `multiplier` in place. Equivalent to `*=` in other languages, but Lua doesn't have this.
+--- @field Multiply fun(self: Vec2, multiplier: Vec2)
+---
+--- Divides this vector by `divisor` in place. Equivalent to `/=` in other languages, but Lua doesn't have this.
+--- @field Divide fun(self: Vec2, divisor: Vec2)
 
 --- Factory for creating Vec2s
 --- @class Vec2Lib

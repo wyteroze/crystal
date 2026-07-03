@@ -7,13 +7,21 @@ Copyright 2026 wyteroze. Licensed under the Apache License, Version 2.0.
 
 --- Represents a 3D vector
 --- @class Vec3
---- @field x number
---- @field y number
---- @field z number
---- @field add fun(self: Vec3, addend: Vec3)
---- @field subtract fun(self: Vec3, subtrahend: Vec3)
---- @field multiply fun(self: Vec3, multiplier: Vec3)
---- @field divide fun(self: Vec3, divisor: Vec3)
+--- @field X number
+--- @field Y number
+--- @field Z number
+---
+--- Adds `addend` to this vector in place. Similar to `+=` in other languages, but Lua doesn't have this.
+--- @field Add fun(self: Vec3, addend: Vec3)
+---
+--- Subtracts `subtrahend` to this vector in place. Similar to `-=` in other languages, but Lua doesn't have this.
+--- @field Subtract fun(self: Vec3, subtrahend: Vec3)
+---
+--- Multiplies this vector by `multiplier` in place. Similar to `*=` in other languages, but Lua doesn't have this.
+--- @field Multiply fun(self: Vec3, multiplier: Vec3)
+---
+--- Divides this vector by `divisor` in place. Similar to `/=` in other languages, but Lua doesn't have this.
+--- @field Divide fun(self: Vec3, divisor: Vec3)
 
 --- Factory for creating Vec3s
 --- @class Vec3Lib

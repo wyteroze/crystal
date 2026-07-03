@@ -2,24 +2,21 @@
 Copyright 2026 wyteroze. Licensed under the Apache License, Version 2.0.
 --]]
 
-local vec1 = Vec3.new(5, 10, 20)
-local vec2 = Vec3.new(-5, -10, -50)
+local myScene = Scene.new()
 
-print(vec1 + vec2)
+local bullyMoonMesh = Assets.loadMesh("bullymoon")
+local bullyMoonTex = Assets.loadImage("bullymoon")
+local bullyMoon = Object.mesh(bullyMoonMesh, bullyMoonTex)
+bullyMoon.Position = Vec3.new(-5, 0, 0)
+myScene:AddObject(bullyMoon)
 
--- local myScene = Scene.new()
+local uziMesh = Assets.loadMesh("cube")
+local uziTex = Assets.loadImage("uzi")
+local uziCube = Object.mesh(uziMesh, uziTex)
+uziCube.Position = Vec3.new(5, 0, 0)
+myScene:AddObject(uziCube)
 
--- local bullyMoonMeshData = Assets.loadMesh("bullymoon")
--- local bullyMoon = Object.mesh(bullyMoonMeshData)
--- bullyMoon.Position = Vec3.new(-5, 0, 0)
--- bullyMoon.Texture = Assets.loadImage("bullymoon")
-
--- local uziCubeMeshData = Assets.loadMesh("cube")
--- local uziCube = Object.mesh(uziCubeMeshData)
--- uziCube.Position = Vec3.new(5, 0, 0)
--- uziCube.Texture = Assets.loadImage("uzi")
-
--- myScene:OnUpdate(function(dt)
---     bullyMoon.Rotation:add(Vec3.new(0, dt * 10, 0))
---     uziCube.Rotation:add(Vec3.new(dt * 5, dt * 10, dt * 20))
--- end)
+myScene:OnUpdate(function(dt)
+    bullyMoon.Rotation:Add(Vec3.new(0, dt * 10, 0))
+    uziCube.Rotation:Add(Vec3.new(dt * 5, dt * 10, dt * 20))
+end)
