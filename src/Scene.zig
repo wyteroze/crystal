@@ -6,7 +6,6 @@ const Object = @import("Object.zig").Object;
 pub const UpdateCallback = struct {
     ctx: ?*anyopaque,
     func: *const fn (ctx: ?*anyopaque, dt: f32) void,
-    destroy_fn: ?*const fn (ctx: ?*anyopaque) void = null
 };
 
 pub const Scene = struct {
@@ -25,10 +24,6 @@ pub const Scene = struct {
     }
 
     pub fn deinit(self: *Scene) void {
-        for (self.callbacks.items) |cb| {
-            if (cb.destroy_fn) |f| f(cb.ctx);
-        }
-
         self.objects.deinit(self.allocator);
         self.callbacks.deinit(self.allocator);
     }

@@ -56,8 +56,8 @@ pub fn main(init: std.process.Init) !void {
 
     var sceneRegistry = SceneRegistry.init(allocator);
     var scriptEngine = try ScriptEngine.init(allocator, io, &sceneRegistry);
-    defer scriptEngine.deinit();
     defer sceneRegistry.deinit();
+    defer scriptEngine.deinit();
 
     scriptEngine.runFile("src/assets/scripts/main.lua");
     log.info("Initialized", .{});
@@ -84,8 +84,7 @@ pub fn main(init: std.process.Init) !void {
         // rendering
         renderer.drawBackground();
         for (sceneRegistry.scenes.items) |s| {
-            log.info("{s}", .{ s.scene.name.? });
-            try renderer.drawScene(s.scene);
+            try renderer.drawScene(s);
         }
 
         try renderer.present();

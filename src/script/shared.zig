@@ -33,3 +33,15 @@ pub fn dumpStack(l: *Lua) void {
 
     log.info("-----------------------------", .{});
 }
+
+pub fn OwnedHandle(comptime Fn: type) type {
+    return struct {
+        ctx: ?*anyopaque,
+        func: ?*const Fn = null,
+        destroy_fn: ?*const fn(ctx: ?*anyopaque) void = null,
+
+        pub fn destroy(self: @This()) void {
+            if (self.destroy_fn) |f| f(self.ctx);
+        }
+    };
+}
