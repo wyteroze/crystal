@@ -234,6 +234,19 @@ fn vec2String(l: *Lua) i32 {
     return 1;
 }
 
+pub fn pushVec3(l: *Lua, v: Vec3_SIMD) void {
+    const vec = l.newUserdata(Vec3_SIMD, 0);
+    vec.* = v;
+
+    l.setMetatableRegistry("Vec3");
+}
+
+pub fn checkVec3(l: *Lua, index: i32) Vec3_SIMD {
+    const v = l.checkUserdata(Vec3_SIMD, index, "Vec3");
+
+    return v.*;
+}
+
 pub fn register(l: *Lua) !void {
     // Vec3 object
     try l.newMetatable("Vec3");

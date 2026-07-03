@@ -7,6 +7,8 @@ const Lua = zlua.Lua;
 const log = @import("../log.zig").script;
 const lua_vec = @import("lua_vec.zig");
 const lua_log = @import("lua_log.zig");
+const lua_scene = @import("lua_scene.zig");
+const lua_object = @import("lua_object.zig");
 
 pub const ScriptEngine = struct {
     lua: *Lua,
@@ -17,6 +19,8 @@ pub const ScriptEngine = struct {
 
         try lua_vec.register(lua);
         try lua_log.register(lua, allocator);
+        try lua_scene.register(lua, allocator);
+        try lua_object.register(lua);
 
         return .{
             .lua = lua

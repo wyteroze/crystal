@@ -11,7 +11,7 @@ const Renderer      = @import("Renderer.zig").Renderer;
 const Mesh          = @import("Mesh.zig").Mesh;
 const Sprite        = @import("Sprite.zig").Sprite;
 const Camera        = @import("Camera.zig").Camera;
-const Instance      = @import("Instance.zig").Instance;
+const Object        = @import("Object.zig").Object;
 const ScriptEngine  = @import("script/ScriptEngine.zig").ScriptEngine;
 
 const fps = 120;

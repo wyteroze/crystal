@@ -5,6 +5,10 @@ const zlua = @import("zlua");
 const log = @import("../log.zig").lua;
 const Lua = zlua.Lua;
 
+pub fn setObjectMetatable(l: *Lua) void {
+    l.setMetatableRegistry("Object");
+}
+
 // Dumps the stack to the terminal
 pub fn dumpStack(l: *Lua) void {
     const top = l.getTop();

@@ -4,6 +4,7 @@ Copyright 2026 wyteroze. Licensed under the Apache License, Version 2.0.
 
 local myScene = Scene.new()
 
+if true then return end
 local bullyMoonMesh = Assets.loadMesh("bullymoon")
 local bullyMoonTex = Assets.loadImage("bullymoon")
 local bullyMoon = Object.mesh(bullyMoonMesh, bullyMoonTex)
