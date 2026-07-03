@@ -8,7 +8,11 @@
 --- Represents a collection of objects, and has
 --- other responsibilities.
 --- @class Scene
+---
+--- Objects under the scene.
 --- @field Objects Object[]
+---
+--- The camera that's used to render the scene.
 --- @field Camera? Camera
 ---
 --- "Attaches" a function to the scene's update event.
@@ -22,8 +26,11 @@
 --- Removes an object from the scene. Does nothing if the object isn't in the scene.
 --- @field RemoveObject fun(self: Scene, object: Object)
 
---- Factory for creating scenes
+--- Factory for creating and managing scenes
 --- @class SceneLib
+---
+--- The scene that will be rendered. You may only have one scene enabled at any time. Set to nil to render nothing.
+--- @field CurrentScene Scene?
 Scene = {}
 
 --- Returns a new Scene

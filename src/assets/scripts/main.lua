@@ -8,6 +8,8 @@ myScene.Camera = camera
 camera.Position = Vec3.new(0, 0, -10)
 camera.Rotation = Vec3.new(0, 0, 0)
 
+Scene.CurrentScene = myScene
+
 local bullyMoonMesh = Assets.loadMesh("bullymoon.obj")
 local bullyMoonTex = Assets.loadImage("bullymoon.bmp")
 local bullyMoon = Object.mesh(bullyMoonMesh, bullyMoonTex)
