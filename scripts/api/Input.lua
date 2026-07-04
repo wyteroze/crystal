@@ -26,6 +26,12 @@ Copyright 2026 wyteroze. Licensed under the Apache License, Version 2.0.
 
 --- Library relating to various input-related things
 --- @class InputLib
+---
+--- Determines if the mouse can move.
+--- @field MouseLocked boolean
+---
+--- Determines if the mouse is visible.
+--- @field MouseVisible boolean
 Input = {}
 
 --- Connect a callback to when an input begins. Call the returned function once to disconnect the callback.

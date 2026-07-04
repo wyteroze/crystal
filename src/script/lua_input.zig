@@ -265,6 +265,49 @@ fn inputGetValue(l: *Lua) i32 {
     return 1;
 }
 
+fn inputIndex(l: *Lua) i32 {
+    const key = l.checkString(2);
+
+    // TODO: move to sdl3, better zig bindings and software rendering
+    // performance plus we won't need to deal with this type of stuff
+    if (std.mem.eql(u8, key, "MouseLocked")) {
+        log.warn("Input.MouseLocked always returns false due to SDL issues", .{});
+
+        l.pushBoolean(false);
+        return 1;
+    } else if (std.mem.eql(u8, key, "MouseVisible")) {
+        log.warn("Input.MouseVisible always returns false due to SDL issues", .{});
+
+        l.pushBoolean(false);
+        return 1;
+    }
+
+    l.raiseErrorStr("no property named '%s' exists", .{ key.ptr });
+    return 0;
+}
+
+fn inputNewIndex(l: *Lua) i32 {
+    const key = l.checkString(2);
+    if (std.mem.eql(u8, key, "MouseLocked")) {
+        log.warn("modifying Input.MouseLocked has no effect due to SDL issues", .{});
+
+        return 0;
+    } else if (std.mem.eql(u8, key, "MouseVisible")) {
+        const visible = l.toBoolean(3);
+        sdl.showCursor(
+            if (visible) .disable else .enable
+        ) catch {
+            l.raiseErrorStr("failed to set mouse visibility to '%s'", .{ visible });
+            return 0;
+        };
+
+        return 0;
+    }
+
+    l.raiseErrorStr("no property named '%s' exists, you can not assign to it", .{ key.ptr });
+    return 0;
+}
+
 const input_lib = [_]zlua.FnReg{
     .{ .name = "OnBegin", .func = zlua.wrap(inputOnBegin) },
     .{ .name = "OnEnd", .func = zlua.wrap(inputOnEnd) },
@@ -280,6 +323,14 @@ pub fn register(l: *Lua, a: std.mem.Allocator) !void {
 
     l.newTable();
     l.setFuncs(&input_lib, 0);
+
+    l.newTable();
+    l.pushFunction(zlua.wrap(inputIndex));
+    l.setField(-2, "__index");
+    l.pushFunction(zlua.wrap(inputNewIndex));
+    l.setField(-2, "__newindex");
+    l.setMetatable(-2);
+
     l.setGlobal("Input");
 }
 

@@ -22,13 +22,15 @@ local uziCube = Object.mesh(uziMesh, uziTex)
 uziCube.Position = Vec3.new(2.5, 0, 0)
 myScene:AddObject(uziCube)
 
+Input.OnBegin("LeftMouseButton", function()
+    Input.MouseVisible = false
+end)
+Input.OnBegin("Escape", function()
+	Input.MouseVisible = true
+end)
+
 Input.OnChange("MouseMove", function(input)
-    local delta = input.Delta
-    camera.Rotation:Add(Vec3.new(
-        delta.Y,
-        delta.X,
-        0
-    ))
+    camera.Rotation:Add(Vec3.new(input.Delta.Y, input.Delta.X, 0))
 end)
 
 myScene:OnUpdate(function(dt)
