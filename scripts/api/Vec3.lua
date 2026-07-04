@@ -15,13 +15,13 @@ Copyright 2026 wyteroze. Licensed under the Apache License, Version 2.0.
 --- @field Add fun(self: Vec3, addend: Vec3)
 ---
 --- Subtracts `subtrahend` to this vector in place. Similar to `-=` in other languages, but Lua doesn't have this.
---- @field Subtract fun(self: Vec3, subtrahend: Vec3)
+--- @field Sub fun(self: Vec3, subtrahend: Vec3)
 ---
 --- Multiplies this vector by `multiplier` in place. Similar to `*=` in other languages, but Lua doesn't have this.
---- @field Multiply fun(self: Vec3, multiplier: Vec3)
+--- @field Mul fun(self: Vec3, multiplier: Vec3)
 ---
 --- Divides this vector by `divisor` in place. Similar to `/=` in other languages, but Lua doesn't have this.
---- @field Divide fun(self: Vec3, divisor: Vec3)
+--- @field Div fun(self: Vec3, divisor: Vec3)
 
 --- Factory for creating Vec3s
 --- @class Vec3Lib
