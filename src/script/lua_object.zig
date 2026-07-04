@@ -29,9 +29,9 @@ const object_lib = [_]zlua.FnReg{
 fn objectIndex(l: *Lua) i32 {
     const obj = l.checkUserdata(Object, 1, "Object");
     const key = l.checkString(2);
-    if (std.mem.eql(u8, key, "Position")) { lua_vec.pushVec3(l, obj.transform.position); return 1; }
-    if (std.mem.eql(u8, key, "Rotation")) { lua_vec.pushVec3(l, obj.transform.rotation); return 1; }
-    if (std.mem.eql(u8, key, "Scale"))    { lua_vec.pushVec3(l, obj.transform.scale);    return 1; }
+    if (std.mem.eql(u8, key, "Position")) { lua_vec.pushVec3Ref(l, &obj.transform.position); return 1; }
+    if (std.mem.eql(u8, key, "Rotation")) { lua_vec.pushVec3Ref(l, &obj.transform.rotation); return 1; }
+    if (std.mem.eql(u8, key, "Scale"))    { lua_vec.pushVec3Ref(l, &obj.transform.scale);    return 1; }
 
     const result = switch (obj.data) {
         .camera => |*c| lua_camera.index(l, c, key),
