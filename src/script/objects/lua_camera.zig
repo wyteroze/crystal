@@ -29,7 +29,7 @@ pub fn newIndex(l: *Lua, _: *object.CameraObject, key: []const u8) ?void {
     return null;
 }
 
-pub fn gc(c: *object.CameraObject, allocator: std.mem.Allocator) void {
+pub fn gc(_: *Lua, c: *object.CameraObject, allocator: std.mem.Allocator) void {
     allocator.destroy(c.camera);
 }
 
@@ -38,12 +38,13 @@ pub fn construct(l: *Lua, obj: *object.Object, allocator: std.mem.Allocator) i32
         l.raiseErrorStr("out of memory creating camera", .{});
         return 0;
     };
-    native_camera.* = Camera.init(0.1, 1000.0, 90.0);
 
+    native_camera.* = Camera.init(0.1, 1000.0, 90.0, undefined);
     obj.* = .{
         .transform = types.Transform.identity(),
         .data = .{ .camera = .{ .camera = native_camera } }
     };
+    native_camera.transform = &obj.transform;
 
     return 1;
 }

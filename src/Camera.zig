@@ -13,14 +13,14 @@ pub const Camera = struct {
     nearPlane: f32,
     farPlane: f32,
     fov: f32,
-    transform: Transform,
+    transform: *Transform,
 
-    pub fn init(nearPlane: f32, farPlane: f32, fov: f32) Camera {
+    pub fn init(nearPlane: f32, farPlane: f32, fov: f32, transform: *Transform) Camera {
         return .{
             .nearPlane = nearPlane,
             .farPlane = farPlane,
             .fov = fov,
-            .transform = Transform.identity()
+            .transform = transform
         };
     }
 

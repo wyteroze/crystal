@@ -11,7 +11,11 @@ var allocator: std.mem.Allocator = undefined;
 var sceneRegistry: *SceneRegistry = undefined;
 var current_scene_ref: ?i32 = null;
 
-const ScenePtr = struct { ptr: *Scene, camera_ref: ?i32 = null };
+const ScenePtr = struct {
+    ptr: *Scene,
+    camera_ref: ?i32 = null,
+    object_refs: std.AutoHashMap(*Object, i32) = undefined
+};
 const RefCtx = struct { lua: *Lua, ref: i32 };
 const UpdateHandler = struct {
     lua: *Lua,
@@ -61,7 +65,7 @@ pub fn sceneNew(l: *Lua) i32 {
     native_scene.* = Scene.init(allocator, name, null);
 
     const scene: *ScenePtr = l.newUserdata(ScenePtr, 0);
-    scene.* = .{ .ptr = native_scene };
+    scene.* = .{ .ptr = native_scene, .object_refs = std.AutoHashMap(*Object, i32).init(allocator) };
     l.setMetatableRegistry("Scene");
     l.pushValue(-1);
 
@@ -208,8 +212,16 @@ pub fn sceneOnUpdate(l: *Lua) i32 {
 pub fn sceneAddObject(l: *Lua) i32 {
     const self = l.checkUserdata(ScenePtr, 1, "Scene");
     const object = l.checkUserdata(Object, 2, "Object");
-    self.ptr.addObject(object.*) catch {
+    self.ptr.addObject(object) catch {
         l.raiseErrorStr("out of memory", .{});
+        return 0;
+    };
+
+    l.pushValue(2);
+    const ref = l.ref(zlua.registry_index);
+    self.object_refs.put(object, ref) catch {
+        l.unref(zlua.registry_index, ref);
+        l.raiseErrorStr("out of memory tracking object reference", .{});
         return 0;
     };
 
@@ -220,6 +232,10 @@ pub fn sceneRemoveObject(l: *Lua) i32 {
     const self = l.checkUserdata(ScenePtr, 1, "Scene");
     const object = l.checkUserdata(Object, 2, "Object");
     self.ptr.removeObject(object);
+
+    if (self.object_refs.fetchRemove(object)) |entry| {
+        l.unref(zlua.registry_index, entry.value);
+    }
 
     return 0;
 }
@@ -244,6 +260,13 @@ pub fn sceneGc(l: *Lua) i32 {
         const handler = @as(*UpdateHandler, @ptrCast(@alignCast(cb.ctx.?)));
         UpdateHandler.destroy(handler);
     }
+
+    var it = self.object_refs.iterator();
+    while (it.next()) |entry| {
+        l.unref(zlua.registry_index, entry.value_ptr.*);
+    }
+
+    self.object_refs.deinit();
 
     sceneRegistry.removeScene(self.ptr);
     return 0;

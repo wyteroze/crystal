@@ -29,8 +29,8 @@ pub const std_options: std.Options = .{
     // Filters for scopes
     .log_scope_levels = &.{
         .{ .scope = .script, .level = .debug },
-        .{ .scope = .render, .level = .info },
-        .{ .scope = .parse, .level = .warn },
+        .{ .scope = .render, .level = .debug },
+        .{ .scope = .parse, .level = .debug },
         .{ .scope = .engine, .level = .debug }
     }
 };
@@ -63,12 +63,12 @@ pub fn main(init: std.process.Init) !void {
 
     var running = true;
     var lastTimeMs: u64 = sdl.getPerformanceCounter();
-    //const frequency = @as(f32, @floatFromInt(sdl.getPerformanceFrequency()));
+    const frequency = @as(f32, @floatFromInt(sdl.getPerformanceFrequency()));
 
     log.info("Starting loop", .{});
     while (running) {
         const currentTime = sdl.getPerformanceCounter();
-        //const dt = @as(f32, @floatFromInt(currentTime - lastTimeMs)) / frequency;
+        const dt = @as(f32, @floatFromInt(currentTime - lastTimeMs)) / frequency;
         lastTimeMs = currentTime;
 
         // events
@@ -82,9 +82,10 @@ pub fn main(init: std.process.Init) !void {
 
         // rendering
         renderer.drawBackground();
+
         const scene = sceneRegistry.current_scene;
         if (scene) |s| {
-            log.debug("{s}", .{ s.name.? });
+            s.update(dt);
             try renderer.drawScene(s);
         }
 

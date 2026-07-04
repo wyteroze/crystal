@@ -27,11 +27,14 @@ pub const Object = struct {
 
 pub const MeshObject = struct {
     mesh: *const Mesh,
-    texture: ?*const Sprite
+    texture: ?*const Sprite,
+    mesh_ref: i32,
+    texture_ref: ?i32 = null
 };
 
 pub const ImageObject = struct {
-    image: *const Sprite
+    image: *const Sprite,
+    image_ref: i32,
 };
 
 pub const CameraObject = struct {

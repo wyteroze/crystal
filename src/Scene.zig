@@ -11,7 +11,7 @@ pub const UpdateCallback = struct {
 
 pub const Scene = struct {
     allocator: std.mem.Allocator,
-    objects: std.ArrayList(Object),
+    objects: std.ArrayList(*Object),
     name: ?[]const u8,
     callbacks: std.ArrayList(UpdateCallback),
     camera: ?*Camera,
@@ -20,7 +20,7 @@ pub const Scene = struct {
         return .{
             .name = name,
             .allocator = allocator,
-            .objects = std.ArrayList(Object).empty,
+            .objects = std.ArrayList(*Object).empty,
             .callbacks = std.ArrayList(UpdateCallback).empty,
             .camera = camera
         };
@@ -31,12 +31,12 @@ pub const Scene = struct {
         self.callbacks.deinit(self.allocator);
     }
 
-    pub fn addObject(self: *Scene, object: Object) !void {
+    pub fn addObject(self: *Scene, object: *Object) !void {
         try self.objects.append(self.allocator, object);
     }
 
     pub fn removeObject(self: *Scene, object: *const Object) void {
-        for (self.objects.items, 0..) |*obj, i| {
+        for (self.objects.items, 0..) |obj, i| {
             if (obj == object) {
                 _ = self.objects.swapRemove(i);
                 return;

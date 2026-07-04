@@ -15,10 +15,10 @@ const vec3Lib = [_]zlua.FnReg{
 
 const vec3Methods = [_]zlua.FnReg{
     // methods
-    .{ .name = "add", .func = zlua.wrap(vec3Add) },
-    .{ .name = "sub", .func = zlua.wrap(vec3Subtract) },
-    .{ .name = "mul", .func = zlua.wrap(vec3Multiply) },
-    .{ .name = "div", .func = zlua.wrap(vec3Divide) },
+    .{ .name = "Add", .func = zlua.wrap(vec3Add) },
+    .{ .name = "Sub", .func = zlua.wrap(vec3Subtract) },
+    .{ .name = "Mul", .func = zlua.wrap(vec3Multiply) },
+    .{ .name = "Div", .func = zlua.wrap(vec3Divide) },
 
     // metamethods
     .{ .name = "__add", .func = zlua.wrap(vec3Add) },
@@ -33,10 +33,10 @@ const vec2Lib = [_]zlua.FnReg{
 
 const vec2Methods = [_]zlua.FnReg{
     // methods
-    .{ .name = "add", .func = zlua.wrap(vec2Add) },
-    .{ .name = "sub", .func = zlua.wrap(vec2Subtract) },
-    .{ .name = "mul", .func = zlua.wrap(vec2Multiply) },
-    .{ .name = "div", .func = zlua.wrap(vec2Divide) },
+    .{ .name = "Add", .func = zlua.wrap(vec2Add) },
+    .{ .name = "Sub", .func = zlua.wrap(vec2Subtract) },
+    .{ .name = "Mul", .func = zlua.wrap(vec2Multiply) },
+    .{ .name = "Div", .func = zlua.wrap(vec2Divide) },
 
     // metamethods
     .{ .name = "__add", .func = zlua.wrap(vec2Add) },

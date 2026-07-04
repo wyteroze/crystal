@@ -31,7 +31,6 @@ pub const Renderer = struct {
     framebuffer: []u32,
     depthbuffer: []f32,
     size: Vec2_cint,
-    camera: ?*Camera,
     default_camera: *Camera,
     tri_buffer: std.ArrayList(Triangle),
     tri_raster_list: std.ArrayList(Triangle),
@@ -39,7 +38,13 @@ pub const Renderer = struct {
     pub fn init(allocator: std.mem.Allocator, window: *sdl.Window, size: Vec2_cint, vsync: ?bool) !Renderer {
         const renderer = try sdl.createRenderer(window, null, .{ .accelerated = true, .present_vsync = vsync orelse false });
         const texture = try sdl.createTexture(renderer, .argb8888, .streaming, size.x, size.y);
-        var default_camera = Camera.init(0.1, 1000.0, 90.0);
+
+        const default_transform = try allocator.create(Transform);
+        default_transform.* = Transform.identity();
+
+        const default_camera = try allocator.create(Camera);
+        default_camera.* = Camera.init(0.1, 1000.0, 90.0, undefined);
+        default_camera.transform = default_transform;
 
         return .{
             .allocator = allocator,
@@ -48,8 +53,7 @@ pub const Renderer = struct {
             .framebuffer = try allocator.alloc(u32, @as(usize, @intCast(size.x * size.y))),
             .depthbuffer = try allocator.alloc(f32, @as(usize, @intCast(size.x * size.y))),
             .size = size,
-            .camera = null,
-            .default_camera = &default_camera,
+            .default_camera = default_camera,
             .tri_buffer = std.ArrayList(Triangle).empty,
             .tri_raster_list = std.ArrayList(Triangle).empty
         };
@@ -60,6 +64,8 @@ pub const Renderer = struct {
         self.texture.destroy();
         self.allocator.free(self.framebuffer);
         self.allocator.free(self.depthbuffer);
+        self.allocator.destroy(self.default_camera.transform);
+        self.allocator.destroy(self.default_camera);
         self.tri_buffer.deinit(self.allocator);
         self.tri_raster_list.deinit(self.allocator);
     }
@@ -80,12 +86,12 @@ pub const Renderer = struct {
     }
 
     pub fn drawScene(self: *Renderer, scene: *Scene) !void {
-        log.debug("{d} objects", .{scene.objects.items.len});
+        //log.debug("{d} objects", .{scene.objects.items.len});
 
         for (scene.objects.items) |obj| {
             switch (obj.data) {
                 .mesh => |m| {
-                    try self.drawMesh(m.mesh, m.texture, &obj.transform);
+                    try self.drawMesh(m.mesh, m.texture, &obj.transform, scene.camera);
                 },
                 .image => |i| {
                     log.warn("standalone image rendering is not supported yet", .{});
@@ -96,9 +102,9 @@ pub const Renderer = struct {
         }
     }
 
-    pub fn drawMesh(self: *Renderer, mesh: *const Mesh, texture: ?*const Sprite, transform: *const Transform) !void {
+    pub fn drawMesh(self: *Renderer, mesh: *const Mesh, texture: ?*const Sprite, transform: *const Transform, cam: ?*Camera) !void {
         const aspect_ratio = @as(f32, @floatFromInt(self.size.x)) / @as(f32, @floatFromInt(self.size.y));
-        const camera = self.camera orelse self.default_camera;
+        const camera = cam orelse self.default_camera;
 
         const camera_transform = camera.transform;
         const projection_matrix = camera.getProjectionMatrix(aspect_ratio);
@@ -402,8 +408,8 @@ pub const Renderer = struct {
         self.drawLine(p2, p0, color);
     }
 
-    pub fn visualizeAxes(self: *Renderer) void {
-        const camera = self.camera orelse self.default_camera;
+    pub fn visualizeAxes(self: *Renderer, cam: ?*Camera) void {
+        const camera = cam orelse self.default_camera;
         const projection_matrix = camera.getProjectionMatrix();
         const view_matrix = camera.getViewMatrix();
 

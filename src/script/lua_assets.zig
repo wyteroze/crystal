@@ -54,6 +54,18 @@ pub fn loadImage(l: *Lua) i32 {
     return 1;
 }
 
+fn meshDataGc(l: *Lua) i32 {
+    const mesh = l.checkUserdata(Mesh, 1, "MeshData");
+    mesh.deinit();
+    return 0;
+}
+
+fn imageDataGc(l: *Lua) i32 {
+    const sprite = l.checkUserdata(Sprite, 1, "ImageData");
+    sprite.deinit(allocator);
+    return 0;
+}
+
 pub fn register(l: *Lua, a: std.mem.Allocator, i: std.Io) !void {
     allocator = a;
     io = i;
@@ -65,7 +77,12 @@ pub fn register(l: *Lua, a: std.mem.Allocator, i: std.Io) !void {
 
     // Datatypes
     try l.newMetatable("MeshData");
+    l.pushFunction(zlua.wrap(meshDataGc));
+    l.setField(-2, "__gc");
     l.pop(1);
+
     try l.newMetatable("ImageData");
+    l.pushFunction(zlua.wrap(imageDataGc));
+    l.setField(-2, "__gc");
     l.pop(1);
 }

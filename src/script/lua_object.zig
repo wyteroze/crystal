@@ -67,7 +67,6 @@ fn objectMesh(l: *Lua) i32 {
     const r = lua_mesh.construct(l, obj, allocator);
     if (r == 1) shared.setObjectMetatable(l);
 
-    shared.setObjectMetatable(l);
     return 1;
 }
 
@@ -90,9 +89,9 @@ fn objectCamera(l: *Lua) i32 {
 pub fn objectGc(l: *Lua) i32 {
     const obj = l.checkUserdata(Object, 1, "Object");
     switch (obj.data) {
-        .mesh => |*m| lua_mesh.gc(m, allocator),
-        .image => |*i| lua_image.gc(i, allocator),
-        .camera => |*c| lua_camera.gc(c, allocator),
+        .mesh => |*m| lua_mesh.gc(l, m, allocator),
+        .image => |*i| lua_image.gc(l, i, allocator),
+        .camera => |*c| lua_camera.gc(l, c, allocator),
     }
 
     return 0;

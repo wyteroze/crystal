@@ -41,9 +41,17 @@ pub const Transform = struct {
     position: Vec3_SIMD,
     rotation: Vec3_SIMD,
 
-    pub fn identity() Transform {
+    pub fn zero() Transform {
         return .{
             .scale = Vec3_SIMD{ 0, 0, 0 },
+            .position = Vec3_SIMD{ 0, 0, 0 },
+            .rotation = Vec3_SIMD{ 0, 0, 0 },
+        };
+    }
+
+    pub fn identity() Transform {
+        return .{
+            .scale = Vec3_SIMD{ 1, 1, 1 },
             .position = Vec3_SIMD{ 0, 0, 0 },
             .rotation = Vec3_SIMD{ 0, 0, 0 },
         };
