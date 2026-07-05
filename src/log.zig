@@ -24,6 +24,7 @@ pub const render    = std.log.scoped(.render);
 pub const parse     = std.log.scoped(.parse);
 pub const obj       = Tagged(.parse, "obj");
 pub const bmp       = Tagged(.parse, "bmp");
+pub const wav       = Tagged(.parse, "wav");
 
 // Engine
 pub const engine    = std.log.scoped(.engine);
