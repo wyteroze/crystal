@@ -11,6 +11,8 @@
 ---
 --- Objects under the scene.
 --- @field Objects Object[]
+--- Audios under the scene.
+--- @field Audios Audio[]
 ---
 --- The camera that's used to render the scene.
 --- @field Camera? Camera
@@ -28,6 +30,12 @@
 ---
 --- Removes an object from the scene. Does nothing if the object isn't in the scene.
 --- @field RemoveObject fun(self: Scene, object: Object)
+---
+--- Adds an audio to the scene's Audios list, making it audible. Does nothing if the audio is already in the scene.
+--- @field AddAudio fun(self: Scene, audio: Audio)
+---
+--- Removes an audio from the scene. Does nothing if the audio isn't in the scene.
+--- @field RemoveAudio fun(self: Scene, audio: Audio)
 
 --- Factory for creating and managing scenes
 --- @class SceneLib

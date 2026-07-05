@@ -20,3 +20,9 @@ function Assets.loadMesh(meshPath) end
 --- @param imagePath string
 --- @return ImageData
 function Assets.loadImage(imagePath) end
+
+--- Loads an audio from your game's `assets/audios/`
+--- You may also choose audios from folders. (ex. `guns/pistol/shoot.wav`)
+--- @param audioPath string
+--- @return AudioData
+function Assets.loadAudio(audioPath) end

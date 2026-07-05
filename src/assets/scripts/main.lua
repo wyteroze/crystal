@@ -22,6 +22,12 @@ local uziCube = Object.mesh(uziMesh, uziTex)
 uziCube.Position = Vec3.new(2.5, 0, 0)
 myScene:AddObject(uziCube)
 
+local pierre = Assets.loadAudio("yopierre.wav")
+local pierreAudio = Audio.new(pierre)
+pierreAudio:AttachTo(uziCube)
+myScene:AddAudio(pierreAudio)
+pierreAudio.Playing = true
+
 Input.OnBegin("LeftMouseButton", function()
     Input.MouseVisible = false
 end)
