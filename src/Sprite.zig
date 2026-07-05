@@ -4,6 +4,7 @@ const std = @import("std");
 const bmp_parser = @import("parsers/bmp.zig");
 
 pub const Sprite = struct {
+    allocator: std.mem.Allocator,
     width: u32,
     height: u32,
 

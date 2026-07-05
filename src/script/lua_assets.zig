@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const zlua = @import("zlua");
-const shared = @import("shared.zig");
+const shared = @import("shared/shared.zig");
 const types = @import("../types.zig");
 const Mesh = @import("../Mesh.zig").Mesh;
 const Sprite = @import("../Sprite.zig").Sprite;
@@ -12,7 +12,6 @@ var io: std.Io = undefined;
 
 const mesh_path = "src/assets/models/";
 const image_path = "src/assets/images/";
-
 const assets_lib = [_]zlua.FnReg {
     .{ .name = "loadMesh", .func = zlua.wrap(loadMesh) },
     .{ .name = "loadImage", .func = zlua.wrap(loadImage) }
@@ -76,13 +75,6 @@ pub fn register(l: *Lua, a: std.mem.Allocator, i: std.Io) !void {
     l.setGlobal("Assets");
 
     // Datatypes
-    try l.newMetatable("MeshData");
-    l.pushFunction(zlua.wrap(meshDataGc));
-    l.setField(-2, "__gc");
-    l.pop(1);
-
-    try l.newMetatable("ImageData");
-    l.pushFunction(zlua.wrap(imageDataGc));
-    l.setField(-2, "__gc");
-    l.pop(1);
+    try shared.registerSimpleClass(l, "MeshData", zlua.wrap(meshDataGc));
+    try shared.registerSimpleClass(l, "ImageData", zlua.wrap(imageDataGc));
 }

@@ -109,6 +109,7 @@ pub fn parseBmp(allocator: std.mem.Allocator, reader: *std.Io.Reader) !Sprite {
 
     log.info("parsed bmp: {d}x{d}, {d}bpp", .{ img_width, img_height, bpp });
     return Sprite{
+        .allocator = allocator,
         .width  = img_width,
         .height = img_height,
         .pixels = pixels,

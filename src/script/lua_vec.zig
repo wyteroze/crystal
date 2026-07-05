@@ -2,12 +2,12 @@
 
 const std = @import("std");
 const zlua = @import("zlua");
-const shared = @import("shared.zig");
+const properties = @import("shared/properties.zig");
 const types = @import("../types.zig");
 const Lua = zlua.Lua;
 const Vec2_SIMD = types.Vec2_SIMD;
 const Vec3_SIMD = types.Vec3_SIMD;
-const Property = shared.Property;
+const Property = properties.Property;
 
 const Vec3Ref = VecRef(Vec3_SIMD);
 const Vec2Ref = VecRef(Vec2_SIMD);
@@ -99,7 +99,7 @@ fn vecGet(comptime R: type, comptime name: [:0]const u8, comptime props: []const
             const self = l.checkUserdata(R, 1, name);
             const key = l.checkString(2);
 
-            if (shared.dispatchIndex(R, props, l, self, key)) |r| return r;
+            if (properties.dispatchIndex(R, props, l, self, key)) |r| return r;
 
             _ = l.getMetatableRegistry(name);
             l.pushValue(2);
@@ -115,7 +115,7 @@ fn vecSet(comptime R: type, comptime name: [:0]const u8, comptime props: []const
             const self = l.checkUserdata(R, 1, name);
             const key = l.checkString(2);
 
-            if (shared.dispatchNewIndex(R, props, l, self, key) != null) return 0;
+            if (properties.dispatchNewIndex(R, props, l, self, key) != null) return 0;
 
             l.raiseErrorStr("invalid field '%s'", .{key.ptr});
             return 0;

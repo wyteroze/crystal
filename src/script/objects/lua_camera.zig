@@ -3,8 +3,6 @@
 const std = @import("std");
 const zlua = @import("zlua");
 const types = @import("../../types.zig");
-const shared = @import("../shared.zig");
-const strEq = shared.strEq;
 const Lua = zlua.Lua;
 const object = @import("../../object.zig");
 
@@ -12,16 +10,16 @@ const Camera = @import("../../Camera.zig").Camera;
 const lua_vec = @import("../lua_vec.zig");
 
 pub fn index(l: *Lua, c: *object.CameraObject, key: []const u8) ?i32 {
-    if (strEq(key, "Fov"))           { l.pushNumber(c.camera.fov); return 1; }
-    if (strEq(key, "UpVector"))      { lua_vec.pushVec3(l, c.camera.getUpDirection()); return 1; }
-    if (strEq(key, "RightVector"))   { lua_vec.pushVec3(l, c.camera.getRightDirection()); return 1; }
-    if (strEq(key, "ForwardVector")) { lua_vec.pushVec3(l, c.camera.getLookDirection()); return 1; }
+    if (std.mem.eql(u8, key, "Fov"))           { l.pushNumber(c.camera.fov); return 1; }
+    if (std.mem.eql(u8, key, "UpVector"))      { lua_vec.pushVec3(l, c.camera.getUpDirection()); return 1; }
+    if (std.mem.eql(u8, key, "RightVector"))   { lua_vec.pushVec3(l, c.camera.getRightDirection()); return 1; }
+    if (std.mem.eql(u8, key, "ForwardVector")) { lua_vec.pushVec3(l, c.camera.getLookDirection()); return 1; }
 
     return null;
 }
 
 pub fn newIndex(l: *Lua, _: *object.CameraObject, key: []const u8) ?void {
-    if (strEq(key, "ForwardVector") or strEq(key, "Far") or strEq(key, "Near") or strEq(key, "Fov")) {
+    if (std.mem.eql(u8, key, "ForwardVector") or std.mem.eql(u8, key, "Far") or std.mem.eql(u8, key, "Near") or std.mem.eql(u8, key, "Fov")) {
         l.raiseErrorStr("'%s' is read-only, you may not assign to it", .{ key.ptr });
         return 0;
     }

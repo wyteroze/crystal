@@ -3,8 +3,6 @@
 const std = @import("std");
 const zlua = @import("zlua");
 const types = @import("../../types.zig");
-const shared = @import("../shared.zig");
-const strEq = shared.strEq;
 const Lua = zlua.Lua;
 const object = @import("../../object.zig");
 

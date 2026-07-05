@@ -3,9 +3,9 @@
 const std = @import("std");
 const zlua = @import("zlua");
 const sdl3 = @import("sdl3");
-const shared = @import("shared.zig");
 const types = @import("../types.zig");
 const lua_vec = @import("lua_vec.zig");
+const LuaSignal = @import("shared/Signal.zig").LuaSignal;
 const Platform = @import("../Platform.zig").Platform;
 const log = @import("../log.zig").lua;
 const Lua = zlua.Lua;
@@ -110,20 +110,26 @@ pub const InputValue = union(enum) {
     vec2: Vec2_SIMD
 };
 
-const CallbackKind = enum { begin, change, end };
-
-const Callback = struct {
-    lua: *Lua,
-    ref: i32,
-    code_filter: ?InputCode, // null means it listens to all codes
-    kind: CallbackKind,
-    disconnected: bool = false
-};
-
 var allocator: std.mem.Allocator = undefined;
-var callbacks: std.ArrayList(*Callback) = undefined;
 var down_state: std.AutoHashMap(InputCode, InputValue) = undefined;
 var window: sdl3.video.Window = undefined;
+
+const InputArgs = struct {
+    code: InputCode,
+    value: InputValue,
+    delta: InputValue,
+    user_index: i32
+};
+const InputSignal = LuaSignal(InputArgs, InputCode);
+
+var begin_signal: InputSignal = undefined;
+var end_signal: InputSignal = undefined;
+var change_signal: InputSignal = undefined;
+
+fn pushInputArgs(l: *Lua, args: InputArgs) i32 {
+    pushInputTable(l, args.code, args.value, args.delta, args.user_index);
+    return 1;
+}
 
 pub fn pushInputTable(l: *Lua, code: InputCode, value: InputValue, delta: InputValue, user_index: i32) void {
     l.newTable();
@@ -147,74 +153,34 @@ pub fn pushInputTable(l: *Lua, code: InputCode, value: InputValue, delta: InputV
     l.setField(-2, "UserIndex");
 }
 
-fn dispatch(kind: CallbackKind, code: InputCode, value: InputValue, delta: InputValue, user_index: i32) void {
-    for (callbacks.items) |cb| {
-        if (cb.disconnected) continue;
-        if (cb.kind != kind) continue;
-        if (cb.code_filter) |f| {
-            if (f != code) continue;
-        }
-
-        const l = cb.lua;
-        _ = l.getIndexRaw(zlua.registry_index, cb.ref);
-
-        pushInputTable(l, code, value, delta, user_index);
-        l.protectedCall(.{ .args = 1, .results = 0 }) catch {
-            log.err("Input callback error: {s}", .{ l.toString(-1) catch "???" });
-            l.pop(1);
-        };
-    }
-}
-
 pub fn fireBegin(code: InputCode, value: InputValue, user_index: i32) void {
     down_state.put(code, value) catch {};
-    dispatch(.begin, code, value, .{ .scalar = 0 }, user_index);
+    begin_signal.fire(.{
+        .code = code,
+        .value = value,
+        .delta = .{ .scalar = 0 },
+        .user_index = user_index
+    }, code, pushInputArgs, "Input.OnBegin");
 }
 
 pub fn fireEnd(code: InputCode, user_index: i32) void {
     _ = down_state.remove(code);
-    dispatch(.end, code, .{ .scalar = 0 }, .{ .scalar = 0 }, user_index);
+    end_signal.fire(.{
+        .code = code,
+        .value = .{ .scalar = 0 },
+        .delta = .{ .scalar = 0 },
+        .user_index = user_index
+    }, code, pushInputArgs, "Input.OnEnd");
 }
 
 pub fn fireChange(code: InputCode, value: InputValue, delta: InputValue, user_index: i32) void {
     down_state.put(code, value) catch {};
-    dispatch(.change, code, value, delta, user_index);
-}
-
-fn registerCallback(l: *Lua, kind: CallbackKind, code_filter: ?InputCode, fn_stack_idx: i32) i32 {
-    l.checkType(fn_stack_idx, .function);
-    l.pushValue(fn_stack_idx);
-    const ref = l.ref(zlua.registry_index);
-
-    const cb = allocator.create(Callback) catch {
-        l.raiseErrorStr("out of memory registering input callback", .{});
-        return 0;
-    };
-    cb.* = .{ .lua = l, .ref = ref, .code_filter = code_filter, .kind = kind };
-
-    callbacks.append(allocator, cb) catch {
-        l.unref(zlua.registry_index, ref);
-        allocator.destroy(cb);
-        l.raiseErrorStr("out of memory registering input callback", .{});
-        return 0;
-    };
-
-    l.pushLightUserdata(cb);
-    l.pushClosure(zlua.wrap(disconnectCallback), 1);
-    return 1;
-}
-
-fn disconnectCallback(l: *Lua) i32 {
-    const cb = @as(*Callback, @ptrCast(@alignCast(
-        l.toUserdata(anyopaque, Lua.upvalueIndex(1)) catch unreachable
-    )));
-
-    if (!cb.disconnected) {
-        cb.disconnected = true;
-        l.unref(zlua.registry_index, cb.ref);
-    }
-
-    return 0;
+    change_signal.fire(.{
+        .code = code,
+        .value = value,
+        .delta = delta,
+        .user_index = user_index
+    }, code, pushInputArgs, "Input.OnChange");
 }
 
 fn parseCodeArg(l: *Lua, index: i32) ?InputCode {
@@ -225,54 +191,6 @@ fn parseCodeArg(l: *Lua, index: i32) ?InputCode {
     }
 
     return code;
-}
-
-fn inputOnBegin(l: *Lua) i32 {
-    if (l.typeOf(1) == .string) {
-        const code = parseCodeArg(l, 1) orelse return 0;
-        return registerCallback(l, .begin, code, 2);
-    }
-
-    return registerCallback(l, .begin, null, 1);
-}
-
-fn inputOnEnd(l: *Lua) i32 {
-    if (l.typeOf(1) == .string) {
-        const code = parseCodeArg(l, 1) orelse return 0;
-        return registerCallback(l, .end, code, 2);
-    }
-
-    return registerCallback(l, .end, null, 1);
-}
-
-fn inputOnChange(l: *Lua) i32 {
-    if (l.typeOf(1) == .string) {
-        const code = parseCodeArg(l, 1) orelse return 0;
-        return registerCallback(l, .change, code, 2);
-    }
-
-    return registerCallback(l, .change, null, 1);
-}
-
-fn inputIsDown(l: *Lua) i32 {
-    const code = parseCodeArg(l, 1) orelse return 0;
-    l.pushBoolean(down_state.contains(code));
-
-    return 1;
-}
-
-fn inputGetValue(l: *Lua) i32 {
-    const code = parseCodeArg(l, 1) orelse return 0;
-    if (down_state.get(code)) |v| {
-        switch (v) {
-            .scalar => |s| l.pushNumber(s),
-            .vec2 => |vec| lua_vec.pushVec2(l, vec)
-        }
-    } else {
-        l.pushNumber(0);
-    }
-
-    return 1;
 }
 
 fn inputIndex(l: *Lua) i32 {
@@ -327,22 +245,66 @@ fn inputNewIndex(l: *Lua) i32 {
     return 0;
 }
 
-const input_lib = [_]zlua.FnReg{
-    .{ .name = "OnBegin", .func = zlua.wrap(inputOnBegin) },
-    .{ .name = "OnEnd", .func = zlua.wrap(inputOnEnd) },
-    .{ .name = "OnChange", .func = zlua.wrap(inputOnChange) },
-    .{ .name = "IsDown", .func = zlua.wrap(inputIsDown) },
-    .{ .name = "GetValue", .func = zlua.wrap(inputGetValue) },
+const InputLib = struct {
+    pub fn OnBegin(l: *Lua) i32 {
+        if (l.typeOf(1) == .string) {
+            const code = parseCodeArg(l, 1) orelse return 0;
+            return begin_signal.connect(l, 2, code);
+        }
+
+        return begin_signal.connect(l, 1, null);
+    }
+
+    pub fn OnEnd(l: *Lua) i32 {
+        if (l.typeOf(1) == .string) {
+            const code = parseCodeArg(l, 1) orelse return 0;
+            return end_signal.connect(l, 2, code);
+        }
+
+        return end_signal.connect(l, 1, null);
+    }
+
+    pub fn OnChange(l: *Lua) i32 {
+        if (l.typeOf(1) == .string) {
+            const code = parseCodeArg(l, 1) orelse return 0;
+            return change_signal.connect(l, 2, code);
+        }
+
+        return change_signal.connect(l, 1, null);
+    }
+
+    pub fn GetValue(l: *Lua) i32 {
+        const code = parseCodeArg(l, 1) orelse return 0;
+        if (down_state.get(code)) |v| {
+            switch (v) {
+                .scalar => |s| l.pushNumber(s),
+                .vec2 => |vec| lua_vec.pushVec2(l, vec)
+            }
+        } else {
+            l.pushNumber(0);
+        }
+
+        return 1;
+    }
+
+    pub fn IsDown(l: *Lua) i32 {
+        const code = parseCodeArg(l, 1) orelse return 0;
+        l.pushBoolean(down_state.contains(code));
+
+        return 1;
+    }
 };
 
 pub fn register(l: *Lua, a: std.mem.Allocator, w: sdl3.video.Window) !void {
     window = w;
     allocator = a;
-    callbacks = std.ArrayList(*Callback).empty;
     down_state = std.AutoHashMap(InputCode, InputValue).init(allocator);
+    begin_signal = InputSignal.init(a);
+    change_signal = InputSignal.init(a);
+    end_signal = InputSignal.init(a);
 
-    l.newTable();
-    l.setFuncs(&input_lib, 0);
+    const funcs = zlua.fnRegsFromType(InputLib);
+    l.newLib(funcs);
 
     l.newTable();
     l.pushFunction(zlua.wrap(inputIndex));
@@ -355,11 +317,9 @@ pub fn register(l: *Lua, a: std.mem.Allocator, w: sdl3.video.Window) !void {
 }
 
 pub fn deinit(l: *Lua) void {
-    for (callbacks.items) |cb| {
-        if (!cb.disconnected) l.unref(zlua.registry_index, cb.ref);
-        allocator.destroy(cb);
-    }
+    begin_signal.deinit(l);
+    change_signal.deinit(l);
+    end_signal.deinit(l);
 
-    callbacks.deinit(allocator);
     down_state.deinit();
 }

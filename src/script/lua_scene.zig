@@ -7,6 +7,8 @@ const Scene = @import("../Scene.zig").Scene;
 const SceneRegistry = @import("../SceneRegistry.zig").SceneRegistry;
 const Object = @import("../object.zig").Object;
 const Sprite = @import("../Sprite.zig").Sprite;
+const ref = @import("shared/ref.zig");
+const Signal = @import("shared/Signal.zig");
 const Lua = zlua.Lua;
 var allocator: std.mem.Allocator = undefined;
 var sceneRegistry: *SceneRegistry = undefined;
@@ -243,9 +245,9 @@ pub fn sceneAddObject(l: *Lua) i32 {
     };
 
     l.pushValue(2);
-    const ref = l.ref(zlua.registry_index);
-    self.object_refs.put(object, ref) catch {
-        l.unref(zlua.registry_index, ref);
+    const r = l.ref(zlua.registry_index);
+    self.object_refs.put(object, r) catch {
+        l.unref(zlua.registry_index, r);
         l.raiseErrorStr("out of memory tracking object reference", .{});
         return 0;
     };
