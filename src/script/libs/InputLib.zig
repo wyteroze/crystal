@@ -21,31 +21,7 @@ pub const InputCode = enum {
     LeftMouseButton, RightMouseButton, MiddleMouseButton, MouseScroll, MouseMove, Space,
 
     pub fn name(self: InputCode) [:0]const u8 {
-        return switch (self) {
-            .A => "A", .B => "B", .C => "C", .D => "D", .E => "E", .F => "F", .G => "G", .H => "H",
-            .I => "I", .J => "J", .K => "K", .L => "L", .M => "M", .N => "N", .O => "O", .P => "P",
-            .Q => "Q", .R => "R", .S => "S", .T => "T", .U => "U", .V => "V", .W => "W", .X => "X",
-            .Y => "Y", .Z => "Z",
-            .Exclamation => "Exclamation", .At => "At", .Hashtag => "Hashtag", .Dollar => "Dollar",
-            .Percent => "Percent", .Caret => "Caret", .Ampersand => "Ampersand", .Asterisk => "Asterisk",
-            .LeftParen => "LeftParen", .RightParen => "RightParen", .Plus => "Plus", .Minus => "Minus",
-            .Underscore => "Underscore", .Equal => "Equal",
-            .LeftBrace => "LeftBrace", .RightBrace => "RightBrace", .LeftBracket => "LeftBracket",
-            .RightBracket => "RightBracket", .Pipe => "Pipe", .Slash => "Slash", .Backslash => "Backslash",
-            .Colon => "Colon", .Semicolon => "Semicolon", .Quote => "Quote", .DoubleQuote => "DoubleQuote",
-            .Comma => "Comma", .Period => "Period", .LessThan => "LessThan", .GreaterThan => "GreaterThan",
-            .Question => "Question", .Tilde => "Tilde", .Backquote => "Backquote",
-            .Escape => "Escape", .F1 => "F1", .F2 => "F2", .F3 => "F3", .F4 => "F4", .F5 => "F5",
-            .F6 => "F6", .F7 => "F7", .F8 => "F8", .F9 => "F9", .F10 => "F10", .F11 => "F11", .F12 => "F12",
-            .Tab => "Tab", .Backspace => "Backspace", .CapsLock => "CapsLock", .Enter => "Enter",
-            .LeftShift => "LeftShift", .RightShift => "RightShift", .LeftControl => "LeftControl",
-            .RightControl => "RightControl", .LeftAlt => "LeftAlt", .RightAlt => "RightAlt",
-            .LeftSuper => "LeftSuper", .RightSuper => "RightSuper",
-            .Up => "Up", .Down => "Down", .Left => "Left", .Right => "Right",
-            .LeftMouseButton => "LeftMouseButton", .RightMouseButton => "RightMouseButton",
-            .MiddleMouseButton => "MiddleMouseButton", .MouseScroll => "MouseScroll", .MouseMove => "MouseMove",
-            .Space => "Space"
-        };
+        return @tagName(self);
     }
 
     pub fn fromString(s: []const u8) ?InputCode {
