@@ -8,7 +8,7 @@
 --- Represents a camera
 --- @class Camera : Object
 --- @field Fov number
---- @field UpVector Vec3
---- @field RightVector Vec3
---- @field ForwardVector Vec3
+--- @field UpDirection Vec3
+--- @field RightDirection Vec3
+--- @field ForwardDirection Vec3
 Camera = {}
