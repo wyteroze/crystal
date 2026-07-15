@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const log = @import("../log.zig").wav;
-const Audio = @import("../Audio.zig").Audio;
+const AudioData = @import("../audio/AudioData.zig").AudioData;
 
 pub const ParseError = error {
     UnexpectedEof,
@@ -16,7 +16,7 @@ pub const ParseError = error {
     MissingDataChunk,
 };
 
-pub fn ParseWav(allocator: std.mem.Allocator, reader: *std.Io.Reader) !Audio {
+pub fn ParseWav(allocator: std.mem.Allocator, reader: *std.Io.Reader) !AudioData {
     log.info("parsing wav", .{});
 
     var riff_header: [4]u8 = undefined;
@@ -127,7 +127,7 @@ pub fn ParseWav(allocator: std.mem.Allocator, reader: *std.Io.Reader) !Audio {
     }
 
     log.info("parsed wav: channels={d}, sample rate={d}, bits per sample={d}, data size: {d} ", .{ channels, sample_rate, bits_per_sample, data.len });
-    return Audio.init(
+    return AudioData.init(
         @as(u16, @intCast(channels)),
         @as(u32, @intCast(sample_rate)),
         @as(u16, @intCast(bits_per_sample)),

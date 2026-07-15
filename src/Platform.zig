@@ -7,7 +7,7 @@ pub const Platform = struct {
     pub fn init() !Platform {
         // we don't use opengl but this prevents weird frame
         // stutters on ProMotion displays for some reason?
-        try sdl3.init(.{ .video = true });
+        try sdl3.init(.{ .video = true, .audio = true });
 
         return .{};
     }

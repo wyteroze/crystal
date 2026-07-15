@@ -6,3 +6,4 @@ pub const Vec3Lib = @import("Vec3Lib.zig").Vec3Lib;
 pub const ObjectLib = @import("ObjectLib.zig").ObjectLib;
 pub const SceneLib = @import("SceneLib.zig").SceneLib;
 pub const InputLib = @import("InputLib.zig").InputLib;
+pub const AudioLib = @import("AudioLib.zig").AudioLib;

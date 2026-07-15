@@ -14,6 +14,7 @@ const ImageData = @import("ImageData.zig").ImageData;
 const Handle = @import("script/reflect/marshal.zig").Handle;
 const Diagnostic = @import("script/shared.zig").Diagnostic;
 const Callback = @import("script/shared.zig").Callback;
+const AudioSource = @import("audio/AudioSource.zig").AudioSource;
 pub var skybox_mesh: ?MeshData = null;
 
 pub const Scene = struct {
@@ -27,6 +28,7 @@ pub const Scene = struct {
 
     allocator: std.mem.Allocator,
     objects: std.ArrayList(*Object),
+    audios: std.ArrayList(*AudioSource),
     name: ?[]const u8,
     callbacks: std.ArrayList(Callback),
     camera: ?*Object,
@@ -37,8 +39,9 @@ pub const Scene = struct {
             .name = if (name) |n| try allocator.dupe(u8, n) else null,
             .camera = null,
             .allocator = allocator,
-            .objects = std.ArrayList(*Object).empty,
-            .callbacks = std.ArrayList(Callback).empty,
+            .objects = .empty,
+            .callbacks = .empty,
+            .audios = .empty,
             .skybox = skybox_mesh orelse return error.SkyboxNotInitialized
         };
     }
@@ -49,6 +52,7 @@ pub const Scene = struct {
 
         self.callbacks.deinit(self.allocator);
         self.objects.deinit(self.allocator);
+        self.audios.deinit(self.allocator);
         self.skybox.deinit();
     }
 
@@ -60,6 +64,19 @@ pub const Scene = struct {
         for (self.objects.items, 0..) |obj, i| {
             if (obj == object) {
                 _ = self.objects.swapRemove(i);
+                return;
+            }
+        }
+    }
+
+    pub fn addAudio(self: *Scene, audio: *AudioSource) !void {
+        try self.audios.append(self.allocator, audio);
+    }
+
+    pub fn removeAudio(self: *Scene, audio: *const AudioSource) void {
+        for (self.audios.items, 0..) |aud, i| {
+            if (aud == audio) {
+                _ = self.audios.swapRemove(i);
                 return;
             }
         }
@@ -92,6 +109,9 @@ pub const Scene = struct {
 
     pub fn AddObject(self: *Scene, obj: Handle(Object)) !void { try self.addObject(obj.ptr); }
     pub fn RemoveObject(self: *Scene, obj: Handle(Object)) void { self.removeObject(obj.ptr); }
+
+    pub fn AddAudio(self: *Scene, obj: Handle(AudioSource)) !void { try self.addAudio(obj.ptr); }
+    pub fn RemoveAudio(self: *Scene, obj: Handle(AudioSource)) void { self.removeAudio(obj.ptr); }
 
     pub fn OnUpdate(self: *Scene, cb: Callback) !void {
         try self.callbacks.append(self.allocator, cb);

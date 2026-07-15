@@ -15,25 +15,27 @@ const Object        = @import("object.zig").Object;
 const ScriptEngine  = @import("script/ScriptEngine.zig").ScriptEngine;
 const SceneRegistry = @import("SceneRegistry.zig").SceneRegistry;
 const InputLib      = @import("script/libs/InputLib.zig");
+const AudioEngine   = @import("audio/AudioEngine.zig").AudioEngine;
 const scene         = @import("Scene.zig");
 
 const fps = 120;
 const fps_ms = 1000 / fps;
-const width = 384;
+
+const width = 540;
 const height = 360;
 
 // You can customize this to filter what types of logs
 // are actually seen in the output
 pub const std_options: std.Options = .{
     // Default log level
-    .log_level = .debug,
+    .log_level = .info,
 
     // Filters for scopes
     .log_scope_levels = &.{
-        .{ .scope = .script, .level = .debug },
-        .{ .scope = .render, .level = .debug },
-        .{ .scope = .parse, .level = .debug },
-        .{ .scope = .engine, .level = .debug }
+        .{ .scope = .script, .level = .info },
+        .{ .scope = .render, .level = .info },
+        .{ .scope = .parse, .level = .info },
+        .{ .scope = .engine, .level = .info }
     }
 };
 
@@ -58,8 +60,11 @@ pub fn main(init: std.process.Init) !void {
     var renderer = try Renderer.init(allocator, window, .{ .x = width, .y = height });
     defer renderer.deinit();
 
+    var audioEngine = try AudioEngine.init(allocator);
+    defer audioEngine.deinit();
+
     var sceneRegistry = SceneRegistry.init(allocator);
-    var scriptEngine = try ScriptEngine.init(allocator, io, &sceneRegistry, window);
+    var scriptEngine = try ScriptEngine.init(allocator, io, &sceneRegistry, window, &audioEngine);
     defer scriptEngine.deinit();
     defer sceneRegistry.deinit();
 
@@ -91,11 +96,14 @@ pub fn main(init: std.process.Init) !void {
         const current_scene = sceneRegistry.current_scene;
         if (current_scene) |s| {
             s.update(dt);
+
+            try audioEngine.tick(s);
             try renderer.drawScene(s);
         }
 
         try renderer.present();
 
+        // frame limiter
         const frameTime = sdl3.timer.getPerformanceCounter() - currentTime;
         const frameTimeMs = (frameTime * 1000) / @as(u64, @intFromFloat(frequency));
         if (frameTimeMs < fps_ms) {

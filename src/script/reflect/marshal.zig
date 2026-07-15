@@ -87,7 +87,10 @@ pub fn check(l: *Lua, comptime T: type, idx: i32) !T {
 
             @compileError("non-string pointers not supported");
         },
-        .optional => |o| if (l.isNil(idx)) return null else return check(l, o.child, idx),
+        .optional => |o| {
+            if (l.isNil(idx)) return null;
+            return try check(l, o.child, idx);
+        },
         .@"enum" => |e| {
             const name = try check(l, []const u8, idx);
             inline for (e.fields) |f| {

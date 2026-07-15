@@ -58,11 +58,18 @@ pub const Object = struct {
             .camera => |c| c.transform.rotation,
         }};
     }
+
+    const max_camera_pitch: f32 = 89.0;
+
     pub fn setRotation(self: *Object, value: Vec3) void {
         switch (self.data) {
             .mesh => |*m| m.transform.transform.rotation = value.vec,
             .image => |*i| i.transform.transform.rotation = value.vec,
-            .camera => |*c| c.transform.rotation = value.vec,
+            .camera => |*c| {
+                var rotation = value.vec;
+                rotation[0] = std.math.clamp(rotation[0], -max_camera_pitch, max_camera_pitch);
+                c.transform.rotation = rotation;
+            },
         }
     }
 

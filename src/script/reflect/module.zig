@@ -65,6 +65,8 @@ fn findMatchingType(comptime fields: []const std.builtin.Type.StructField, compt
     inline for (fields) |f| {
         if (f.type == T) return f.name;
     }
+
+    @compileError("no ctx value of type '" ++ @typeName(T) ++ "' is available for a module init param; add one to the ctx tuple in ScriptEngine.init");
 }
 
 fn optionalOverrideName(comptime T: type, comptime default_name: [:0]const u8) [:0]const u8 {
