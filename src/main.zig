@@ -8,14 +8,14 @@ const types         = @import("types.zig");
 const log           = @import("log.zig").engine;
 const Platform      = @import("Platform.zig").Platform;
 const Renderer      = @import("Renderer.zig").Renderer;
-const MeshData          = @import("MeshData.zig").MeshData;
-const ImageData        = @import("ImageData.zig").ImageData;
+const MeshData      = @import("MeshData.zig").MeshData;
+const ImageData     = @import("ImageData.zig").ImageData;
 const Camera        = @import("Camera.zig").Camera;
 const Object        = @import("object.zig").Object;
 const ScriptEngine  = @import("script/ScriptEngine.zig").ScriptEngine;
 const SceneRegistry = @import("SceneRegistry.zig").SceneRegistry;
-const scene = @import("Scene.zig");
-const lua_input = @import("script/lua_input.zig");
+const InputLib      = @import("script/libs/InputLib.zig");
+const scene         = @import("Scene.zig");
 
 const fps = 120;
 const fps_ms = 1000 / fps;
@@ -46,6 +46,7 @@ pub fn main(init: std.process.Init) !void {
     const allocator = init.gpa;
     const io = init.io;
 
+    // SceneRegistry automatically handles deinitializing of skybox mesh
     scene.skybox_mesh = try MeshData.loadFromFile(allocator, io, "src/assets/models/skybox.obj");
 
     var platform = try Platform.init();
@@ -59,8 +60,8 @@ pub fn main(init: std.process.Init) !void {
 
     var sceneRegistry = SceneRegistry.init(allocator);
     var scriptEngine = try ScriptEngine.init(allocator, io, &sceneRegistry, window);
-    defer sceneRegistry.deinit();
     defer scriptEngine.deinit();
+    defer sceneRegistry.deinit();
 
     scriptEngine.runFile("src/assets/scripts/main.lua");
     log.info("Initialized", .{});
@@ -80,7 +81,7 @@ pub fn main(init: std.process.Init) !void {
             switch (e) {
                 .quit => running = false,
 
-                else => { } //scriptEngine.handleInput(e)
+                else => if (InputLib.current) |c| c.dispatch(e)
             }
         }
 
@@ -94,5 +95,11 @@ pub fn main(init: std.process.Init) !void {
         }
 
         try renderer.present();
+
+        const frameTime = sdl3.timer.getPerformanceCounter() - currentTime;
+        const frameTimeMs = (frameTime * 1000) / @as(u64, @intFromFloat(frequency));
+        if (frameTimeMs < fps_ms) {
+            sdl3.timer.delayMilliseconds(@intCast(fps_ms - frameTimeMs));
+        }
     }
 }

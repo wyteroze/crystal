@@ -4,6 +4,8 @@ const std = @import("std");
 const bmp_parser = @import("parsers/bmp.zig");
 
 pub const ImageData = struct {
+    pub const lua_ref = true;
+    pub const hidden = .{ "width", "height", "pixels", "loadFromFile", "sample" };
     allocator: std.mem.Allocator,
     width: u32,
     height: u32,
@@ -24,8 +26,8 @@ pub const ImageData = struct {
         return image_data;
     }
 
-    pub fn deinit(self: ImageData, allocator: std.mem.Allocator) void {
-        allocator.free(self.pixels);
+    pub fn deinit(self: ImageData) void {
+        self.allocator.free(self.pixels);
     }
 
     /// U and V range from 0.0 - 1.0, other values

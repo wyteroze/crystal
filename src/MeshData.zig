@@ -10,6 +10,9 @@ const Vertex = types.Vertex;
 const Face = types.Face;
 
 pub const MeshData = struct {
+    pub const lua_ref = true;
+    pub const hidden = .{ "vertices", "indices", "faces", "texture" };
+
     allocator: std.mem.Allocator,
     vertices: []Vertex,
     indices: []usize,

@@ -6,37 +6,113 @@ const types = @import("types.zig");
 const MeshData = @import("MeshData.zig").MeshData;
 const ImageData = @import("ImageData.zig").ImageData;
 const Camera = @import("Camera.zig").Camera;
-pub const ObjectKind = enum { mesh_data, image, camera };
+const Vec3 = @import("script/objects/Vec3.zig").Vec3;
+pub const ObjectKind = enum { mesh, image, camera };
 
 pub const Object = struct {
-    transform: types.Transform,
+    pub const hidden = .{ "data" };
+    pub const name = "ObjectInstance";
+    pub const lua_ref = true;
+
     data: union(ObjectKind) {
-        mesh_data: MeshObject,
+        mesh: MeshObject,
         image: ImageObject,
         camera: CameraObject,
 
+        pub fn transform(self: *@This()) *types.Transform {
+            return switch (self.*) {
+                .mesh => |*m| &m.transform.transform,
+                .image => |*i| &i.transform.transform,
+                .camera => |*c| &c.transform
+            };
+        }
+
         pub fn luaName(self: @This()) []const u8 {
             return switch (self) {
-                .mesh_data => "MeshData",
+                .mesh => "Mesh",
                 .image => "Image",
                 .camera => "Camera"
             };
         }
+    },
+
+    pub fn getPosition(self: Object) Vec3 {
+        return .{ .vec = switch (self.data) {
+            .mesh => |m| m.transform.transform.position,
+            .image => |i| i.transform.transform.position,
+            .camera => |c| c.transform.position,
+        }};
+    }
+    pub fn setPosition(self: *Object, value: Vec3) void {
+        switch (self.data) {
+            .mesh => |*m| m.transform.transform.position = value.vec,
+            .image => |*i| i.transform.transform.position = value.vec,
+            .camera => |*c| c.transform.position = value.vec,
+        }
+    }
+
+    pub fn getRotation(self: Object) Vec3 {
+        return .{ .vec = switch (self.data) {
+            .mesh => |m| m.transform.transform.rotation,
+            .image => |i| i.transform.transform.rotation,
+            .camera => |c| c.transform.rotation,
+        }};
+    }
+    pub fn setRotation(self: *Object, value: Vec3) void {
+        switch (self.data) {
+            .mesh => |*m| m.transform.transform.rotation = value.vec,
+            .image => |*i| i.transform.transform.rotation = value.vec,
+            .camera => |*c| c.transform.rotation = value.vec,
+        }
+    }
+
+    pub fn getScale(self: Object) ?Vec3 {
+        return .{ .vec = switch (self.data) {
+            .mesh => |m| m.transform.scale,
+            .image => |i| i.transform.scale,
+            .camera => return null,
+        }};
+    }
+    pub fn setScale(self: *Object, value: Vec3) !void {
+        switch (self.data) {
+            .mesh => |*m| m.transform.scale = value.vec,
+            .image => |*i| i.transform.scale = value.vec,
+            .camera => return error.NoScaleOnCamera,
+        }
+    }
+
+    pub fn getForwardDirection(self: Object) ?Vec3 {
+        return .{ .vec = switch (self.data) {
+            .camera => |c| c.camera.getLookDirection(),
+            else => return null,
+        }};
+    }
+    pub fn getRightDirection(self: Object) ?Vec3 {
+        return .{ .vec = switch (self.data) {
+            .camera => |c| c.camera.getRightDirection(),
+            else => return null,
+        }};
+    }
+    pub fn getUpDirection(self: Object) ?Vec3 {
+        return .{ .vec = switch (self.data) {
+            .camera => |c| c.camera.getUpDirection(),
+            else => return null,
+        }};
     }
 };
 
 pub const MeshObject = struct {
-    mesh_data: *const MeshData,
+    transform: types.ScaledTransform,
+    mesh: *const MeshData,
     texture: ?*const ImageData,
-    mesh_ref: i32,
-    texture_ref: ?i32 = null
 };
 
 pub const ImageObject = struct {
+    transform: types.ScaledTransform,
     image: *const ImageData,
-    image_ref: i32,
 };
 
 pub const CameraObject = struct {
+    transform: types.Transform,
     camera: *Camera
 };

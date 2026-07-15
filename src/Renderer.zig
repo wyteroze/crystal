@@ -38,6 +38,7 @@ pub const Renderer = struct {
     pub fn init(allocator: std.mem.Allocator, window: sdl3.video.Window, size: Vec2_usize) !Renderer {
         const window_surface = try sdl3.video.Window.getSurface(window);
         const canvas = try sdl3.surface.Surface.init(size.x, size.y, .array_bgra_32);
+        try canvas.setBlendMode(.none);
 
         const depthbuffer = try allocator.alloc(f32, @as(usize, @intCast(size.x * size.y)));
 
@@ -72,7 +73,37 @@ pub const Renderer = struct {
     }
 
     pub fn present(self: Renderer) !void {
-        try self.canvas.blitScaled(null, self.window_surface, null, .nearest);
+        @setRuntimeSafety(false);
+
+        try self.canvas.lock();
+        defer self.canvas.unlock();
+        try self.window_surface.lock();
+        defer self.window_surface.unlock();
+        const src = self.canvas.value.pixels;
+        const dst = self.window_surface.value.pixels;
+        const src_pitch: usize = @intCast(self.canvas.value.pitch);
+        const dst_pitch: usize = @intCast(self.window_surface.value.pitch);
+        const w: usize = @intCast(self.canvas.value.w);
+        const h: usize = @intCast(self.canvas.value.h);
+
+        const src_bytes: [*]const u8 = @ptrCast(src);
+        const dst_bytes: [*]u8 = @ptrCast(dst);
+
+        var y: usize = 0;
+        while (y < h) : (y += 1) {
+            const src_row = src_bytes + y * src_pitch;
+            const dst_row0 = dst_bytes + (y * 2) * dst_pitch;
+            const dst_row1 = dst_bytes + (y * 2 + 1) * dst_pitch;
+
+            var x: usize = 0;
+            while (x < w) : (x += 1) {
+                const px: u32 = @as(*const u32, @alignCast(@ptrCast(src_row + x * 4))).*;
+                @as(*u32, @alignCast(@ptrCast(dst_row0 + x * 8))).* = px;
+                @as(*u32, @alignCast(@ptrCast(dst_row0 + x * 8 + 4))).* = px;
+            }
+            @memcpy(dst_row1[0 .. w * 8], dst_row0[0 .. w * 8]);
+        }
+
         try self.window.updateSurface();
     }
 
@@ -94,14 +125,17 @@ pub const Renderer = struct {
         //log.debug("{d} objects", .{scene.objects.items.len});
 
         if (scene.skybox.texture != null) {
-            const skybox_pos = if (scene.camera) |c| &c.transform.onlyPosition() else &Transform.identity();
-            try self.drawMesh(&scene.skybox, scene.skybox.texture, skybox_pos, scene.camera);
+            const cam = if (scene.camera) |obj| obj.data.camera.camera else null;
+            const skybox_pos = if (cam) |c| &c.transform.onlyPosition() else &Transform.identity();
+
+            try self.drawMesh(&scene.skybox, scene.skybox.texture, skybox_pos, cam);
         }
 
         for (scene.objects.items) |obj| {
             switch (obj.data) {
-                .mesh_data => |m| {
-                    try self.drawMesh(m.mesh_data, m.texture, &obj.transform, scene.camera);
+                .mesh => |m| {
+                    const cam = if (scene.camera) |o| o.data.camera.camera else null;
+                    try self.drawMesh(m.mesh, m.texture, obj.data.transform(), cam);
                 },
                 .image => |i| {
                     log.warn("standalone image rendering is not supported yet", .{});

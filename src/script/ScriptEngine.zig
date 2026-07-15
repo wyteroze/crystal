@@ -7,25 +7,30 @@ const Lua = zlua.Lua;
 
 const log = @import("../log.zig").script;
 const libs = @import("libs/libs.zig");
+const objects = @import("objects/objects.zig");
 const reflect = @import("reflect/reflect.zig");
 
 const SceneRegistry = @import("../SceneRegistry.zig").SceneRegistry;
 
 pub const ScriptEngine = struct {
     lua: *Lua,
+    arena: *std.heap.ArenaAllocator,
+    allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator, io: std.Io, sceneRegistry: *SceneRegistry, window: sdl3.video.Window) !ScriptEngine {
+        const arena = try allocator.create(std.heap.ArenaAllocator);
+        arena.* = std.heap.ArenaAllocator.init(allocator);
+
+        reflect.marshal.allocator = allocator;
+        reflect.marshal.ref_allocator = arena.allocator();
+
         var lua = try Lua.init(allocator);
         lua.openLibs();
 
-        _ = io;
-        _ = sceneRegistry;
-        _ = window;
-        //try reflect.registerAll(lua, libs, .{ allocator, io, sceneRegistry, window });
+        try reflect.registerAllLibs(lua, libs, .{ allocator, io, sceneRegistry, window });
+        try reflect.registerAllObjects(lua, objects);
 
-        return .{
-            .lua = lua
-        };
+        return .{ .lua = lua, .arena = arena, .allocator = allocator };
     }
 
     // Runs a script from the given path. Handles all errors
@@ -58,6 +63,8 @@ pub const ScriptEngine = struct {
     }
 
     pub fn deinit(self: *ScriptEngine) void {
+        self.arena.deinit();
+        self.allocator.destroy(self.arena);
         self.lua.deinit();
     }
 };

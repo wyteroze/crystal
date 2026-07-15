@@ -37,11 +37,9 @@ pub const Mat4 = struct {
 };
 
 pub const Transform = struct {
-    scale: Vec3_SIMD,
     position: Vec3_SIMD,
     rotation: Vec3_SIMD,
 
-    // Returns a copy of the Transform with only position
     pub fn onlyPosition(self: *Transform) Transform {
         var t = Transform.identity();
         t.position = self.position;
@@ -51,7 +49,6 @@ pub const Transform = struct {
 
     pub fn zero() Transform {
         return .{
-            .scale = Vec3_SIMD{ 0, 0, 0 },
             .position = Vec3_SIMD{ 0, 0, 0 },
             .rotation = Vec3_SIMD{ 0, 0, 0 },
         };
@@ -59,9 +56,17 @@ pub const Transform = struct {
 
     pub fn identity() Transform {
         return .{
-            .scale = Vec3_SIMD{ 1, 1, 1 },
             .position = Vec3_SIMD{ 0, 0, 0 },
             .rotation = Vec3_SIMD{ 0, 0, 0 },
         };
+    }
+};
+
+pub const ScaledTransform = struct {
+    transform: Transform,
+    scale: Vec3_SIMD,
+
+    pub fn identity() ScaledTransform {
+        return .{ .transform = Transform.identity(), .scale = Vec3_SIMD{ 1, 1, 1 } };
     }
 };

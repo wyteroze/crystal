@@ -31,27 +31,32 @@ myScene:AddObject(uziCube)
 
 Input.OnBegin("LeftMouseButton", function()
     Input.MouseVisible = false
+    Input.MouseLocked = true
 end)
 Input.OnBegin("Escape", function()
-	Input.MouseVisible = true
+    Input.MouseVisible = true
+    Input.MouseLocked = false
 end)
 
 Input.OnChange("MouseMove", function(input)
-    camera.Rotation:Add(Vec3.new(input.Delta.Y, input.Delta.X, 0))
+    camera.Rotation = camera.Rotation + Vec3.new(input.Delta.Y, input.Delta.X, 0)
 end)
 
 myScene:OnUpdate(function(dt)
     local mul = Vec3.new(dt, dt, dt)
 
-    if Input.IsDown("W") then camera.Position:Add(camera.ForwardVector * mul) end
-    if Input.IsDown("S") then camera.Position:Sub(camera.ForwardVector * mul) end
-    if Input.IsDown("A") then camera.Position:Sub(camera.RightVector * mul) end
-    if Input.IsDown("D") then camera.Position:Add(camera.RightVector * mul) end
-    if Input.IsDown("Space") then camera.Position:Add(camera.UpVector * mul) end
-    if Input.IsDown("LeftShift") then camera.Position:Sub(camera.UpVector * mul) end
+    local toAdd = Vec3.new(0, 0, 0)
+    if Input.IsDown("W")            then toAdd = toAdd + camera.ForwardDirection * mul end
+    if Input.IsDown("S")            then toAdd = toAdd - camera.ForwardDirection * mul end
+    if Input.IsDown("A")            then toAdd = toAdd - camera.RightDirection * mul end
+    if Input.IsDown("D")            then toAdd = toAdd + camera.RightDirection * mul end
+    if Input.IsDown("Space")        then toAdd = toAdd + camera.UpDirection * mul end
+    if Input.IsDown("LeftShift")    then toAdd = toAdd - camera.UpDirection * mul end
 
-    bullyMoon.Rotation:Add(Vec3.new(0, dt * 50, 0))
-    uziCube.Rotation:Add(Vec3.new(dt * 5, dt * 50, dt * 20))
+    if toAdd then camera.Position = camera.Position + toAdd end
+
+    bullyMoon.Rotation = bullyMoon.Rotation + Vec3.new(0, dt * 50, 0)
+    uziCube.Rotation = uziCube.Rotation + Vec3.new(dt * 5, dt * 50, dt * 20)
 end)
 
 print("done")
