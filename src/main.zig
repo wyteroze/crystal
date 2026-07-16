@@ -16,13 +16,10 @@ const ScriptEngine  = @import("script/ScriptEngine.zig").ScriptEngine;
 const SceneRegistry = @import("SceneRegistry.zig").SceneRegistry;
 const InputLib      = @import("script/libs/InputLib.zig");
 const AudioEngine   = @import("audio/AudioEngine.zig").AudioEngine;
+const Config        = @import("Config.zig").Config;
 const scene         = @import("Scene.zig");
 
-const fps = 120;
-const fps_ms = 1000 / fps;
-
-const width = 540;
-const height = 360;
+const config_path = "config.toml";
 
 // You can customize this to filter what types of logs
 // are actually seen in the output
@@ -48,16 +45,18 @@ pub fn main(init: std.process.Init) !void {
     const allocator = init.gpa;
     const io = init.io;
 
+    const config = try Config.load(allocator, io, config_path);
+
     // SceneRegistry automatically handles deinitializing of skybox mesh
     scene.skybox_mesh = try MeshData.loadFromFile(allocator, io, "src/assets/models/skybox.obj");
 
     var platform = try Platform.init();
     defer platform.deinit();
 
-    var window = try platform.createWindow("kebab", .{ .centered = null }, .{ .centered = null }, .{ .x = width*2, .y = height*2 });
+    var window = try platform.createWindow("kebab", .{ .centered = null }, .{ .centered = null }, .{ .x = config.width*2, .y = config.height*2 });
     defer window.deinit();
 
-    var renderer = try Renderer.init(allocator, window, .{ .x = width, .y = height });
+    var renderer = try Renderer.init(allocator, window, .{ .x = config.width, .y = config.height });
     defer renderer.deinit();
 
     var audioEngine = try AudioEngine.init(allocator);
@@ -104,6 +103,7 @@ pub fn main(init: std.process.Init) !void {
         try renderer.present();
 
         // frame limiter
+        const fps_ms = config.fps / 1000;
         const frameTime = sdl3.timer.getPerformanceCounter() - currentTime;
         const frameTimeMs = (frameTime * 1000) / @as(u64, @intFromFloat(frequency));
         if (frameTimeMs < fps_ms) {
