@@ -13,6 +13,9 @@ local window = Window.new("Game window", 540, 360, 2)
 window.Camera = camera
 window.Scene = scene
 
+local font = Assets.loadFont("NinetyFive")
+print(font:MeasureText("hello world"))
+
 window.UI:Button("Top", Vec2.new(0, 0), Vec2.new(64, 64), "hello")
 
 local bullyMoonMesh = Assets.loadMesh("bullymoon.obj")

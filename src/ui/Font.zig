@@ -5,6 +5,7 @@ const ImageData = @import("../ImageData.zig").ImageData;
 const TomlData = @import("../TomlData.zig").TomlData;
 const TomlValue = @import("../TomlData.zig").TomlValue;
 const Glyph = @import("Glyph.zig").Glyph;
+const Vec2 = @import("../script/objects/Vec2.zig").Vec2;
 const log = @import("../log.zig").font;
 
 const map_name = "map.toml";
@@ -14,7 +15,7 @@ pub const TextSize = struct { w: u32, h: u32 };
 pub const Font = struct {
     pub const lua_ref = true;
     pub const name = "Font";
-    pub const hidden = .{ "sheet", "glyphs", "loadFromFile" };
+    pub const hidden = .{ "sheet", "glyphs", "loadFromFile", "measure" };
 
     allocator: std.mem.Allocator,
     sheet: *const ImageData,
@@ -116,6 +117,12 @@ pub const Font = struct {
         }
 
         return .{ .w = width, .h = self.line_height };
+    }
+
+    pub fn MeasureText(self: Font, text: []const u8) !Vec2 {
+        const m = try self.measure(text);
+
+        return Vec2.init(@floatFromInt(m.w), @floatFromInt(m.h));
     }
 
     pub fn deinit(self: *Font) void {
