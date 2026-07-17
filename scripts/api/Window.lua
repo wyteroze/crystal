@@ -76,9 +76,11 @@ Copyright 2026 wyteroze. Licensed under the Apache License, Version 2.0.
 --- @class WindowLib
 Window = {}
 
---- Creates and opens a new window.
+--- Creates and opens a new window. Width and height determine the internal resolution,
+--- and the optional `scale` (default is 1.0) determines the window size multiplier.
 --- @param title string
 --- @param width integer
 --- @param height integer
+--- @param scale number?
 --- @return Window
-function Window.new(title, width, height) end
+function Window.new(title, width, height, scale) end

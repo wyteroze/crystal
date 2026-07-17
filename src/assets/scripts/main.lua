@@ -8,7 +8,7 @@ camera.Position = Vec3.new(0, 0, -5)
 local scene = Scene.new("Test scene")
 scene.SkyboxTexture = Assets.loadImage("skyboxes/Ocean-1.bmp")
 
-local window = Window.new("Game window", 512, 384)
+local window = Window.new("Game window", 540, 360, 2)
 
 window.Camera = camera
 window.Scene = scene

@@ -14,8 +14,8 @@ pub const WindowLib = struct {
         return .{ .manager = manager };
     }
 
-    pub fn new(self: *WindowLib, title: [:0]const u8, width: usize, height: usize) !Handle(Window) {
-        const win = try self.manager.create(title, width, height, 1.0, true, true);
+    pub fn new(self: *WindowLib, title: [:0]const u8, width: usize, height: usize, scale: ?f32) !Handle(Window) {
+        const win = try self.manager.create(title, width, height, scale orelse 1.0, true, true);
         return .{ .ptr = win };
     }
 };
