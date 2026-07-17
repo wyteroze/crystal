@@ -34,10 +34,11 @@ pub const WindowManager = struct {
         height: usize,
         scale: f32,
         want_depth: bool,
-        opaque_bg: bool
+        opaque_bg: bool,
+        decorated: bool,
     ) !*Window {
         const handle = try self.platform.createWindow(
-            title,
+            title, !opaque_bg, decorated,
             .{ .centered = null }, .{ .centered = null },
             @as(u16, @trunc(@as(f32, @floatFromInt(width))*scale)), // size x
             @as(u16, @trunc(@as(f32, @floatFromInt(height))*scale)) // size y

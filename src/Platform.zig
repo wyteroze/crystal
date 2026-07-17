@@ -14,12 +14,12 @@ pub const Platform = struct {
 
     pub fn createWindow(
         _: Platform,
-        name: [:0]const u8,
+        name: [:0]const u8, transparent: bool, decorated: bool,
         pos_x: sdl3.video.Window.Position,
         pos_y: sdl3.video.Window.Position,
         size_x: u16, size_y: u16
     ) !sdl3.video.Window {
-        const window = try sdl3.video.Window.init(name, size_x, size_y, .{ .resizable = true });
+        const window = try sdl3.video.Window.init(name, size_x, size_y, .{ .resizable = true, .borderless = !decorated, .transparent = transparent });
         try window.setPosition(pos_x, pos_y);
 
         return window;

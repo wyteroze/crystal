@@ -27,15 +27,11 @@ local uziCube = Object.mesh(uziMesh, uziTex)
 uziCube.Position = Vec3.new(2.5, 0, 0)
 scene:AddObject(uziCube)
 
-local pierre = Assets.loadAudio("yopierre.wav")
-local pierreAudio = Audio.new(pierre)
-pierreAudio:AttachTo(uziCube)
-scene:AddAudio(pierreAudio)
-pierreAudio.Playing = true
-
-print(Color.fromName("Chartreuse", 255):GetARGB())
-print(Color.fromARGB(255, 0, 0, 0):GetName())
-print(Color.fromHex("0xFFFFFFFF"):GetHex())
+-- local pierre = Assets.loadAudio("yopierre.wav")
+-- local pierreAudio = Audio.new(pierre)
+-- pierreAudio:AttachTo(uziCube)
+-- scene:AddAudio(pierreAudio)
+-- pierreAudio.Playing = true
 
 window.Input:OnBegin("LeftMouseButton", function()
     window.Input.MouseVisible = false
