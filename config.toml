@@ -1,5 +1,5 @@
 # Copyright 2026 wyteroze. Licensed under the Apache License, Version 2.0.
-# Le kebab config. You can adjust various settings in this file to your liking.
+# Crystal config. You can adjust various settings in this file to your liking.
 
 [window]
 # The rendering resolution. The window size is double this.

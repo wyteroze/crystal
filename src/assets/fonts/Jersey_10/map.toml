@@ -1,4 +1,4 @@
-# This config is used by kebab to figure out how to render glyphs correctly.
+# This config is used by Crystal to figure out how to render glyphs correctly.
 # This file name must stay unchanged (map.toml) to be recognized by the font system.
 #
 # [info] contains font info.

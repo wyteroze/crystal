@@ -1,10 +1,10 @@
 // Copyright 2026 wyteroze. Licensed under the Apache License, Version 2.0.
 
 .{
-    .name = .kebab,
+    .name = .crystal,
     .version = "0.0.0",
 
-    .fingerprint = 0xb031f3ac155d82ce, // Changing this has security and trust implications.
+    .fingerprint = 0x878a1f197adb4cc4, // Changing this has security and trust implications.
     .minimum_zig_version = "0.16.0",
 
     .dependencies = .{
