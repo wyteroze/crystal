@@ -11,7 +11,7 @@ const WidgetRegistry = @import("WidgetRegistry.zig").WidgetRegistry;
 const InputState = @import("input/Input.zig").InputState;
 const Font = @import("ui/Font.zig").Font;
 const Scene = @import("Scene.zig").Scene;
-const Engine = @import("Engine.zig").Engine;
+const Engine = @import("engine/Engine.zig").Engine;
 
 const clear_color = 0xFF_8A_AA_FF;
 

@@ -16,7 +16,7 @@ const AudioEngine = @import("../audio/AudioEngine.zig").AudioEngine;
 const ColorRegistry = @import("../ColorRegistry.zig").ColorRegistry;
 const WindowManager = @import("../WindowManager.zig").WindowManager;
 const Platform = @import("../Platform.zig").Platform;
-const Engine = @import("../Engine.zig").Engine;
+const Engine = @import("../engine/Engine.zig").Engine;
 
 pub const ScriptEngine = struct {
     lua: *Lua,

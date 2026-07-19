@@ -3,7 +3,7 @@
 const std = @import("std");
 const sdl3 = @import("sdl3");
 const Callback = @import("../shared.zig").Callback;
-const Engine = @import("../../Engine.zig").Engine;
+const Engine = @import("../../engine/Engine.zig").Engine;
 
 pub const EngineLibFrameInfo = struct {
     pub const lua_ref = true;

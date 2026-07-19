@@ -1,7 +1,7 @@
 // Copyright 2026 wyteroze. Licensed under the Apache License, Version 2.0.
 
 const std = @import("std");
-const Callback = @import("script/shared.zig").Callback;
+const Callback = @import("../script/shared.zig").Callback;
 
 pub const CloseReason = enum {
     os_request,
@@ -10,6 +10,7 @@ pub const CloseReason = enum {
 };
 
 pub const Engine = struct {
+    io: std.Io,
     allocator: std.mem.Allocator,
 
     fps: f32 = 0,
@@ -19,8 +20,9 @@ pub const Engine = struct {
     pre_step_callbacks: std.ArrayList(Callback),
     post_step_callbacks: std.ArrayList(Callback),
 
-    pub fn init(allocator: std.mem.Allocator) Engine {
-        return .{
+    pub fn init(self: *Engine, allocator: std.mem.Allocator, io: std.Io) !void {
+        self.* = .{
+            .io = io,
             .allocator = allocator,
             .pre_step_callbacks = .empty,
             .post_step_callbacks =.empty

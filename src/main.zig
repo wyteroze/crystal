@@ -25,7 +25,7 @@ const Config        = @import("Config.zig").Config;
 const Color         = @import("Color.zig").Color;
 const Font          = @import("ui/Font.zig").Font;
 const Widget        = @import("ui/Widget.zig").Widget;
-const Engine        = @import("Engine.zig").Engine;
+const Engine        = @import("engine/Engine.zig").Engine;
 const widget        = @import("ui/Widget.zig");
 const scene         = @import("Scene.zig");
 const perf          = @import("profile/perf.zig");
@@ -52,7 +52,9 @@ pub fn main(init: std.process.Init) !void {
     const allocator = init.gpa;
     const io = init.io;
 
-    var engine = Engine.init(allocator);
+    var engine: Engine = undefined;
+    try engine.init(allocator, io);
+    defer engine.deinit();
 
     var threadRegistry = ThreadRegistry.init(io);
     defer threadRegistry.deinit();
@@ -90,7 +92,6 @@ pub fn main(init: std.process.Init) !void {
     defer widgetRegistry.deinit();
     defer sceneRegistry.deinit();
     defer colorRegistry.deinit();
-    defer engine.deinit();
 
     scriptEngine.runFile("src/assets/scripts/main.lua");
     log.info("Initialized", .{});
