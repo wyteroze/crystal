@@ -10,7 +10,7 @@
       text.badge-label {
         font-family: 'Oaboe', monospace;
         font-size: 24px;
-        fill: #E6E8EC;
+        fill: #FFFFFF;
         dominant-baseline: alphabetic;
       }
     </style>
