@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const TomlData = @import("TomlData.zig").TomlData;
-const ColorRegistry = @import("ColorRegistry.zig").ColorRegistry;
+const ColorRegistry = @import("engine/ColorRegistry.zig").ColorRegistry;
 
 pub const Color = struct {
     pub const name = "ColorObject";

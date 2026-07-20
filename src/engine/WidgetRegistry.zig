@@ -2,9 +2,9 @@
 
 const std = @import("std");
 const sdl3 = @import("sdl3");
-const ButtonData = @import("ui/Widget.zig").ButtonData;
-const Widget = @import("ui/Widget.zig").Widget;
-const Vec2 = @import("script/objects/Vec2.zig").Vec2;
+const ButtonData = @import("../ui/Widget.zig").ButtonData;
+const Widget = @import("../ui/Widget.zig").Widget;
+const Vec2 = @import("../script/objects/Vec2.zig").Vec2;
 
 const SCROLL_SPEED: f32 = 24.0;
 

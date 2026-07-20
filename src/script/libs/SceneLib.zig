@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const Scene = @import("../../Scene.zig").Scene;
-const SceneRegistry = @import("../../SceneRegistry.zig").SceneRegistry;
+const SceneRegistry = @import("../../engine/SceneRegistry.zig").SceneRegistry;
 const Handle = @import("../reflect/marshal.zig").Handle;
 const marshal = @import("../reflect/marshal.zig");
 

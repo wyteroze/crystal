@@ -12,7 +12,7 @@ const Handle = marshal.Handle;
 const Diagnostic = @import("../script/shared.zig").Diagnostic;
 const Painter = @import("../render/Painter.zig").Painter;
 const UIPainter = @import("../render/UIPainter.zig");
-const WidgetRegistry = @import("../WidgetRegistry.zig").WidgetRegistry;
+const WidgetRegistry = @import("../engine/WidgetRegistry.zig").WidgetRegistry;
 const ImageData = @import("../ImageData.zig").ImageData;
 
 const WidgetList = std.ArrayList(*Widget);

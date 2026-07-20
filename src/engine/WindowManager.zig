@@ -2,16 +2,16 @@
 
 const std = @import("std");
 const sdl3 = @import("sdl3");
-const types = @import("types.zig");
+const types = @import("../types.zig");
 const Platform = @import("Platform.zig").Platform;
-const Window = @import("Window.zig").Window;
-const Renderer = @import("render/Renderer.zig").Renderer;
-const RenderTarget = @import("render/RenderTarget.zig").RenderTarget;
+const Window = @import("../Window.zig").Window;
+const Renderer = @import("../render/Renderer.zig").Renderer;
+const RenderTarget = @import("../render/RenderTarget.zig").RenderTarget;
 const WidgetRegistry = @import("WidgetRegistry.zig").WidgetRegistry;
-const InputState = @import("input/Input.zig").InputState;
-const Font = @import("ui/Font.zig").Font;
-const Scene = @import("Scene.zig").Scene;
-const Engine = @import("engine/Engine.zig").Engine;
+const InputState = @import("../input/Input.zig").InputState;
+const Font = @import("../ui/Font.zig").Font;
+const Scene = @import("../Scene.zig").Scene;
+const Engine = @import("Engine.zig").Engine;
 
 const clear_color = 0xFF_8A_AA_FF;
 
@@ -114,10 +114,15 @@ pub const WindowManager = struct {
         }
     }
 
-    /// Returns false if the app needs to quit, immediately exiting the game loop.
-    pub fn handleEvent(self: *WindowManager, event: sdl3.events.Event) bool {
+    pub fn pumpEvents(self: *WindowManager) void {
+        while (sdl3.events.poll()) |e| {
+            self.handleEvent(e);
+        }
+    }
+
+    pub fn handleEvent(self: *WindowManager, event: sdl3.events.Event) void {
         switch (event) {
-            .quit => { self.engine.quit(.os_request); return false; },
+            .quit => self.engine.quit(.os_request),
             .window_close_requested => |w| if (self.find(w.id)) |win| self.close(win),
             .window_focus_gained => |w| if (self.find(w.id)) |win| self.focus(win) catch {},
             .window_focus_lost => |w| if (self.find(w.id)) |win| self.focusLost(win),
@@ -130,9 +135,10 @@ pub const WindowManager = struct {
                 };
 
                 if (wid) |id| if (self.find(id)) |w| {
-                    // consumed by UI, not game input
-                    if (w.registry.handlePointerEvent(event, w.target.scale)) return true;
-                    w.input.dispatch(event);
+                    // input gets consumed by UI
+                    if (!w.registry.handlePointerEvent(event, w.target.scale)) {
+                        w.input.dispatch(event);
+                    }
                 };
             },
 
@@ -140,11 +146,7 @@ pub const WindowManager = struct {
             else => if (self.focused) |w| w.input.dispatch(event)
         }
 
-        if (self.windows.items.len == 0) {
-            self.engine.quit(.no_windows);
-            return false;
-        }
-        return true;
+        if (self.windows.items.len == 0) self.engine.quit(.no_windows);
     }
 
     pub fn renderAll(self: *WindowManager, renderer: *Renderer, font: *Font) !void {

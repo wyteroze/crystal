@@ -1,7 +1,7 @@
 // Copyright 2026 wyteroze. Licensed under the Apache License, Version 2.0.
 
 const sdl3 = @import("sdl3");
-const types = @import("types.zig");
+const types = @import("../types.zig");
 
 pub const Platform = struct {
     pub fn init() !Platform {

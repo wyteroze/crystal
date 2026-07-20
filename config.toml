@@ -1,6 +1,0 @@
-# Copyright 2026 wyteroze. Licensed under the Apache License, Version 2.0.
-# Crystal config. You can adjust various settings in this file to your liking.
-
-[window]
-# The target FPS of the engine. Expects an integer. Default: 60
-fps = 120

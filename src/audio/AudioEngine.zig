@@ -67,7 +67,7 @@ pub const AudioEngine = struct {
         self.allocator.destroy(source);
     }
 
-    pub fn tick(self: *AudioEngine, scene: *Scene, cam: *Camera) !void {
+    pub fn tick(self: *AudioEngine, scene: *Scene, cam: ?*Camera) !void {
         for (scene.audios.items) |a| {
             self.applyPositionalGain(a, cam);
             try a.update();

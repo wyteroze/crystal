@@ -1,7 +1,7 @@
 // Copyright 2026 wyteroze. Licensed under the Apache License, Version 2.0.
 
 const std = @import("std");
-const Scene = @import("Scene.zig").Scene;
+const Scene = @import("../Scene.zig").Scene;
 
 pub const SceneRegistry = struct {
     allocator: std.mem.Allocator,

@@ -3,7 +3,7 @@
 const std = @import("std");
 const Diagnostic = @import("../shared.zig").Diagnostic;
 const Color = @import("../../Color.zig").Color;
-const ColorRegistry = @import("../../ColorRegistry.zig").ColorRegistry;
+const ColorRegistry = @import("../../engine/ColorRegistry.zig").ColorRegistry;
 
 pub const ColorLib = struct {
     pub const hidden = .{ "registry" };

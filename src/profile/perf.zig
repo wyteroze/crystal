@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const sdl3 = @import("sdl3");
-const ThreadRegistry = @import("../ThreadRegistry.zig").ThreadRegistry;
+const ThreadRegistry = @import("../engine/ThreadRegistry.zig").ThreadRegistry;
 const log = @import("../log.zig").threading;
 
 const MAX_ZONES = 4096;

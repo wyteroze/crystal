@@ -9,15 +9,16 @@ const Handle = @import("script/reflect/marshal.zig").Handle;
 const Diagnostic = @import("script/shared.zig").Diagnostic;
 const Callback = @import("script/shared.zig").Callback;
 const AudioSource = @import("audio/AudioSource.zig").AudioSource;
-pub var skybox_mesh: ?MeshData = null;
 
 pub const Scene = struct {
     pub const lua_name = "SceneObject";
     pub const hidden = .{
         "objects", "callbacks", "skybox",
-        "addObject", "removeObject", "update"
+        "addObject", "removeObject", "update",
+        "skybox_mesh"
     };
     pub const lua_ref = true;
+    pub var skybox_mesh: ?MeshData = null;
     diagnostic: Diagnostic = .{},
 
     allocator: std.mem.Allocator,

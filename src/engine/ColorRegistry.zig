@@ -1,8 +1,8 @@
 // Copyright 2026 wyteroze. Licensed under the Apache License, Version 2.0.
 
 const std = @import("std");
-const TomlData = @import("TomlData.zig").TomlData;
-const Color = @import("Color.zig").Color;
+const TomlData = @import("../TomlData.zig").TomlData;
+const Color = @import("../Color.zig").Color;
 
 const colors_path = "src/data/colors.toml";
 

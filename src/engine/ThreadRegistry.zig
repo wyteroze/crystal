@@ -1,7 +1,7 @@
 // Copyright 2026 wyteroze. Licensed under the Apache License, Version 2.0.
 
 const std = @import("std");
-const log = @import("log.zig").threading;
+const log = @import("../log.zig").threading;
 
 pub const ThreadInfo = struct {
     name: []const u8 = "thread"

@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const Window = @import("../../Window.zig").Window;
-const WindowManager = @import("../../WindowManager.zig").WindowManager;
+const WindowManager = @import("../../engine/WindowManager.zig").WindowManager;
 const Handle = @import("../reflect/marshal.zig").Handle;
 
 pub const WindowLib = struct {

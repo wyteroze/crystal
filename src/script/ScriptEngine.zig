@@ -10,12 +10,12 @@ const libs = @import("libs/libs.zig");
 const objects = @import("objects/objects.zig");
 const reflect = @import("reflect/reflect.zig");
 
-const SceneRegistry = @import("../SceneRegistry.zig").SceneRegistry;
-const WidgetRegistry = @import("../WidgetRegistry.zig").WidgetRegistry;
+const SceneRegistry = @import("../engine/SceneRegistry.zig").SceneRegistry;
+const WidgetRegistry = @import("../engine/WidgetRegistry.zig").WidgetRegistry;
 const AudioEngine = @import("../audio/AudioEngine.zig").AudioEngine;
-const ColorRegistry = @import("../ColorRegistry.zig").ColorRegistry;
-const WindowManager = @import("../WindowManager.zig").WindowManager;
-const Platform = @import("../Platform.zig").Platform;
+const ColorRegistry = @import("../engine/ColorRegistry.zig").ColorRegistry;
+const WindowManager = @import("../engine/WindowManager.zig").WindowManager;
+const Platform = @import("../engine/Platform.zig").Platform;
 const Engine = @import("../engine/Engine.zig").Engine;
 
 pub const ScriptEngine = struct {
