@@ -11,12 +11,7 @@ const Vec3 = types.Vec3;
 const Vertex = render_types.Vertex;
 const Face = render_types.Face;
 
-pub const ParseError = error{
-    MissingComponents,
-    InvalidFaceData,
-    InvalidFloat,
-    InvalidInt
-};
+pub const ParseError = error{ MissingComponents, InvalidFaceData, InvalidFloat, InvalidInt };
 
 pub fn parseObj(allocator: std.mem.Allocator, reader: *std.Io.Reader) !MeshData {
     log.debug("parsing obj", .{});
@@ -33,7 +28,13 @@ pub fn parseObj(allocator: std.mem.Allocator, reader: *std.Io.Reader) !MeshData 
     var faces = std.ArrayList(Face).empty;
     defer faces.deinit(allocator);
 
-    while (try reader.takeDelimiter('\n')) |line| {
+    while (try reader.takeDelimiter('\n')) |raw_line| {
+        // remove CR from line endings
+        const line = if (raw_line.len > 0 and raw_line[raw_line.len - 1] == '\r')
+            raw_line[0 .. raw_line.len - 1]
+        else
+            raw_line;
+
         if (std.mem.startsWith(u8, line, "#")) {
             continue; // comment
         } else if (std.mem.startsWith(u8, line, "vn")) {
@@ -48,20 +49,12 @@ pub fn parseObj(allocator: std.mem.Allocator, reader: *std.Io.Reader) !MeshData 
             const start_idx = indices.items.len;
 
             const tri_count = try parseFaceLine(allocator, line, raw_positions.items, raw_uvs.items, &vertices, &indices);
-            try faces.append(allocator, .{
-                .start = start_idx,
-                .length = tri_count * 3
-            });
+            try faces.append(allocator, .{ .start = start_idx, .length = tri_count * 3 });
         }
     }
 
     log.info("parsed obj: {d} vertices, {d} faces", .{ vertices.items.len, faces.items.len });
-    return MeshData.init(
-        allocator,
-        vertices.items,
-        indices.items,
-        faces.items,
-        null // objs do not store textures
+    return MeshData.init(allocator, vertices.items, indices.items, faces.items, null // objs do not store textures
     );
 }
 
@@ -75,27 +68,20 @@ fn parseVertexLine(line: []const u8) ParseError!Vec3 {
         if (component.len == 0) continue;
         if (index >= 3) break;
 
-        vertex[index] = std.fmt.parseFloat(f32, component)
-            catch return ParseError.InvalidFloat;
+        vertex[index] = std.fmt.parseFloat(f32, component) catch return ParseError.InvalidFloat;
 
         index += 1;
     }
 
     if (index < 3) {
-        log.warn("vertex line missing components: '{s}'", .{ line });
+        log.warn("vertex line missing components: '{s}'", .{line});
         return ParseError.MissingComponents;
     }
 
     return Vec3{ vertex[0], vertex[1], vertex[2] };
 }
 
-fn parseFaceLine(allocator: std.mem.Allocator,
-    line: []const u8,
-    raw_positions: []const Vec3,
-    raw_uvs: []const Vec2,
-    vertices: *std.ArrayList(Vertex),
-    indices: *std.ArrayList(usize)
-) !usize {
+fn parseFaceLine(allocator: std.mem.Allocator, line: []const u8, raw_positions: []const Vec3, raw_uvs: []const Vec2, vertices: *std.ArrayList(Vertex), indices: *std.ArrayList(usize)) !usize {
     var space_iter = std.mem.splitScalar(u8, line, ' ');
     _ = space_iter.next(); // consume "f"
 
@@ -112,11 +98,9 @@ fn parseFaceLine(allocator: std.mem.Allocator,
         var slash_iter = std.mem.splitScalar(u8, corner_str, '/');
 
         // position index
-        const v_str = slash_iter.next()
-            orelse return ParseError.InvalidFaceData;
+        const v_str = slash_iter.next() orelse return ParseError.InvalidFaceData;
 
-        const v_idx = std.fmt.parseInt(usize, v_str, 10)
-            catch return ParseError.InvalidInt;
+        const v_idx = std.fmt.parseInt(usize, v_str, 10) catch return ParseError.InvalidInt;
 
         if (v_idx == 0 or v_idx > raw_positions.len) {
             log.warn("face references out of range vertex index {d} (max is {d})", .{ v_idx, raw_positions.len });
@@ -128,8 +112,7 @@ fn parseFaceLine(allocator: std.mem.Allocator,
         var uv: Vec2 = Vec2{ 0.0, 0.0 };
         if (slash_iter.next()) |vt_str| {
             if (vt_str.len > 0) {
-                const vt_idx = std.fmt.parseInt(usize, vt_str, 10)
-                    catch return ParseError.InvalidFaceData;
+                const vt_idx = std.fmt.parseInt(usize, vt_str, 10) catch return ParseError.InvalidFaceData;
 
                 if (vt_idx == 0 or vt_idx > raw_uvs.len) {
                     log.warn("face references out-of-range uv index {d} (max is {d})", .{ vt_idx, raw_uvs.len });
@@ -166,7 +149,6 @@ fn parseFaceLine(allocator: std.mem.Allocator,
     return tri_count;
 }
 
-
 fn parseTextureLine(line: []const u8) ParseError!Vec2 {
     var iter = std.mem.splitScalar(u8, line, ' ');
     _ = iter.next(); // consume "vt"
@@ -177,8 +159,7 @@ fn parseTextureLine(line: []const u8) ParseError!Vec2 {
         if (component.len == 0) continue;
         if (index >= 2) break; // ignore w component
 
-        uv[index] = std.fmt.parseFloat(f32, component)
-            catch return ParseError.InvalidFloat;
+        uv[index] = std.fmt.parseFloat(f32, component) catch return ParseError.InvalidFloat;
 
         index += 1;
     }

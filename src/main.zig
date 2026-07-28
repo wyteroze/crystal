@@ -22,7 +22,7 @@ pub const std_options: std.Options = .{
 
 pub fn main(init: std.process.Init) !void {
     var engine: Engine = undefined;
-    try engine.init(init.gpa, init.io);
+    engine.init(init.gpa, init.io) catch |err| return err;
     defer engine.deinit();
 
     perf.registry = &engine.thread_registry;
