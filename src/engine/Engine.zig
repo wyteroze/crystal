@@ -57,31 +57,59 @@ pub const Engine = struct {
 
     pub fn init(self: *Engine, allocator: std.mem.Allocator, io: std.Io) !void {
         log.info("Initializing", .{});
-        var memory_registry = MemoryRegistry.init(allocator);
 
+        // set non-fallible fields
         self.* = .{
             .io = io,
             .allocator = allocator,
             .pre_step_callbacks = .empty,
-            .post_step_callbacks =.empty,
+            .post_step_callbacks = .empty,
             .thread_registry = .init(io),
-            .platform = try .init(),
+            .platform = undefined,
             .target_fps = 120,
             .window_manager = undefined,
-            .renderer = try .init(try memory_registry.createCategory("Render")),
-            .audio_engine = try .init(try memory_registry.createCategory("Audio engine")),
-            .widget_registry = .init(try memory_registry.createCategory("Widget registry")),
-            .scene_registry = .init(try memory_registry.createCategory("Scene registry")),
-            .color_registry = try .init(try memory_registry.createCategory("Color registry"), io),
+            .renderer = undefined,
+            .audio_engine = undefined,
+            .widget_registry = undefined,
+            .scene_registry = undefined,
+            .color_registry = undefined,
             .script_engine = undefined,
-            .default_font = try .loadFromFile(allocator, io, DEFAULT_FONT_PATH),
+            .default_font = undefined,
             .last_time_ms = sdl3.timer.getPerformanceCounter(),
             .frequency = @floatFromInt(sdl3.timer.getPerformanceFrequency()),
-            .memory_registry = undefined
+            .memory_registry = undefined,
         };
 
+        var memory_registry = MemoryRegistry.init(allocator);
+        errdefer memory_registry.deinit();
+
+        // init fallible fields with cleanup
+        self.platform = try .init();
+        errdefer self.platform.deinit();
+
+        self.renderer = try .init(try memory_registry.createCategory("Render"));
+        errdefer self.renderer.deinit();
+
+        self.audio_engine = try .init(try memory_registry.createCategory("Audio engine"));
+        errdefer self.audio_engine.deinit();
+
+        self.widget_registry = .init(try memory_registry.createCategory("Widget registry"));
+        errdefer self.widget_registry.deinit();
+
+        self.scene_registry = .init(try memory_registry.createCategory("Scene registry"));
+        errdefer self.scene_registry.deinit();
+
+        self.color_registry = try .init(try memory_registry.createCategory("Color registry"), io);
+        errdefer self.color_registry.deinit();
+
+        self.default_font = try Font.loadFromFile(allocator, io, DEFAULT_FONT_PATH);
+        errdefer self.default_font.deinit();
+
         self.window_manager = .init(try memory_registry.createCategory("Window manager"), &self.platform, self);
-        self.script_engine = try .init(try memory_registry.createCategory("Script engine"), io, &self.scene_registry, &self.platform, &self.audio_engine, &self.window_manager, &self.color_registry, self);
+        errdefer self.window_manager.deinit();
+
+        self.script_engine = try ScriptEngine.init(try memory_registry.createCategory("Script engine"), io, &self.scene_registry, &self.platform, &self.audio_engine, &self.window_manager, &self.color_registry, self);
+        errdefer self.script_engine.deinit();
 
         // SceneRegistry automatically handles deinitializing of skybox mesh
         Scene.skybox_mesh = try .loadFromFile(allocator, io, "src/assets/models/skybox.obj");
@@ -152,8 +180,10 @@ pub const Engine = struct {
     }
 
     pub fn deinit(self: *Engine) void {
-        const close_reason = if (self.close_reason) |cr| @tagName(cr) else null;
-        log.info("Closing (reason: {?s})", .{ close_reason });
+        if (self.close_reason) |cr|
+            log.info("Closing (reason: {s})", .{ @tagName(cr) })
+        else
+            log.info("Closing", .{});
 
         for (self.pre_step_callbacks.items) |cb| cb.deinit();
         for (self.post_step_callbacks.items) |cb| cb.deinit();
