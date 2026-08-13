@@ -1,16 +1,13 @@
 // Copyright 2026 wyteroze. Licensed under the Apache License, Version 2.0.
 
 .{
-    .name = .crystal,
-    .version = "0.0.4",
+    .name = .engine,
+    .version = "0.0.0",
 
-    .fingerprint = 0x878a1f197adb4cc4, // Changing this has security and trust implications.
+    .fingerprint = 0xe8a81a8d888634b2,
     .minimum_zig_version = "0.16.0",
 
     .dependencies = .{
-        .engine = .{ .path = "engine" },
-        // if you update any of the below you also need to do it in engine/build.zig.zon
-        // it's annoying but I don't care enough to find a better way
         .zlua = .{
             .url = "git+https://github.com/natecraddock/ziglua#d59103e257b25ae892cdede9a671366e8d4f3e51",
             .hash = "zlua-0.1.0-hGRpC4aUBQCOTE7WgTqCz0YBVUUaIpqDu1cNBu8nN6jH",
@@ -23,17 +20,13 @@
             .url = "git+https://github.com/floooh/sokol-zig.git#c28dacba3526de17d3a2a1c3628d87e75efae5a8",
             .hash = "sokol-0.1.0-pb1HK4WVPwDcT836SeTd2phnOOPDuyNZu8Gy79h7SI4J",
         },
-        // I know it's a seemingly random repo since it has zero stars but the original repo is for zig 0.15.0,
-        // and we aren't on that version.
-        .zig_assimp = .{
-            .url = "git+https://github.com/fathonyfath/assimp?ref=zig-0.16.0#72d9313b13f83001fa92d12e07f909f636325d3e",
-            .hash = "zig_assimp-5.4.0--G7jvqq0AADWFfytMdZ2empaUSWoOZR3gCTA1Y6VXu1X",
-        },
+        // Original repo credit to https://github.com/fathonyfath/assimp
+        .zig_assimp = .{ .path = "vendor/zig_assimp" },
     },
 
     .paths = .{
         "build.zig",
         "build.zig.zon",
-        "src",
-    },
+        "src"
+    }
 }

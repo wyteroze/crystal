@@ -1,0 +1,20 @@
+.{
+    .name = .zig_assimp,
+    .version = "5.4.0",
+    .fingerprint = 0x3e92a7cfbee36ef8,
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "LICENCE",
+        "README.md",
+        "include",
+        "src",
+    },
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .assimp = .{
+            .url = "https://github.com/assimp/assimp/archive/refs/tags/v6.0.5.tar.gz",
+            .hash = "N-V-__8AAIXDnA63pHaxPutkZU6w4bBIuJKhlxjxB1TQ9TLW",
+        },
+    },
+}
