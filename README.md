@@ -8,6 +8,9 @@
 > <img src="assets/headers/crystalWarning.svg" alt="Warning" width="138"><br>
 > Crystal is still in early development. This means APIs are unstable, and breaking changes occur often. Features like physics and an editor also don't exist yet. See the Roadmap below.
 
+> <img src="assets/headers/crystalNote.svg" alt="Note" width="99"><br>
+> This fork of the repository (/rewrite) is for the revamp of Crystal. Some major changes include moving to hardware-rendering, a paradigm shift to ECS, a more pragmatic Lua API, support for common filetypes, and more.
+
 <br><img src="assets/headers/crystalAbout.svg" alt="About" width="114">
 
 ---
