@@ -1,22 +1,31 @@
 @vs vs
 
-in vec3 position;
-in vec4 color0;
+layout(binding=0) uniform vs_params {
+    mat4 model;
+    mat4 view;
+    mat4 proj;
+};
 
-out vec4 color;
+in vec3 position;
+in vec3 normal;
+in vec2 uv;
+out vec3 vnormal;
+out vec2 vuv;
 
 void main() {
-    gl_Position = vec4(position, 1.0);
-    color = color0;
+    gl_Position = proj * view * model * vec4(position, 1.0);
+    vnormal = normalize(mat3(model) * normal);
+    vuv = uv;
 }
 @end
 
 @fs fs
-in vec4 color;
+in vec3 vnormal;
+in vec2 vuv;
 out vec4 frag_color;
 
 void main() {
-    frag_color = color;
+    frag_color = vec4(vnormal * 0.5 + 0.5, 1.0);
 }
 @end
 

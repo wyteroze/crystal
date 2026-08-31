@@ -1,4 +1,4 @@
-// Copyright 2026 wyteroze. Licensed under the Apache License, Version 2.0.
+// Copyright 2026 wyteroze. Licensed under the Apache-2.0 license.
 
 const types = @import("types.zig");
 
@@ -51,4 +51,9 @@ pub const Bindings = struct {
     vertex_buffers: [4]?types.BufferHandle = @splat(null),
     index_buffer: ?types.BufferHandle = null,
     images: [4]?types.ImageHandle = @splat(null)
+};
+
+pub const Uniforms = struct {
+    slot: u32,
+    data: []const u8
 };

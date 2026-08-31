@@ -1,4 +1,4 @@
-// Copyright 2026 wyteroze. Licensed under the Apache License, Version 2.0.
+// Copyright 2026 wyteroze. Licensed under the Apache-2.0 license.
 
 const std = @import("std");
 const sokol = @import("sokol");
@@ -7,19 +7,20 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const sdk_path = b.option([]const u8, "sdk", "Path to macOS SDK (looks something like MacOSX26.5.sdk")
+    const sdk_path = b.option([]const u8, "sdk", "Path to macOS SDK (looks something like MacOSX26.5.sdk") 
         orelse std.zig.system.darwin.getSdk(b.allocator, b.graph.io, &target.result);
 
     const dep_sdl3 = b.dependency("sdl3", .{ .target = target, .optimize = optimize });
-    const dep_zlua = b.dependency("zlua", .{ .target = target, .optimize = optimize, .lang = .lua54 });
+    const dep_zlua = b.dependency("zlua", .{ .target = target, .optimize = optimize, .lang = .lua55 });
     const dep_sokol = b.dependency("sokol", .{ .target = target, .optimize = optimize, .gl = true });
+    const dep_toml = b.dependency("toml", .{ .target = target, .optimize = optimize });
     const dep_shdc = dep_sokol.builder.dependency("shdc", .{});
-    const dep_assimp = b.dependency("zig_assimp", .{
-        .target = target,
-        .optimize = optimize,
-        .formats = "STL,Obj,FBX,glTF,glTF2",
-        .double = false,
-        .zlib = false
+    const dep_assimp = b.dependency("zig_assimp", .{ 
+        .target = target, 
+        .optimize = optimize, 
+        .formats = "STL,Obj,FBX,glTF,glTF2", 
+        .double = false, 
+        .zlib = false 
     });
 
     const shader_mod = try sokol.shdc.createModule(b, "shaders", dep_sokol.module("sokol"), .{
@@ -38,18 +39,19 @@ pub fn build(b: *std.Build) !void {
         .root_source_file = b.path("src/engine.zig"),
         .target = target,
         .optimize = optimize,
-        .imports = &.{
-            .{ .name = "sdl3", .module = dep_sdl3.module("sdl3") },
-            .{ .name = "zlua", .module = dep_zlua.module("zlua") },
-            .{ .name = "sokol", .module = dep_sokol.module("sokol") },
-            .{ .name = "shaders", .module = shader_mod }
+        .imports = &.{ 
+            .{ .name = "sdl3", .module = dep_sdl3.module("sdl3") }, 
+            .{ .name = "zlua", .module = dep_zlua.module("zlua") }, 
+            .{ .name = "sokol", .module = dep_sokol.module("sokol") }, 
+            .{ .name = "toml", .module = dep_toml.module("toml") },
+            .{ .name = "shaders", .module = shader_mod } 
         },
     });
 
-    const engine_lib = b.addLibrary(.{
-        .name = "engine",
-        .root_module = engine_mod,
-        .linkage = .static
+    const engine_lib = b.addLibrary(.{ 
+        .name = "engine", 
+        .root_module = engine_mod, 
+        .linkage = .static 
     });
 
     const lib_assimp = dep_assimp.artifact("assimp");

@@ -1,4 +1,4 @@
-// Copyright 2026 wyteroze. Licensed under the Apache License, Version 2.0.
+// Copyright 2026 wyteroze. Licensed under the Apache-2.0 license.
 
 .{
     .name = .engine,
@@ -8,10 +8,8 @@
     .minimum_zig_version = "0.16.0",
 
     .dependencies = .{
-        .zlua = .{
-            .url = "git+https://github.com/natecraddock/ziglua#d59103e257b25ae892cdede9a671366e8d4f3e51",
-            .hash = "zlua-0.1.0-hGRpC4aUBQCOTE7WgTqCz0YBVUUaIpqDu1cNBu8nN6jH",
-        },
+        // Original repo credit to https://github.com/fathonyfath/assimp
+        .zig_assimp = .{ .path = "vendor/zig_assimp" },
         .sdl3 = .{
             .url = "git+https://codeberg.org/7Games/zig-sdl3?ref=v0.2.2#83c694024f23cbacfa36fcd8fca1c57d4957203e",
             .hash = "sdl3-0.2.2-NmT1Q-2jKQBa4uSXUwuVwdmXpXe-eYwim7Wkyx531v6O",
@@ -20,13 +18,15 @@
             .url = "git+https://github.com/floooh/sokol-zig.git#c28dacba3526de17d3a2a1c3628d87e75efae5a8",
             .hash = "sokol-0.1.0-pb1HK4WVPwDcT836SeTd2phnOOPDuyNZu8Gy79h7SI4J",
         },
-        // Original repo credit to https://github.com/fathonyfath/assimp
-        .zig_assimp = .{ .path = "vendor/zig_assimp" },
+        .zlua = .{
+            .url = "git+https://github.com/natecraddock/ziglua#134fd6110e860672c32703d9c76588a1d5f6a3fa",
+            .hash = "zlua-0.1.0-hGRpC4aUBQCOTE7WgTqCz0YBVUUaIpqDu1cNBu8nN6jH",
+        },
+        .toml = .{
+            .url = "git+https://github.com/sam701/zig-toml?ref=zig-0.16#8685923e32e8b8a795eb2715684236975a70faed",
+            .hash = "toml-0.3.0-bV14BRmKAQAWR0FT0KUKFwVJTImaFhWjSe6HfSMtNZOH",
+        },
     },
 
-    .paths = .{
-        "build.zig",
-        "build.zig.zon",
-        "src"
-    }
+    .paths = .{ "build.zig", "build.zig.zon", "src" },
 }

@@ -1,4 +1,4 @@
-// Copyright 2026 wyteroze. Licensed under the Apache License, Version 2.0.
+// Copyright 2026 wyteroze. Licensed under the Apache-2.0 license.
 
 const std = @import("std");
 const desc = @import("desc.zig");
@@ -50,4 +50,10 @@ pub fn getElapsedSeconds(self: *Platform) f64 {
     return switch (self.backend) {
         .sdl => |*b| b.getElapsedSeconds()
     };
+}
+
+pub fn waitSeconds(self: *Platform, duration: f32) void {
+    switch (self.backend) {
+        .sdl => |*b| b.waitSeconds(duration)
+    }
 }

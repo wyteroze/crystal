@@ -1,4 +1,4 @@
-// Copyright 2026 wyteroze. Licensed under the Apache License, Version 2.0.
+// Copyright 2026 wyteroze. Licensed under the Apache-2.0 license.
 
 const std = @import("std");
 const sdl3 = @import("sdl3");
@@ -28,6 +28,7 @@ pub fn createSurface(self: SdlBackend, d: desc.SurfaceDesc) !types.SurfaceHandle
     _ = sdl3.c.SDL_GL_SetAttribute(sdl3.c.SDL_GL_CONTEXT_PROFILE_MASK, sdl3.c.SDL_GL_CONTEXT_PROFILE_CORE);
     _ = sdl3.c.SDL_GL_SetAttribute(sdl3.c.SDL_GL_CONTEXT_MAJOR_VERSION, 4);
     _ = sdl3.c.SDL_GL_SetAttribute(sdl3.c.SDL_GL_CONTEXT_MINOR_VERSION, 1);
+    _ = sdl3.c.SDL_GL_SetAttribute(sdl3.c.SDL_GL_DEPTH_SIZE, 24);
 
     const w: sdl3.video.Window = try .init(d.title, @intCast(d.width), @intCast(d.height), .{ .open_gl = true, .resizable = true });
     _ = try sdl3.video.gl.Context.init(w);
@@ -50,13 +51,18 @@ pub fn pollEvent(self: SdlBackend) ?desc.PlatformEvent {
     return switch (event) {
         .quit => return .quit,
         .window_resized => |e| return .{ .surface_resize = .{ .width = @intCast(e.width), .height = @intCast(e.height) } },
-        else => null
+        else => null,
     };
 }
 
 pub fn getElapsedSeconds(self: SdlBackend) f64 {
     _ = self;
-    return @as(f64, @floatCast(sdl3.timer.getNanosecondsSinceInit())) / std.time.ns_per_s;
+    return @as(f64, @floatFromInt(sdl3.timer.getNanosecondsSinceInit())) / std.time.ns_per_s;
+}
+
+pub fn waitSeconds(self: SdlBackend, duration: f32) void {
+    _ = self;
+    sdl3.timer.delayNanosecondsPrecise(@trunc(duration * std.time.ns_per_s));
 }
 
 pub fn swapBuffers(self: SdlBackend, h: types.SurfaceHandle) !void {

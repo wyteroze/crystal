@@ -1,10 +1,10 @@
-// Copyright 2026 wyteroze. Licensed under the Apache License, Version 2.0.
+// Copyright 2026 wyteroze. Licensed under the Apache-2.0 license.
 
-const shd = @import("shaders");
-const types = @import("types.zig");
+pub const program = @import("shaders");
 const Renderer = @import("Renderer.zig");
 const gfx = @import("sokol").gfx;
 
-pub fn basic(r: *Renderer) types.ShaderHandle {
-    return r.createShader(shd.basicShaderDesc(gfx.queryBackend()));
+// Export shader stuff
+pub fn basicShaderDesc() gfx.ShaderDesc {
+    return program.basicShaderDesc(gfx.queryBackend());
 }

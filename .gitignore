@@ -7,3 +7,5 @@ export.json
 .DS_Store
 chars.txt
 __pycache__/
+net.wyteroze.example/
+net.wyteroze.crystal-example/

@@ -1,4 +1,4 @@
-// Copyright 2026 wyteroze. Licensed under the Apache License, Version 2.0.
+// Copyright 2026 wyteroze. Licensed under the Apache-2.0 license.
 
 const std = @import("std");
 const sokol = @import("sokol");
@@ -11,7 +11,7 @@ backend: Backend,
 
 pub fn init(b: Backend) Renderer {
     switch (b) {
-        .sokol => |bk| bk.init()
+        .sokol => |*bk| bk.init()
     }
 
     return .{ .backend = b };
@@ -56,6 +56,12 @@ pub fn applyPipeline(self: *Renderer, pipeline: types.PipelineHandle) void {
 pub fn applyBindings(self: *Renderer, binds: desc.Bindings) void {
     switch (self.backend) {
         .sokol => |*b| b.applyBindings(binds)
+    }
+}
+
+pub fn applyUniforms(self: *Renderer, unis: desc.Uniforms) void {
+    switch (self.backend) {
+        .sokol => |*b| b.applyUniforms(unis)
     }
 }
 

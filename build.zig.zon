@@ -1,4 +1,4 @@
-// Copyright 2026 wyteroze. Licensed under the Apache License, Version 2.0.
+// Copyright 2026 wyteroze. Licensed under the Apache-2.0 license.
 
 .{
     .name = .crystal,
@@ -9,6 +9,7 @@
 
     .dependencies = .{
         .engine = .{ .path = "engine" },
+        .docgen = .{ .path = "tools/docgen" },
         // if you update any of the below you also need to do it in engine/build.zig.zon
         // it's annoying but I don't care enough to find a better way
         .zlua = .{
