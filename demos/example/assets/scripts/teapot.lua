@@ -5,14 +5,13 @@ Copyright 2026 wyteroze. Licensed under the Apache-2.0 license.
 local cmath = require("core.math")
 local assets = require("assets")
 
-local Teapot = {
-    Multiplier = 1
-}
+local Teapot = {}
 Teapot.__index = Teapot
 
 function Teapot.new(entity)
     local self = setmetatable({
-        entity = entity
+        Multiplier = 1,
+        entity = entity,
     }, Teapot)
 
     self.entity:SetComponents({
