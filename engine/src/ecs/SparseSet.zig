@@ -67,7 +67,11 @@ pub fn insert(self: *SparseSet, entity: Entity, bytes: []const u8) !void {
 
     const dense_idx: u32 = @intCast(self.dense.items.len);
     try self.dense.append(self.allocator, entity);
-    try self.dense_data.appendSlice(self.allocator, bytes);
+
+    const start = self.dense_data.items.len;
+    try self.dense_data.resize(self.allocator, start + self.elem_size);
+    @memset(self.dense_data.items[start..][0..self.elem_size], 0);
+    @memcpy(self.dense_data.items[start..][0..bytes.len], bytes);
 
     self.sparse.items[entity.index] = dense_idx;
 }
@@ -108,7 +112,7 @@ pub fn remove(self: *SparseSet, entity: Entity) void {
 }
 
 pub fn get(self: *SparseSet, entity: Entity) ?[]u8 {
-    if (entity.index > self.sparse.items.len) return null;
+    if (entity.index >= self.sparse.items.len) return null;
 
     const dense_idx = self.sparse.items[entity.index];
     if (dense_idx == null_idx) return null;

@@ -50,9 +50,8 @@ pub const FieldType = struct {
             .alignment = @alignOf(T),
             .read = struct {
                 fn c(allocator: std.mem.Allocator, lua: *zlua.Lua, idx: i32, out: []u8) anyerror!void {
-                    var parsed = try lua.toAnyAlloc(T, idx);
-                    defer lua.allocator().destroy(parsed.arena);
-                    defer parsed.arena.deinit();
+                    const parsed = try linker.util.parseValAlloc(lua, T, idx);
+                    defer if (parsed.arena) |a| { a.deinit(); lua.allocator().destroy(a); };
 
                     const owned = try deepDupe(allocator, T, parsed.value);
                     @memcpy(out[0..@sizeOf(T)], std.mem.asBytes(&owned));
@@ -78,6 +77,7 @@ pub const FieldType = struct {
             .pointer => |info| info.size == .slice or info.size == .many or !info.is_const,
             .optional => |info| needsAlloc(info.child),
             .@"struct" => |info| blk: {
+                if (@hasDecl(T, "__opaque") and T.__opaque) break :blk false;
                 inline for (info.fields) |f| {
                     if (needsAlloc(f.type)) break :blk true;
                 }
@@ -91,6 +91,7 @@ pub const FieldType = struct {
         return switch (@typeInfo(T)) {
             .pointer => |info| blk: {
                 if (info.size == .slice) {
+                    std.debug.print("dupe slice: ptr={*} len={} elem={s}\n", .{ v.ptr, v.len, @typeName(info.child) });
                     break :blk try allocator.dupe(info.child, v);
                 }
                 break :blk v;

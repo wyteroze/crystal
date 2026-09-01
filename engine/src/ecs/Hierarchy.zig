@@ -31,9 +31,9 @@ pub fn setParent(self: *Hierarchy, entity: Entity, parent: ?Entity) !void {
         if (self.isAncestorOf(entity, p)) return error.CyclicParent;
     }
 
-    const old_parent = self.parents.items[entity.index];
-    if (!old_parent.eql(Entity.invalid)) {
-        self.removeChild(old_parent, entity);
+    const previous_parent = self.parents.items[entity.index];
+    if (!previous_parent.eql(Entity.invalid)) {
+        self.removeChild(previous_parent, entity);
     }
 
     self.parents.items[entity.index] = parent orelse Entity.invalid;
@@ -46,7 +46,7 @@ pub fn setParent(self: *Hierarchy, entity: Entity, parent: ?Entity) !void {
 fn removeChild(self: *Hierarchy, parent: Entity, child: Entity) void {
     for (self.children.items[parent.index].items, 0..) |e, i| {
         if (e.eql(child)) {
-            _ = self.children.swapRemove(i);
+            _ = self.children.items[parent.index].swapRemove(i);
             return;
         }
     }

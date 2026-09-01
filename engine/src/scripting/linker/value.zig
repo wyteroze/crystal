@@ -151,7 +151,6 @@ pub fn value(l: *Lua, comptime T: type, comptime recipe: recipes.LuaValueRecipe)
 
     switch (recipe.scope) {
         .global => l.setGlobal(switch (recipe.name) { .auto => util.shortTypeName(T), .named => |nm| nm }),
-        .module => |name| util.moduleRegister(l, name, switch (recipe.name) { .auto => util.shortTypeName(T), .named => |nm| nm }),
-        .top_level_module => util.registerTopLevelModule(l, switch (recipe.name) { .auto => util.shortTypeName(T), .named => |nm| nm })
+        .module => |name| util.moduleRegister(l, name, switch (recipe.name) { .auto => util.shortTypeName(T), .named => |nm| nm })
     }
 }

@@ -20,6 +20,10 @@ pub fn fromPath(path: []const u8) AssetId {
     };
 }
 
+pub fn deinit(self: AssetId, allocator: std.mem.Allocator) void {
+    if (runtime_safety) allocator.free(self.name);
+}
+
 pub fn eql(self: AssetId, other: AssetId) bool {
     return self.value == other.value;
 }

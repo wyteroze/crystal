@@ -6,6 +6,7 @@ const binding = @import("Binding.zig");
 const Lua = zlua.Lua;
 
 pub const parseVal = binding.parseVal;
+pub const parseValAlloc = binding.parseValAlloc;
 pub const pushVal = binding.pushVal;
 pub const isBoundType = binding.isBoundType;
 
@@ -111,7 +112,6 @@ pub fn registerTopLevelModule(l: *Lua, mod_path: [:0]const u8) void {
     l.setField(-2, mod_path);
 
     l.remove(-1); // now pop `loaded`
-    l.pop(1);
 }
 
 pub fn autoPush(l: *Lua, comptime func: anytype) void {

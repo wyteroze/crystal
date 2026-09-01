@@ -12,22 +12,34 @@ function Teapot.new(entity)
     local self = setmetatable({
         Multiplier = 1,
         entity = entity,
+        timer = 0,
+        lastFlicker = 0,
+        ogParent = entity.Parent
     }, Teapot)
 
-    self.entity:SetComponents({
-        Position = cmath.Vec3.new(0, 0, -5),
-        Rotation = cmath.Vec3.new(0, 0, 0),
-        Mesh = assets.load("asset://models/shortandstout.glb")
-    })
+    self.entity:AddComponent("Position", cmath.Vec3.new(0, 0, -5))
+    self.entity:AddComponent("Rotation", cmath.Vec3.new(0, 0, 0))
+    self.entity:AddComponent("Mesh", assets.load("file://models/shortandstout.glb"))
 
     return self
 end
 
 function Teapot:OnUpdate(dt)
+    self.timer = self.timer + dt
     local toAdd = self.Multiplier * dt
     local add = cmath.Vec3.new(toAdd * 5, toAdd * 10, toAdd * 20)
     
     self.entity.Components.Rotation = self.entity.Components.Rotation + add
+    
+    if self.timer < 5 then return end
+    if self.timer - self.lastFlicker > 1 then
+        self.lastFlicker = self.timer
+        if not self.entity.Parent then
+            self.entity.Parent = self.ogParent
+        else
+            self.entity.Parent = nil
+        end 
+    end
 end
 
 function Teapot:OnDestroy()

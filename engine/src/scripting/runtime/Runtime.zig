@@ -4,6 +4,7 @@ const std = @import("std");
 const zlua = @import("zlua");
 const linker = @import("../linker/linker.zig");
 const ecs = @import("../../ecs/ecs.zig");
+const assets = @import("../../assets/assets.zig");
 const c = zlua.c;
 const Lua = zlua.Lua;
 const Script = @import("Script.zig");
@@ -11,17 +12,36 @@ const types = @import("../../assets/types.zig");
 
 const Runtime = @This();
 state: *Lua,
+world: *ecs.World,
+registry: *assets.AssetRegistry,
 
-pub fn init(allocator: std.mem.Allocator) !Runtime {
+/// `linkState` must be called immediately after this.
+pub fn init(allocator: std.mem.Allocator, world: *ecs.World, registry: *assets.AssetRegistry) !Runtime {
     const l: *Lua = try .init(allocator);
     l.openLibs();
 
     linker.registry.registerAll(l);
-    return .{ .state = l };
+    return .{ .state = l, .world = world, .registry = registry };
 }
 
 pub fn deinit(self: Runtime) void {
     self.state.deinit();
+}
+
+pub fn linkState(self: *Runtime) void {
+    const raw_space = self.state.getExtraSpace();
+    const space_ptr: **Runtime = @ptrCast(@alignCast(raw_space));
+
+    space_ptr.* = self;
+}
+
+/// Gets and returns the pointer of the Runtime that created the state,
+/// which is stored in the state's extra space (linkState() must have been called first)
+pub fn fromState(state: *Lua) *Runtime {
+    const raw_space = state.getExtraSpace();
+    const space_ptr: **Runtime = @ptrCast(@alignCast(raw_space));
+
+    return space_ptr.*;
 }
 
 pub fn loadScript(self: Runtime, source: types.ScriptSource) !Script {

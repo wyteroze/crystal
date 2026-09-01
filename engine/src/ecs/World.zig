@@ -11,6 +11,7 @@ const Hierarchy = @import("Hierarchy.zig");
 
 const field_types: std.StaticStringMap(ComponentId.FieldType) = blk: {
     const math = @import("../core/math/math.zig");
+    const assets = @import("../assets/assets.zig");
 
     break :blk .initComptime(.{
         .{ "boolean", ComponentId.FieldType.ofType(bool) },
@@ -19,7 +20,8 @@ const field_types: std.StaticStringMap(ComponentId.FieldType) = blk: {
         .{ "string", ComponentId.FieldType.ofType([]const u8) },
         .{ "Vec3", ComponentId.FieldType.ofType(math.Vec3) },
         .{ "Quat", ComponentId.FieldType.ofType(math.Quat) },
-        .{ "Mat4", ComponentId.FieldType.ofType(math.Mat4) }
+        .{ "Mat4", ComponentId.FieldType.ofType(math.Mat4) },
+        .{ "Asset", ComponentId.FieldType.ofType(assets.AssetHandle) }
     });
 };
 

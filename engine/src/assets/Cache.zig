@@ -30,6 +30,7 @@ pub fn init(allocator: std.mem.Allocator, io: std.Io) Cache {
 pub fn deinit(self: *Cache) void {
     var iter = self.entries.iterator();
     while (iter.next()) |e| {
+        e.key_ptr.deinit(self.allocator);
         e.value_ptr.asset.deinit(self.allocator);
     }
 
@@ -38,24 +39,25 @@ pub fn deinit(self: *Cache) void {
 }
 
 pub fn load(self: *Cache, source: AssetSource, uri: []const u8, path: []const u8) !AssetId {
-    const id: AssetId = .fromPath(uri);
+    const lookup_id: AssetId = .fromPath(uri);
 
-    if (self.entries.getPtr(id)) |e| {
+    if (self.entries.getPtr(lookup_id)) |e| {
         _ = e.rc.fetchAdd(1, .monotonic);
         e.time_freed = null;
-
-        return id;
+        return lookup_id;
     }
 
     const bytes = try source.read(path);
+    const owned_name = try self.allocator.dupe(u8, uri);
+    const stored_id: AssetId = .fromPath(owned_name);
 
-    try self.entries.put(id, .{ 
+    try self.entries.put(stored_id, .{
         .asset = try .parse(self.allocator, path, bytes),
         .rc = .init(1),
         .time_freed = null
     });
 
-    return id;
+    return lookup_id;
 }
 
 pub fn ref(self: *Cache, id: AssetId) void {
@@ -103,6 +105,7 @@ pub fn tick(self: *Cache) usize {
             continue;
         }
 
+        id.deinit(self.allocator);
         entry.asset.deinit(self.allocator);
         _ = self.entries.remove(id);
         _ = self.pending_frees.swapRemove(i);

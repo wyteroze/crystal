@@ -145,7 +145,6 @@ pub fn reference(l: *Lua, comptime T: type, comptime recipe: recipes.LuaReferenc
     }
     switch (recipe.scope) {
         .global => l.setGlobal(switch (recipe.name) { .auto => util.shortTypeName(T), .named => |nm| nm }),
-        .module => |mod_name| util.moduleRegister(l, mod_name, switch (recipe.name) { .auto => util.shortTypeName(T), .named => |nm| nm }),
-        .top_level_module => util.registerTopLevelModule(l, switch (recipe.name) { .auto => util.shortTypeName(T), .named => |nm| nm})
+        .module => |mod_name| util.moduleRegister(l, mod_name, switch (recipe.name) { .auto => util.shortTypeName(T), .named => |nm| nm })
     }
 }

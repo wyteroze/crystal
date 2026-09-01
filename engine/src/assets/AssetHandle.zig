@@ -41,3 +41,11 @@ pub fn scriptSource(self: AssetHandle) !*const types.ScriptSource {
         else => error.WrongAssetKind
     };
 }
+
+const std = @import("std");
+pub const __lua = .val;
+pub const __opaque = true;
+pub fn format(self: AssetHandle, buf: []u8) []const u8 {
+    return std.fmt.bufPrint(buf, "Asset {f}", .{ self.id })
+        catch "Asset ?";
+}

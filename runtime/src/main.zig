@@ -52,7 +52,8 @@ fn render(w: *ecs.World, dt: f32, ctx: *RenderCtx) void {
     var q = w.query(&.{ ctx.mesh_id, ctx.pos_id, ctx.rot_id });
     var it = q.iterator();
     while (it.next()) |entity| {
-        const mesh = w.getComponent(entity, w.components.id("Mesh").?, assets.types.Mesh) orelse continue;
+        if (entity.getParent() == null) continue;
+        const mesh_asset = w.getComponent(entity, w.components.id("Mesh").?, assets.AssetHandle) orelse continue;
         const pos = w.getComponent(entity, ctx.pos_id, Position).?.*;
         const rot = w.getComponent(entity, ctx.rot_id, Rotation).?.*;
 
@@ -62,7 +63,7 @@ fn render(w: *ecs.World, dt: f32, ctx: *RenderCtx) void {
         ctx.renderer.applyBindings(.{ .vertex_buffers = .{ ctx.vbuf, null, null, null }, .index_buffer = ctx.ibuf });
         ctx.renderer.applyUniforms(.{ .slot = gfx.shaders.program.UB_vs_params, .data = std.mem.asBytes(&vs_params) });
 
-        ctx.renderer.draw(0, @intCast(mesh.indices.len), 1);
+        ctx.renderer.draw(0, @intCast((mesh_asset.mesh() catch return).indices.len), 1);
     }
 
     ctx.renderer.endPass();
@@ -115,11 +116,6 @@ pub fn main(init: std.process.Init) !void {
     
     const os: Os = try .init(init, builtin.os.tag, boot.package_id);
 
-    var lua_allocator: core.TrackedAllocator = .init(allocator, "LuaRuntime");
-    const runtime: scripting.Runtime = try .init(lua_allocator.allocator());
-    defer runtime.deinit();
-    runtime.setGenerational();
-
     var asset_allocator: core.TrackedAllocator = .init(allocator, "AssetRegistry");
     var asset_registry: assets.AssetRegistry = try .init(asset_allocator.allocator(), io, os, project_path);
     defer asset_registry.deinit();
@@ -129,13 +125,18 @@ pub fn main(init: std.process.Init) !void {
     var world: ecs.World = .init(ecs_allocator.allocator());
     defer world.deinit();
 
+    var lua_allocator: core.TrackedAllocator = .init(allocator, "LuaRuntime");
+    var runtime: scripting.Runtime = try .init(lua_allocator.allocator(), &world, &asset_registry);
+    defer runtime.deinit();
+    runtime.setGenerational();
+    runtime.linkState();
+
     // Register components
     const scene_component = try world.registerComponentNative(Scene, "Scene"); // For organizing collections of entities
-    const mesh_component = try world.registerComponentNative(assets.types.Mesh, "Mesh"); // For giving an entity a mesh appearance
+    const mesh_component = try world.registerComponentNativeShaped(assets.AssetHandle, "Mesh"); // For giving an entity a mesh appearance
     const pos_component = try world.registerComponentNativeShaped(Position, "Position"); // For moving entities
     const rot_component = try world.registerComponentNativeShaped(Rotation, "Rotation"); // For rotating entites (Euler)
     const script_component = try world.registerComponentNative(scripting.Script, "Script"); // For giving entities behavior
-
     // Create a scene inside of the world
     const scene = try world.spawnEntity();
 
@@ -149,20 +150,8 @@ pub fn main(init: std.process.Init) !void {
     // Spawn a new entity
     const entity = try world.spawnEntity();
 
-    // Load teapot model
-    var model = try asset_registry.load("file://models/shortandstout.glb");
-    defer model.release();
-    const mesh = try model.mesh();
-
-    // Give the entity the teapot mesh
-    try world.addComponent(entity, mesh_component, assets.types.Mesh, mesh.*);
-
     // Parent the component under the scene
     try entity.setParent(scene);
-
-    // Give the entity a position and rotation
-    try world.addComponent(entity, pos_component, Position, .zero);
-    try world.addComponent(entity, rot_component, Rotation, .zero);
 
     // Add a script to the component
     const source = try asset_registry.load("file://scripts/teapot.lua");
@@ -186,8 +175,9 @@ pub fn main(init: std.process.Init) !void {
 
     const shader = renderer.createShader(gfx.shaders.basicShaderDesc());
 
-    const sab = std.mem.sliceAsBytes(mesh.vertices);
-    const iab = std.mem.sliceAsBytes(mesh.indices);
+    const mesh_asset = world.getComponent(entity, mesh_component, assets.AssetHandle) orelse unreachable;
+    const sab = std.mem.sliceAsBytes((try mesh_asset.mesh()).vertices);
+    const iab = std.mem.sliceAsBytes((try mesh_asset.mesh()).indices);
     const vbuf = renderer.createBuffer(.{ .type = .vertex, .data = sab, .size = sab.len });
     const ibuf = renderer.createBuffer(.{ .type = .index, .data = iab, .size = iab.len });
 

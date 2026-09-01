@@ -53,7 +53,10 @@ pub fn load(self: *AssetRegistry, uri_str: []const u8) !AssetHandle {
     const uri: AssetUri = try .parse(self.allocator, uri_str);
     defer uri.deinit(self.allocator);
 
-    const source = self.sources.get(uri.scheme) orelse return error.UnknownScheme;
+    const source = self.sources.get(uri.scheme) orelse {
+        std.log.err("unknown scheme '{s}://'", .{ uri.scheme });
+        return error.UnknownScheme;
+    };
     const id = try self.cache.load(source, uri_str, uri.path);
     return .acquire(&self.cache, id);
 }
@@ -61,6 +64,17 @@ pub fn load(self: *AssetRegistry, uri_str: []const u8) !AssetHandle {
 pub const registerLua = struct {
     const zlua = @import("zlua");
     const linker = @import("../scripting/linker/linker.zig");
+    const Runtime = @import("../scripting/runtime/Runtime.zig");
+    const HandleBind = linker.Binding(AssetHandle, false);
+
+    fn luaLoadAsset(l: *zlua.Lua) !i32 {
+        const r: *Runtime = .fromState(l);
+        const uri = l.toString(1) catch |e| linker.util.luaErr(l, e, .{ []const u8, 1 });
+        const handle = try r.registry.load(uri);
+
+        HandleBind.push(l, handle);
+        return 1;
+    }
 
     pub fn registerLua(l: *zlua.Lua) void {
         linker.reference(l, AssetHandle, .{
@@ -68,12 +82,12 @@ pub const registerLua = struct {
             .scope = .{ .module = "assets.types" }
         });
 
-        linker.reference(l, AssetRegistry, .{
-            .name = .{ .named = "assets" },
-            .scope = .top_level_module,
-            .methods = &.{
-                .named("load", AssetRegistry.load)
-            }
+        linker.module(l, .{
+            .name = "assets",
+            .functions = &.{
+                .custom("load", luaLoadAsset)
+            },
         });
+
     }
 }.registerLua;

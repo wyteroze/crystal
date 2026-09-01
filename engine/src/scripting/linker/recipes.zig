@@ -108,8 +108,6 @@ pub const Properties = union(enum) {
 pub const Scope = union(enum) {
     /// A global accessible in all lua scripts
     global,
-    /// A module named after the type that returns said type.
-    top_level_module, 
     /// A module with the given name that contains the type.
     module: [:0]const u8,
 };
@@ -189,4 +187,10 @@ pub const LuaReferenceRecipe = struct {
     eq: OpMode = .identity,
     tostring: OpMode = .identity,
     gc: ?Method = null
+};
+
+pub const LuaModuleRecipe = struct {
+    name: [:0]const u8,
+    functions: []const Method = &.{},
+    properties: ?Properties = null
 };

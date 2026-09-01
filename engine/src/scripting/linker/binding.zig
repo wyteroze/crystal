@@ -34,6 +34,19 @@ pub fn Binding(comptime T: type, comptime is_ref: bool) type {
     };
 }
 
+pub fn Parsed(comptime T: type) type {
+    return struct {
+        arena: ?*std.heap.ArenaAllocator,
+        value: T,
+
+        pub fn deinit(self: @This()) void {
+            const allocator = self.arena.child_allocator;
+            self.arena.deinit();
+            allocator.destroy(self.arena);
+        }
+    };
+}
+
 pub fn pushVal(l: *Lua, comptime T: type, val: T) void {
     const is_ptr = @typeInfo(T) == .pointer;
     const Inner = if (is_ptr) @typeInfo(T).pointer.child else T;
@@ -53,5 +66,23 @@ pub fn parseVal(l: *Lua, comptime ParamType: type, idx: i32) !ParamType {
         return Binding(Inner, Inner.__lua == .ref).check(l, idx);
     } else {
         return l.toAny(ParamType, idx);
+    }
+}
+
+pub fn parseValAlloc(l: *Lua, comptime ParamType: type, idx: i32) !Parsed(ParamType) {
+    const is_ptr = @typeInfo(ParamType) == .pointer;
+    const Inner = if (is_ptr) @typeInfo(ParamType).pointer.child else ParamType;
+
+    if (comptime isBoundType(Inner)) {
+        return .{
+            .arena = null,
+            .value = Binding(Inner, Inner.__lua == .ref).check(l, idx)
+        };
+    } else {
+        const result = try l.toAnyAlloc(ParamType, idx);
+        return .{
+            .arena = result.arena,
+            .value = result.value
+        };
     }
 }

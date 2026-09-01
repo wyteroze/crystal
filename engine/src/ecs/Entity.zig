@@ -284,7 +284,9 @@ pub const registerLua = struct {
             if (info.fields.len != 1) lua.raiseErrorStr("multi-field components not yet supported", .{});
 
             const field = info.fields[0];
-            var bytes: [64]u8 = undefined;
+            var bytes: [64]u8 align(16) = undefined;
+            std.debug.assert(field.type.alignment <= 16);
+            std.debug.assert(field.type.size <= bytes.len);
 
             field.type.read(self.world.allocator, lua, -1, bytes[0..field.type.size]) catch |e| raiseForComponentErr(lua, e, key);
             self.setComponentField(key, bytes[0..field.type.size]) catch |e| raiseForComponentErr(lua, e, key);
@@ -317,12 +319,14 @@ pub const registerLua = struct {
 
         if (std.mem.eql(u8, key, "Parent")) {
             if (self.getParent()) |p| {
-                EntityBind.push(l, p);
-                return 1;
-            } else {
-                l.pushNil();
-                return 1;
+                if (!p.eql(.invalid)) {
+                    EntityBind.push(l, p);
+                    return 1;
+                }
             }
+
+            l.pushNil();
+            return 1;
         } else if (std.mem.eql(u8, key, "Components")) {
             const window = l.allocator().create(ComponentsSlidingWindow) catch |e| linker.util.luaErr(l, e, .{});
             window.* = .{
@@ -362,7 +366,12 @@ pub const registerLua = struct {
         const key = l.toString(2) catch |e| linker.util.luaErr(l, e, .{ []const u8, 2 });
 
         if (std.mem.eql(u8, key, "Parent")) {
-            const entity = if (l.isNil(3)) null else EntityBind.check(l, 3);
+            const entity = if (l.isNil(3)) null else blk: {
+                const e = EntityBind.check(l, 3);
+                if (!e.eql(.invalid)) break :blk e;
+                break :blk null;
+            };
+            
             self.setParent(entity) catch |e| linker.util.luaErr(l, e, .{});
         } else if (std.mem.eql(u8, key, "Components")) {
             l.raiseErrorStr(
