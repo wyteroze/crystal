@@ -1,7 +1,7 @@
 // Copyright 2026 wyteroze. Licensed under the Apache-2.0 license.
 
 const std = @import("std");
-const AssetSource = @import("AssetSource.zig");
+const Source = @import("Source.zig");
 
 const DirSource = @This();
 allocator: std.mem.Allocator,
@@ -20,7 +20,7 @@ pub fn deinit(self: DirSource) void {
     self.base_dir.close(self.io);
 }
 
-pub fn source(self: *DirSource) AssetSource {
+pub fn source(self: *DirSource) Source {
     return .{
         .ptr = self,
         .vtable = &.{

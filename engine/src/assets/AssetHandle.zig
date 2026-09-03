@@ -34,6 +34,14 @@ pub fn mesh(self: AssetHandle) !*const types.Mesh {
     };
 }
 
+pub fn image(self: *AssetHandle) !*const types.Image {
+    const k = self.kind() orelse return error.AssetNotLoaded;
+    return switch (k.*) {
+        .image => |*i| i,
+        else => error.WrongAssetKind
+    };
+}
+
 pub fn scriptSource(self: AssetHandle) !*const types.ScriptSource {
     const k = self.kind() orelse return error.AssetNotLoaded;
     return switch (k.*) {

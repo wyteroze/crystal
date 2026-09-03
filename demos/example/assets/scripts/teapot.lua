@@ -19,7 +19,8 @@ function Teapot.new(entity)
 
     self.entity:AddComponent("Position", cmath.Vec3.new(0, 0, -5))
     self.entity:AddComponent("Rotation", cmath.Vec3.new(0, 0, 0))
-    self.entity:AddComponent("Mesh", assets.load("file://models/shortandstout.glb"))
+    self.entity:AddComponent("Mesh", assets.load("file://models/cube.fbx"))
+    self.entity:AddComponent("Image", assets.load("file://images/chicken.jpg"))
 
     return self
 end

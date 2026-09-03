@@ -105,6 +105,11 @@ pub fn getComponent(self: Entity, id: ComponentId, comptime T: type) ?*T {
     return self.world.getComponent(self, id, T);
 }
 
+pub fn getName(self: Entity) ?[]const u8 {
+    const name_component = self.getComponent(self.world.components.id("Name").?, []const u8) orelse return null;
+    return name_component;
+}
+
 pub fn format(self: Entity, buf: []u8) []const u8 {
     return std.fmt.bufPrint(buf, "Entity{{ index: {d}, generation: {d} }}", .{ self.index, self.generation }) 
         catch "Entity{ index: ?, generation: ? }";

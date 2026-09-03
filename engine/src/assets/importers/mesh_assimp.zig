@@ -3,11 +3,7 @@
 const std = @import("std");
 const types = @import("../types.zig");
 const ImportLocation = @import("importers.zig").ImportLocation;
-const c = @cImport({
-    @cInclude("assimp/cimport.h");
-    @cInclude("assimp/scene.h");
-    @cInclude("assimp/postprocess.h");
-});
+const c = @import("c");
 
 pub fn importMesh(allocator: std.mem.Allocator, location: ImportLocation, path: []const u8) !types.Mesh {
     const flags = c.aiProcess_Triangulate | c.aiProcess_GenNormals | c.aiProcess_FixInfacingNormals;

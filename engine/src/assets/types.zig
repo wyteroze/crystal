@@ -20,6 +20,18 @@ pub const Mesh = struct {
     }
 };
 
+pub const Image = struct {
+    width: usize, 
+    height: usize,
+    path: []const u8,
+    data: []f32,
+
+    pub fn deinit(self: *const Image, allocator: std.mem.Allocator) void {
+        allocator.free(self.path);
+        allocator.free(self.data);
+    }
+};
+
 pub const ScriptSource = struct {
     path: []const u8,
     type: enum { text, bytecode, text_or_bytecode },

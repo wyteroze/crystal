@@ -3,7 +3,7 @@
 const std = @import("std");
 const AssetId = @import("AssetId.zig");
 const AssetKind = @import("AssetKind.zig").AssetKind;
-const AssetSource = @import("sources/AssetSource.zig");
+const Source = @import("sources/Source.zig");
 
 pub const CacheEntry = struct {
     asset: AssetKind,
@@ -38,7 +38,7 @@ pub fn deinit(self: *Cache) void {
     self.pending_frees.deinit(self.allocator);
 }
 
-pub fn load(self: *Cache, source: AssetSource, uri: []const u8, path: []const u8) !AssetId {
+pub fn load(self: *Cache, source: Source, uri: []const u8, path: []const u8) !AssetId {
     const lookup_id: AssetId = .fromPath(uri);
 
     if (self.entries.getPtr(lookup_id)) |e| {
@@ -52,7 +52,7 @@ pub fn load(self: *Cache, source: AssetSource, uri: []const u8, path: []const u8
     const stored_id: AssetId = .fromPath(owned_name);
 
     try self.entries.put(stored_id, .{
-        .asset = try .parse(self.allocator, path, bytes),
+        .asset = try .parse(self.allocator, self.io, path, bytes),
         .rc = .init(1),
         .time_freed = null
     });

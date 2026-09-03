@@ -22,6 +22,8 @@ const RenderCtx = struct {
     pipeline: gfx.types.PipelineHandle, 
     vbuf: gfx.types.BufferHandle, 
     ibuf: gfx.types.BufferHandle, 
+    img: gfx.types.ImageHandle,
+    sampler: gfx.types.SamplerHandle,
     mesh_id: ecs.ComponentId, 
     pos_id: ecs.ComponentId, 
     rot_id: ecs.ComponentId, 
@@ -35,40 +37,67 @@ const Position = math.Vec3;
 const Rotation = math.Vec3;
 const Scene = struct { cam: ?ecs.Entity };
 
-fn render(w: *ecs.World, dt: f32, ctx: *RenderCtx) void {
-    ctx.clock += dt;
+const render = struct {
+    fn renderMeshTextured() void {
 
-    ctx.renderer.beginPass(.{ .clear_color = .{ 0.1, 0.1, 0.1, 1.0 }, .width = ctx.surface_size[0], .height = ctx.surface_size[1] });
-    ctx.renderer.applyPipeline(ctx.pipeline);
-
-    const scene = w.getComponent(ctx.scene_entity, w.components.id("Scene").?, Scene).?.*;
-    const view = if (scene.cam) |cam| blk: {
-        const pos = (w.getComponent(cam, w.components.id("Position").?, Position) orelse &math.Vec3.zero);
-        const rot = (w.getComponent(cam, w.components.id("Rotation").?, Rotation) orelse &math.Vec3.zero);
-
-        break :blk math.Mat4.fromTRS(pos.*, .fromEuler(.fromSimd(rot.*.simd() * @as(math.Vec3.Simd3, @splat(std.math.pi / 180.0)))), .one).invertRT();
-    } else math.Mat4.identity;
-
-    var q = w.query(&.{ ctx.mesh_id, ctx.pos_id, ctx.rot_id });
-    var it = q.iterator();
-    while (it.next()) |entity| {
-        if (entity.getParent() == null) continue;
-        const mesh_asset = w.getComponent(entity, w.components.id("Mesh").?, assets.AssetHandle) orelse continue;
-        const pos = w.getComponent(entity, ctx.pos_id, Position).?.*;
-        const rot = w.getComponent(entity, ctx.rot_id, Rotation).?.*;
-
-        const model: math.Mat4 = .fromTRS(pos, .fromEuler(.fromSimd(rot.simd() * @as(math.Vec3.Simd3, @splat(std.math.pi / 180.0)))), .one);
-        const vs_params: gfx.shaders.program.VsParams = .{ .model = @bitCast(model.transpose()), .view = @bitCast(view.transpose()), .proj = @bitCast(ctx.proj.transpose()) };
-
-        ctx.renderer.applyBindings(.{ .vertex_buffers = .{ ctx.vbuf, null, null, null }, .index_buffer = ctx.ibuf });
-        ctx.renderer.applyUniforms(.{ .slot = gfx.shaders.program.UB_vs_params, .data = std.mem.asBytes(&vs_params) });
-
-        ctx.renderer.draw(0, @intCast((mesh_asset.mesh() catch return).indices.len), 1);
     }
 
-    ctx.renderer.endPass();
-    ctx.renderer.commit();
-}
+    fn renderMesh() void {
+
+    }
+
+    fn renderImage() void {
+
+    }
+
+    pub fn render(w: *ecs.World, dt: f32, ctx: *RenderCtx) void {
+        ctx.clock += dt;
+
+        ctx.renderer.beginPass(.{ 
+            .clear_color = .{ 0.1, 0.1, 0.1, 1.0 }, 
+            .width = ctx.surface_size[0], 
+            .height = ctx.surface_size[1] 
+        });
+        ctx.renderer.applyPipeline(ctx.pipeline);
+
+        const scene = w.getComponent(ctx.scene_entity, w.components.id("Scene").?, Scene).?.*;
+        const view = if (scene.cam) |cam| blk: {
+            const pos = (w.getComponent(cam, w.components.id("Position").?, Position) orelse &math.Vec3.zero);
+            const rot = (w.getComponent(cam, w.components.id("Rotation").?, Rotation) orelse &math.Vec3.zero);
+
+            break :blk math.Mat4.fromTRS(pos.*, .fromEuler(.fromSimd(rot.*.simd() * @as(math.Vec3.Simd3, @splat(std.math.pi / 180.0)))), .one).invertRT();
+        } else math.Mat4.identity;
+
+        var q = w.query(&.{ ctx.mesh_id, ctx.pos_id, ctx.rot_id });
+        var it = q.iterator();
+        while (it.next()) |entity| {
+            if (entity.getParent() == null) continue;
+            const mesh_asset = w.getComponent(entity, w.components.id("Mesh").?, assets.AssetHandle) orelse continue;
+            const mesh = mesh_asset.mesh() catch { std.log.err("'Mesh' component must be an AssetHandle to a mesh", .{}); continue; };
+            const pos = w.getComponent(entity, ctx.pos_id, Position).?.*;
+            const rot = w.getComponent(entity, ctx.rot_id, Rotation).?.*;
+            
+            const model: math.Mat4 = .fromTRS(pos, .fromEuler(.fromSimd(rot.simd() * @as(math.Vec3.Simd3, @splat(std.math.pi / 180.0)))), .one);
+            const vs_params: gfx.shaders.program.VsParams = .{ .model = @bitCast(model.transpose()), .view = @bitCast(view.transpose()), .proj = @bitCast(ctx.proj.transpose()) };
+
+            ctx.renderer.applyBindings(.{ 
+                .vertex_buffers = .{ ctx.vbuf, null, null, null }, 
+                .index_buffer = ctx.ibuf,
+                .images = .{ ctx.img, null, null, null },
+                .samplers = .{ ctx.sampler, null, null, null }
+            });
+            ctx.renderer.applyUniforms(.{ 
+                .slot = gfx.shaders.program.UB_vs_params, 
+                .data = std.mem.asBytes(&vs_params) 
+            });
+
+            ctx.renderer.draw(0, @intCast(mesh.indices.len), 1);
+        }
+
+        ctx.renderer.endPass();
+        ctx.renderer.commit();
+    }
+}.render;
 
 fn updateScripts(w: *ecs.World, dt: f32, _: *void) void {
     const script_component = w.components.id("Script").?;
@@ -134,9 +163,12 @@ pub fn main(init: std.process.Init) !void {
     // Register components
     const scene_component = try world.registerComponentNative(Scene, "Scene"); // For organizing collections of entities
     const mesh_component = try world.registerComponentNativeShaped(assets.AssetHandle, "Mesh"); // For giving an entity a mesh appearance
+    const image_component = try world.registerComponentNativeShaped(assets.AssetHandle, "Image"); // For giving an entity an image appearance (or a texture, if it has a mesh)
     const pos_component = try world.registerComponentNativeShaped(Position, "Position"); // For moving entities
     const rot_component = try world.registerComponentNativeShaped(Rotation, "Rotation"); // For rotating entites (Euler)
     const script_component = try world.registerComponentNative(scripting.Script, "Script"); // For giving entities behavior
+    _ = try world.registerComponentNativeShaped([]const u8, "Name"); // For naming an entity (we don't use it, but lua does)
+
     // Create a scene inside of the world
     const scene = try world.spawnEntity();
 
@@ -176,22 +208,52 @@ pub fn main(init: std.process.Init) !void {
     const shader = renderer.createShader(gfx.shaders.basicShaderDesc());
 
     const mesh_asset = world.getComponent(entity, mesh_component, assets.AssetHandle) orelse unreachable;
-    const sab = std.mem.sliceAsBytes((try mesh_asset.mesh()).vertices);
-    const iab = std.mem.sliceAsBytes((try mesh_asset.mesh()).indices);
+    const image_asset = world.getComponent(entity, image_component, assets.AssetHandle) orelse unreachable;
+    const mesh = try mesh_asset.mesh();
+    const image = try image_asset.image();
+
+    const sab = std.mem.sliceAsBytes(mesh.vertices);
+    const iab = std.mem.sliceAsBytes(mesh.indices);
     const vbuf = renderer.createBuffer(.{ .type = .vertex, .data = sab, .size = sab.len });
     const ibuf = renderer.createBuffer(.{ .type = .index, .data = iab, .size = iab.len });
+    const img = renderer.createImage(.{ 
+        .width = @intCast(image.width), 
+        .height = @intCast(image.height), 
+        .data = std.mem.sliceAsBytes(image.data),
+        .format = .argbf32
+    });
+
+    const sampler = renderer.createSampler(.{});
 
     const pipeline = renderer.createPipeline(.{
         .shader = shader,
         .index_type = .uint32,
         .cull_mode = .front,
         .depth_write = true,
-        .layout = &.{ .{ .offset = 0, .format = .float3 }, .{ .offset = 12, .format = .float3 }, .{ .offset = 24, .format = .float2 } },
+        .layout = &.{ 
+            .{ .offset = 0, .format = .float3 }, // position
+            .{ .offset = 12, .format = .float3 }, // normal
+            .{ .offset = 24, .format = .float2 }  // uv coord
+        },
     });
 
     const proj = math.Mat4.perspective(90.0 * (std.math.pi / 180.0), @as(f32, @floatFromInt(surface_size[0])) / @as(f32, @floatFromInt(surface_size[1])), 0.1, 100.0);
 
-    var render_ctx = RenderCtx{ .renderer = &renderer, .pipeline = pipeline, .vbuf = vbuf, .ibuf = ibuf, .surface_size = &surface_size, .mesh_id = mesh_component, .pos_id = pos_component, .rot_id = rot_component, .scene_entity = scene, .proj = proj, .clock = 0 };
+    var render_ctx = RenderCtx{ 
+        .renderer = &renderer, 
+        .pipeline = pipeline, 
+        .vbuf = vbuf, 
+        .ibuf = ibuf, 
+        .img = img,
+        .sampler = sampler,
+        .surface_size = &surface_size, 
+        .mesh_id = mesh_component, 
+        .pos_id = pos_component, 
+        .rot_id = rot_component, 
+        .scene_entity = scene, 
+        .proj = proj, 
+        .clock = 0 
+    };
     try world.registerSystem("Render", RenderCtx, render, &render_ctx);
 
     // dear god

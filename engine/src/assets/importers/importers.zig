@@ -1,6 +1,7 @@
 // Copyright 2026 wyteroze. Licensed under the Apache-2.0 license.
 
 pub const mesh_assimp = @import("mesh_assimp.zig");
+pub const image_zigimg = @import("image_zigimg.zig");
 
 pub const ImportLocation = union(enum) {
     path: []const u8,

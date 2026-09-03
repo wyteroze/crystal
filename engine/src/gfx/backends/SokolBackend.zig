@@ -33,6 +33,43 @@ pub fn createBuffer(self: SokolBackend, d: desc.BufferDesc) types.BufferHandle {
     return .{ .id = buf.id };
 }
 
+pub fn createSampler(self: SokolBackend, d: desc.SamplerDesc) types.SamplerHandle {
+    _ = self;
+
+    const sampler = gfx.makeSampler(.{
+        .wrap_u = switch (d.wrap_u) { .clamp => .CLAMP_TO_EDGE, .repeat => .REPEAT },
+        .wrap_v = switch (d.wrap_v) { .clamp => .CLAMP_TO_EDGE, .repeat => .REPEAT },
+        .min_filter = switch (d.min_filter) { .linear => .LINEAR, .nearest => .NEAREST },
+        .mag_filter = switch (d.mag_filter) { .linear => .LINEAR, .nearest => .NEAREST },
+    });
+
+    return .{ .id = sampler.id };
+}
+
+pub fn createImage(self: SokolBackend, d: desc.ImageDesc) types.ImageHandle {
+    _ = self;
+
+    var img_data: gfx.ImageData = .{};
+    if (d.data) |data| {
+        img_data.mip_levels[0] = gfx.asRange(data);
+    }
+
+    const img = gfx.makeImage(.{
+        .width = @intCast(d.width),
+        .height = @intCast(d.height),
+        .pixel_format = switch (d.format) {
+            .argbf32 => .RGBA32F,
+            .depth_stencil => .DEPTH_STENCIL,
+            .rgba8 => .RGBA8
+        },
+        .data = img_data
+    });
+
+    const view = gfx.makeView(.{ .texture = .{ .image = img } });
+
+    return .{ .id = view.id };
+}
+
 pub fn createPipeline(self: SokolBackend, d: desc.PipelineDesc) types.PipelineHandle {
     _ = self;
     var layout: gfx.VertexLayoutState = .{};
@@ -104,6 +141,10 @@ pub fn applyBindings(self: SokolBackend, binds: desc.Bindings) void {
 
     for (binds.images, 0..) |image, i| {
         if (image) |img| bindings.views[i] = .{ .id = img.id };
+    }
+
+    for (binds.samplers, 0..) |sampler, i| {
+        if (sampler) |smp| bindings.samplers[i] = .{ .id = smp.id };
     }
 
     gfx.applyBindings(bindings);

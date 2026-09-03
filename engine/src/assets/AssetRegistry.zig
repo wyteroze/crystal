@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const asset_sources = @import("sources/sources.zig").sources;
-const AssetSource = @import("sources/AssetSource.zig");
+const Source = @import("sources/Source.zig");
 const DirSource = @import("sources/DirSource.zig");
 const AssetUri = @import("AssetUri.zig");
 const AssetHandle = @import("AssetHandle.zig");
@@ -13,12 +13,12 @@ const AssetRegistry = @This();
 allocator: std.mem.Allocator,
 io: std.Io,
 cache: Cache,
-sources: std.StringHashMap(AssetSource),
+sources: std.StringHashMap(Source),
 assets_path: ?[]const u8,
 
 pub fn init(allocator: std.mem.Allocator, io: std.Io, os: Os, proj_path: ?[]const u8) !AssetRegistry {
     const assets_path = if (proj_path) |p| try std.Io.Dir.path.join(allocator, &.{ p, "assets" }) else null;
-    var sources: std.StringHashMap(AssetSource) = .init(allocator);
+    var sources: std.StringHashMap(Source) = .init(allocator);
     
     inline for (asset_sources) |s| {
         const src_ptr = try allocator.create(DirSource);
@@ -45,7 +45,7 @@ pub fn deinit(self: *AssetRegistry) void {
     self.cache.deinit();
 }
 
-pub fn registerSource(self: *AssetRegistry, scheme: []const u8, source: AssetSource) !void {
+pub fn registerSource(self: *AssetRegistry, scheme: []const u8, source: Source) !void {
     try self.sources.put(scheme, source);
 }
 

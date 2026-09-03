@@ -9,9 +9,16 @@ pub const BufferDesc = struct {
     data: ?[]const u8 = null
 };
 
+pub const SamplerDesc = struct {
+    wrap_u: types.WrapType = .repeat,
+    wrap_v: types.WrapType = .repeat,
+    mag_filter: types.FilterType = .linear,
+    min_filter: types.FilterType = .linear
+};
+
 pub const ImageDesc = struct {
     width: u32, height: u32,
-    format: types.PixelFormat = .rgba8,
+    format: types.PixelFormat = .argbf32,
     data: ?[]const u8 = null
 };
 
@@ -50,7 +57,8 @@ pub const PassDesc = struct {
 pub const Bindings = struct {
     vertex_buffers: [4]?types.BufferHandle = @splat(null),
     index_buffer: ?types.BufferHandle = null,
-    images: [4]?types.ImageHandle = @splat(null)
+    images: [4]?types.ImageHandle = @splat(null),
+    samplers: [4]?types.SamplerHandle = @splat(null)
 };
 
 pub const Uniforms = struct {

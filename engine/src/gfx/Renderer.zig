@@ -29,6 +29,18 @@ pub fn createBuffer(self: *Renderer, d: desc.BufferDesc) types.BufferHandle {
     };
 }
 
+pub fn createSampler(self: *Renderer, d: desc.SamplerDesc) types.SamplerHandle {
+    return switch (self.backend) {
+        .sokol => |*b| b.createSampler(d)
+    };
+}
+
+pub fn createImage(self: *Renderer, d: desc.ImageDesc) types.ImageHandle {
+    return switch (self.backend) {
+        .sokol => |*b| b.createImage(d)
+    };
+}
+
 pub fn createPipeline(self: *Renderer, d: desc.PipelineDesc) types.PipelineHandle {
     return switch (self.backend) {
         .sokol => |*b| b.createPipeline(d)
