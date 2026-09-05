@@ -80,7 +80,7 @@ pub fn build(b: *std.Build) !void {
 
     const shader_mod = try sokol.shdc.createModule(b, "shaders", dep_sokol.module("sokol"), .{
         .shdc_dep = dep_shdc,
-        .input = "src/gfx/shaders/basic.glsl",
+        .input = "src/gpu/shaders/basic.glsl",
         .output = "basic.glsl.zig",
         .slang = .{
             .glsl410 = true,

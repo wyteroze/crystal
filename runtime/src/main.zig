@@ -4,7 +4,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const engine = @import("engine");
 const Platform = engine.Platform;
-const gfx = engine.gfx;
+const gpu = engine.gpu;
 const ecs = engine.ecs;
 const assets = engine.assets;
 const math = engine.core.math;
@@ -19,12 +19,12 @@ const fps_seconds: f32 = 1.0 / @as(f32, @floatCast(target_fps));
 const asset_purge_rate_seconds: f32 = 0.5;
 
 const RenderCtx = struct { 
-    renderer: *gfx.Renderer, 
-    pipeline: gfx.types.PipelineHandle, 
-    vbuf: gfx.types.BufferHandle, 
-    ibuf: gfx.types.BufferHandle, 
-    img: gfx.types.ImageHandle,
-    sampler: gfx.types.SamplerHandle,
+    gpu_device: *gpu.GpuDevice, 
+    pipeline: gpu.types.PipelineHandle, 
+    vbuf: gpu.types.BufferHandle, 
+    ibuf: gpu.types.BufferHandle, 
+    img: gpu.types.ImageHandle,
+    sampler: gpu.types.SamplerHandle,
     mesh_id: ecs.ComponentId, 
     pos_id: ecs.ComponentId, 
     rot_id: ecs.ComponentId, 
@@ -54,12 +54,12 @@ const render = struct {
     pub fn render(w: *ecs.World, dt: f32, ctx: *RenderCtx) void {
         ctx.clock += dt;
 
-        ctx.renderer.beginPass(.{ 
+        ctx.gpu_device.beginPass(.{ 
             .clear_color = .{ 0.1, 0.1, 0.1, 1.0 }, 
             .width = ctx.surface_size[0], 
             .height = ctx.surface_size[1]
         });
-        ctx.renderer.applyPipeline(ctx.pipeline);
+        ctx.gpu_device.applyPipeline(ctx.pipeline);
 
         const scene = w.getComponent(ctx.scene_entity, w.components.id("Scene").?, Scene).?.*;
         const view = if (scene.cam) |cam| blk: {
@@ -79,24 +79,24 @@ const render = struct {
             const rot = w.getComponent(entity, ctx.rot_id, Rotation).?.*;
             
             const model: math.Mat4 = .fromTRS(pos, .fromEuler(.fromSimd(rot.simd() * @as(math.Vec3.Simd3, @splat(std.math.pi / 180.0)))), .one);
-            const vs_params: gfx.shaders.program.VsParams = .{ .model = @bitCast(model.transpose()), .view = @bitCast(view.transpose()), .proj = @bitCast(ctx.proj.transpose()) };
+            const vs_params: gpu.shaders.program.VsParams = .{ .model = @bitCast(model.transpose()), .view = @bitCast(view.transpose()), .proj = @bitCast(ctx.proj.transpose()) };
 
-            ctx.renderer.applyBindings(.{ 
+            ctx.gpu_device.applyBindings(.{ 
                 .vertex_buffers = .{ ctx.vbuf, null, null, null }, 
                 .index_buffer = ctx.ibuf,
                 .images = .{ ctx.img, null, null, null },
                 .samplers = .{ ctx.sampler, null, null, null }
             });
-            ctx.renderer.applyUniforms(.{ 
-                .slot = gfx.shaders.program.UB_vs_params, 
+            ctx.gpu_device.applyUniforms(.{ 
+                .slot = gpu.shaders.program.UB_vs_params, 
                 .data = std.mem.asBytes(&vs_params) 
             });
 
-            ctx.renderer.draw(0, @intCast(mesh.indices.len), 1);
+            ctx.gpu_device.draw(0, @intCast(mesh.indices.len), 1);
         }
 
-        ctx.renderer.endPass();
-        ctx.renderer.commit();
+        ctx.gpu_device.endPass();
+        ctx.gpu_device.commit();
     }
 }.render;
 
@@ -235,12 +235,12 @@ pub fn main(init: std.process.Init) !void {
     const surface = try platform.createSurface(.{ .title = "crystal", .width = surface_size[0], .height = surface_size[1], .target = .primary });
     defer platform.destroySurface(surface);
 
-    var renderer_allocator: core.TrackedAllocator = .init(allocator, "Renderer");
-    var renderer: gfx.Renderer = .init(.initSokol(renderer_allocator.allocator()));
-    defer renderer.deinit();
-    renderer.start();
+    var gpu_allocator: core.TrackedAllocator = .init(allocator, "Gpu");
+    var gpu_device: gpu.GpuDevice = .init(.initSokol(gpu_allocator.allocator()));
+    defer gpu_device.deinit();
+    gpu_device.start();
 
-    const shader = renderer.createShader(gfx.shaders.basicShaderDesc());
+    const shader = gpu_device.createShader(gpu.shaders.basicShaderDesc());
 
     const mesh_asset = world.getComponent(entity, mesh_component, assets.AssetHandle) orelse unreachable;
     const image_asset = world.getComponent(entity, image_component, assets.AssetHandle) orelse unreachable;
@@ -249,18 +249,18 @@ pub fn main(init: std.process.Init) !void {
 
     const sab = std.mem.sliceAsBytes(mesh.vertices);
     const iab = std.mem.sliceAsBytes(mesh.indices);
-    const vbuf = renderer.createBuffer(.{ .type = .vertex, .data = sab, .size = sab.len });
-    const ibuf = renderer.createBuffer(.{ .type = .index, .data = iab, .size = iab.len });
-    const img = renderer.createImage(.{ 
+    const vbuf = gpu_device.createBuffer(.{ .type = .vertex, .data = sab, .size = sab.len });
+    const ibuf = gpu_device.createBuffer(.{ .type = .index, .data = iab, .size = iab.len });
+    const img = gpu_device.createImage(.{ 
         .width = @intCast(image.width), 
         .height = @intCast(image.height), 
         .data = std.mem.sliceAsBytes(image.data),
         .format = .argbf32
     });
 
-    const sampler = renderer.createSampler(.{});
+    const sampler = gpu_device.createSampler(.{});
 
-    const pipeline = renderer.createPipeline(.{
+    const pipeline = gpu_device.createPipeline(.{
         .shader = shader,
         .index_type = .uint32,
         .cull_mode = .front,
@@ -275,7 +275,7 @@ pub fn main(init: std.process.Init) !void {
     const proj = math.Mat4.perspective(90.0 * (std.math.pi / 180.0), @as(f32, @floatFromInt(surface_size[0])) / @as(f32, @floatFromInt(surface_size[1])), 0.1, 100.0);
 
     var render_ctx = RenderCtx{ 
-        .renderer = &renderer, 
+        .gpu_device = &gpu_device, 
         .pipeline = pipeline, 
         .vbuf = vbuf, 
         .ibuf = ibuf, 
@@ -330,13 +330,13 @@ pub fn main(init: std.process.Init) !void {
                 lua_allocator.currentUsage() + 
                 asset_allocator.currentUsage() + 
                 ecs_allocator.currentUsage() +
-                renderer_allocator.currentUsage()
+                gpu_allocator.currentUsage()
             ), core.SizeFormatter.fmtSize(tracked.currentUsage()) });
 
             std.log.info("{f}", .{ lua_allocator });
             std.log.info("{f}", .{ asset_allocator });
             std.log.info("{f}", .{ ecs_allocator });
-            std.log.info("{f}", .{ renderer_allocator });
+            std.log.info("{f}", .{ gpu_allocator });
 
             std.log.info("[Lua GC]: {f}", .{ core.SizeFormatter.fmtSize( @intCast( runtime.gcCount() * 1024 ) ) });
         }
