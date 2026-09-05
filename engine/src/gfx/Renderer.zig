@@ -10,16 +10,18 @@ const Renderer = @This();
 backend: Backend,
 
 pub fn init(b: Backend) Renderer {
-    switch (b) {
+    return .{ .backend = b };
+}
+
+pub fn start(self: *Renderer) void {
+    switch (self.backend) {
         .sokol => |*bk| bk.init()
     }
-
-    return .{ .backend = b };
 }
 
 pub fn deinit(self: *Renderer) void {
     switch (self.backend) {
-        .sokol => |b| b.deinit()
+        .sokol => |*b| b.deinit()
     }
 }
 

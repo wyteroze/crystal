@@ -39,6 +39,8 @@ pub fn build(b: *std.Build) !void {
     const sdk_path = b.option([]const u8, "sdk", "Path to macOS SDK (looks something like MacOSX26.5.sdk") 
         orelse std.zig.system.darwin.getSdk(b.allocator, b.graph.io, &target.result);
 
+    b.sysroot = sdk_path;
+
     const dep_sdl3 = b.dependency("sdl3", .{ .target = target, .optimize = optimize });
     const dep_zlua = b.dependency("zlua", .{ .target = target, .optimize = optimize, .lang = .lua55 });
     const dep_sokol = b.dependency("sokol", .{ .target = target, .optimize = optimize, .gl = true });
@@ -100,7 +102,7 @@ pub fn build(b: *std.Build) !void {
             .{ .name = "zigimg", .module = dep_zigimg.module("zigimg") },
             .{ .name = "shaders", .module = shader_mod } ,
             .{ .name = "c", .module = c_mod }
-        },
+        }
     });
 
     const engine_lib = b.addLibrary(.{ 
@@ -120,6 +122,9 @@ pub fn build(b: *std.Build) !void {
         const frameworks = b.pathJoin(&.{ sdk_path.?, "System", "Library", "Frameworks" });
         const includes = b.pathJoin(&.{ sdk_path.?, "usr", "include" });
         const libs = b.pathJoin(&.{ "/", "usr", "lib" });
+        
+        translator.addIncludePath(.{ .cwd_relative = includes });
+        translator.addFrameworkPath(.{ .cwd_relative = frameworks });
 
         engine_lib.root_module.addFrameworkPath(.{ .cwd_relative = frameworks });
         engine_lib.root_module.addIncludePath(.{ .cwd_relative = includes });

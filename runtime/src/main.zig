@@ -12,6 +12,7 @@ const scripting = engine.scripting;
 const Os = engine.Os;
 const core = engine.core;
 const toml = engine.toml;
+const Scheduler = engine.Scheduler;
 
 const target_fps = 120;
 const fps_seconds: f32 = 1.0 / @as(f32, @floatCast(target_fps));
@@ -56,7 +57,7 @@ const render = struct {
         ctx.renderer.beginPass(.{ 
             .clear_color = .{ 0.1, 0.1, 0.1, 1.0 }, 
             .width = ctx.surface_size[0], 
-            .height = ctx.surface_size[1] 
+            .height = ctx.surface_size[1]
         });
         ctx.renderer.applyPipeline(ctx.pipeline);
 
@@ -145,6 +146,39 @@ pub fn main(init: std.process.Init) !void {
     
     const os: Os = try .init(init, builtin.os.tag, boot.package_id);
 
+    var scheduler: Scheduler = undefined;
+    try scheduler.init(allocator, io, &os);
+    defer scheduler.deinit();
+
+    var num: usize = 0;
+
+    const say_hi = struct {
+        fn c2(nptr: *usize, add: usize) void {
+            _ = @atomicRmw(usize, nptr, .Add, add, .monotonic);
+        }
+
+        fn c(nptr: *usize) void {
+            var counter2: Scheduler.Counter = .{};
+            var jobs: [10]Scheduler.Job.Wrap(c2) = undefined;
+
+            for (0..10) |i| {
+                jobs[i] = .{ .args = .{ nptr, i } };
+                jobs[i].submit(Scheduler.current(), .{ .counter = &counter2 });
+            }
+
+            Scheduler.current().wait(&counter2);
+        }
+    }.c;
+    
+    var counter: Scheduler.Counter = .{};
+    var main_jobs: [10]Scheduler.Job.Wrap(say_hi) = undefined;
+    for (0..10) |i| {
+        main_jobs[i] = .{ .args = .{ &num } };
+        main_jobs[i].submit(&scheduler, .{ .counter = &counter });
+    }
+    scheduler.waitBlocking(&counter);
+    std.log.info("Number: {d}", .{ num });
+
     var asset_allocator: core.TrackedAllocator = .init(allocator, "AssetRegistry");
     var asset_registry: assets.AssetRegistry = try .init(asset_allocator.allocator(), io, os, project_path);
     defer asset_registry.deinit();
@@ -204,6 +238,7 @@ pub fn main(init: std.process.Init) !void {
     var renderer_allocator: core.TrackedAllocator = .init(allocator, "Renderer");
     var renderer: gfx.Renderer = .init(.initSokol(renderer_allocator.allocator()));
     defer renderer.deinit();
+    renderer.start();
 
     const shader = renderer.createShader(gfx.shaders.basicShaderDesc());
 
@@ -266,6 +301,10 @@ pub fn main(init: std.process.Init) !void {
         const start = platform.getElapsedSeconds();
         const dt: f32 = @floatCast(start - last_time);
         last_time = start;
+
+        var frame_root: Scheduler.Counter = .{};
+
+        scheduler.waitBlocking(&frame_root);
 
         while (platform.pollEvent()) |e| {
             switch (e) {

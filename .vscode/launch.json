@@ -1,0 +1,13 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug Crystal",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceRoot}/zig-out/bin/crystal",
+            "args": [ "--", "--project=demos/example/" ],
+            "cwd": "${workspaceRoot}"
+        }
+    ]
+}

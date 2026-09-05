@@ -8,3 +8,4 @@ pub const assets = @import("assets/assets.zig");
 pub const scripting = @import("scripting/scripting.zig");
 pub const Os = @import("os/Os.zig");
 pub const toml = @import("toml");
+pub const Scheduler = @import("scheduler/Scheduler.zig");
