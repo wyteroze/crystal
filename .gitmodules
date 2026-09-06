@@ -1,0 +1,3 @@
+[submodule "engine/vendor/DiligentEngine/src"]
+	path = engine/vendor/DiligentEngine/src
+	url = https://github.com/DiligentGraphics/DiligentEngine.git

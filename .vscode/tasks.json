@@ -4,7 +4,7 @@
     {
       "label": "Zig Run macOS",
       "type": "shell",
-      "command": "zig build run -Dtarget=native-macos.26.6",
+      "command": "zig build run -Dbackend=vulkan -- --project=demos/example/",
       "problemMatcher": [],
       "group": {
         "kind": "build",

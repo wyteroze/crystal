@@ -6,22 +6,25 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const sdk_path = b.option([]const u8, "sdk", "Path to macOS SDK (looks something like `MacOSX26.5.sdk`)") 
+    const sdk_path = b.option([]const u8, "sdk", "Path to macOS SDK (looks something like `MacOSX26.5.sdk`)")
         orelse std.zig.system.darwin.getSdk(b.allocator, b.graph.io, &target.result);
+
+    const backend = b.option(enum { gl, d3d11, d3d12, vulkan }, "backend", "Backend to use\n(default: gl)")
+        orelse .gl;
 
     // this might be a yikes move but SDL3 needs sysroot which is identical to sdk_path
     // and having to pass it twice would be dumb and have no good use, so we do this instead
     b.sysroot = sdk_path;
 
-    const dep_engine = b.dependency("engine", .{ .target = target, .optimize = optimize, .sdk = sdk_path });
+    const dep_engine = b.dependency("engine", .{ .target = target, .optimize = optimize, .sdk = sdk_path, .backend = backend });
 
-    const exe_mod = b.createModule(.{ 
-        .root_source_file = b.path("runtime/src/main.zig"), 
-        .target = target, 
-        .optimize = optimize, 
+    const exe_mod = b.createModule(.{
+        .root_source_file = b.path("runtime/src/main.zig"),
+        .target = target,
+        .optimize = optimize,
         .imports = &.{
-            .{ .name = "engine", .module = dep_engine.module("engine") },
-        }, 
+            .{ .name = "engine", .module = dep_engine.module("engine") }
+        },
         .link_libc = true
     });
 
@@ -29,7 +32,7 @@ pub fn build(b: *std.Build) void {
 
     const exe = b.addExecutable(.{
         .name = "crystal",
-        .root_module = exe_mod,
+        .root_module = exe_mod
     });
     b.installArtifact(exe);
 

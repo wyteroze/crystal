@@ -10,6 +10,7 @@
     .dependencies = .{
         // Original repo credit to https://github.com/fathonyfath/assimp
         .zig_assimp = .{ .path = "vendor/zig_assimp" },
+        .diligent_engine = .{ .path = "vendor/DiligentEngine" },
         .sdl3 = .{
             .url = "git+https://codeberg.org/7Games/zig-sdl3?ref=v0.2.2#83c694024f23cbacfa36fcd8fca1c57d4957203e",
             .hash = "sdl3-0.2.2-NmT1Q-2jKQBa4uSXUwuVwdmXpXe-eYwim7Wkyx531v6O",
@@ -36,5 +37,5 @@
         },
     },
 
-    .paths = .{ "build.zig", "build.zig.zon", "src" },
+    .paths = .{ "build.zig", "build.zig.zon", "src", "vendor" },
 }

@@ -1,0 +1,23 @@
+{
+    "folders": [
+        {
+            "name": "crystal",
+            "path": "."
+        },
+        {
+            "name": "engine",
+            "path": "engine"
+        },
+        {
+            "name": "docgen",
+            "path": "tools/docgen"
+        },
+    ],
+	"settings": {
+        "files.exclude": {
+			"**/zig-cache": true,
+			"**/zig-out": true,
+			"**/.zig-cache": true
+        },
+	}
+}

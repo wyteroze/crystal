@@ -3,27 +3,27 @@
 const std = @import("std");
 const types = @import("../types.zig");
 const ImportLocation = @import("importers.zig").ImportLocation;
-const c = @import("c");
+const assimp = @import("assimp");
 
 pub fn importMesh(allocator: std.mem.Allocator, location: ImportLocation, path: []const u8) !types.Mesh {
-    const flags = c.aiProcess_Triangulate | c.aiProcess_GenNormals | c.aiProcess_FixInfacingNormals;
+    const flags = assimp.aiProcess_Triangulate | assimp.aiProcess_GenNormals | assimp.aiProcess_FixInfacingNormals;
     const scene = switch (location) {
         .path => |p| blk: {
             const p_sentinel = try allocator.dupeSentinel(u8, p, 0);
             defer allocator.free(p_sentinel);
 
-            break :blk c.aiImportFile(p_sentinel, flags);
+            break :blk assimp.aiImportFile(p_sentinel, flags);
         },
         .bytes => |b| blk: {
-            break :blk c.aiImportFileFromMemory(b.ptr, @intCast(b.len), flags, null);
+            break :blk assimp.aiImportFileFromMemory(b.ptr, @intCast(b.len), flags, null);
         }
     };
 
     if (scene == null) {
-        std.log.err("{s:0}", .{ c.aiGetErrorString() });
+        std.log.err("{s:0}", .{ assimp.aiGetErrorString() });
         return error.ImportFailed;
     }
-    defer c.aiReleaseImport(scene);
+    defer assimp.aiReleaseImport(scene);
 
     // TODO: import all meshes in the scene instead of only first
     const ai_mesh = scene.*.mMeshes[0].*;
@@ -37,7 +37,7 @@ pub fn importMesh(allocator: std.mem.Allocator, location: ImportLocation, path: 
         const uv = if (ai_mesh.mTextureCoords[0] != null)
             ai_mesh.mTextureCoords[0][i]
         else
-            c.aiVector3D{ .x = 0, .y = 0, .z = 0 };
+            assimp.aiVector3D{ .x = 0, .y = 0, .z = 0 };
 
         vertices[i] = .{ .position = .{ pos.x, pos.y, pos.z }, .normal = .{ norm.x, norm.y, norm.z }, .uv = .{ uv.x, uv.y } };
     }

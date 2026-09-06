@@ -9,3 +9,5 @@ chars.txt
 __pycache__/
 net.wyteroze.example/
 net.wyteroze.crystal-example/
+build/
+install/
