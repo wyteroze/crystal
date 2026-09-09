@@ -9,51 +9,27 @@ const Platform = @This();
 backend: Backend,
 
 pub fn init(b: Backend) !Platform {
-    switch (b) {
-        .sdl => |bk| try bk.init()
-    }
+    switch (b) { inline else => |bk| bk.init() }
 
     return .{ .backend = b };
 }
 
 pub fn deinit(self: *Platform) void {
-    switch (self.backend) {
-        .sdl => |*b| b.deinit()
-    }
+    switch (self.backend) { inline else => |*b| b.deinit() }
 }
 
 pub fn createSurface(self: *Platform, d: desc.SurfaceDesc) !types.SurfaceHandle {
-    return switch (self.backend) {
-        .sdl => |*b| b.createSurface(d)
-    };
+    return switch (self.backend) { inline else => |*b| b.createSurface(d) };
+}
+
+pub fn getSurfacePixelSize(self: *Platform, h: types.SurfaceHandle) ![2]u32 {
+    return switch (self.backend) { inline else => |*b| b.getSurfacePixelSize(h) };
 }
 
 pub fn destroySurface(self: *Platform, h: types.SurfaceHandle) void {
-    switch (self.backend) {
-        .sdl => |*b| b.destroySurface(h)
-    }
+    switch (self.backend) { inline else => |*b| b.destroySurface(h) }
 }
 
 pub fn pollEvent(self: *Platform) ?desc.PlatformEvent {
-    return switch (self.backend) {
-        .sdl => |*b| b.pollEvent()
-    };
-}
-
-pub fn swapBuffers(self: *Platform, h: types.SurfaceHandle) !void {
-    switch (self.backend) {
-        .sdl => |*b| try b.swapBuffers(h)
-    }
-}
-
-pub fn getElapsedSeconds(self: *Platform) f64 {
-    return switch (self.backend) {
-        .sdl => |*b| b.getElapsedSeconds()
-    };
-}
-
-pub fn waitSeconds(self: *Platform, duration: f32) void {
-    switch (self.backend) {
-        .sdl => |*b| b.waitSeconds(duration)
-    }
+    return switch (self.backend) { inline else => |*b| b.pollEvent() };
 }

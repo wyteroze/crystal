@@ -18,17 +18,14 @@ pub fn importImage(allocator: std.mem.Allocator, io: std.Io, location: ImportLoc
         return error.AnimatedImagesUnsuported;
     }
 
-    var data: std.ArrayList(f32) = try .initCapacity(allocator, image.pixels.len());
-    defer data.deinit(allocator);
-    var iter = image.iterator();
-    while (iter.next()) |pix| {
-        try data.appendSlice(allocator, &.{ pix.r, pix.g, pix.b, pix.a });
-    }
+    try image.convert(allocator, .rgba32);
+    const data = try allocator.dupe(u8, image.pixels.asBytes());
 
     return .{
         .width = image.width, 
         .height = image.height,
-        .data = try data.toOwnedSlice(allocator),
-        .path = path 
+        .data = data,
+        .path = path,
+        .format = .rgba8
     };
 }

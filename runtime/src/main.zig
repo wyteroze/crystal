@@ -16,15 +16,17 @@ const Scheduler = engine.Scheduler;
 
 const target_fps = 120;
 const fps_seconds: f32 = 1.0 / @as(f32, @floatCast(target_fps));
-const asset_purge_rate_seconds: f32 = 0.5;
+const asset_purge_rate_seconds: std.Io.Duration = .fromSeconds(1);
+const clear_color: core.Color = .fromRgbFloat(0.1, 0.1, 0.1, 1.0);
 
 const RenderCtx = struct { 
     gpu_device: *gpu.GpuDevice, 
-    pipeline: gpu.types.PipelineHandle, 
-    vbuf: gpu.types.BufferHandle, 
-    ibuf: gpu.types.BufferHandle, 
-    img: gpu.types.ImageHandle,
-    sampler: gpu.types.SamplerHandle,
+    pipeline: gpu.GpuDevice.GpuPipeline, 
+    vbuf: gpu.GpuDevice.GpuBuffer, 
+    ibuf: gpu.GpuDevice.GpuBuffer, 
+    ubuf: gpu.GpuDevice.GpuBuffer,
+    img: gpu.GpuDevice.GpuImage,
+    sampler: gpu.GpuDevice.GpuSampler,
     mesh_id: ecs.ComponentId, 
     pos_id: ecs.ComponentId, 
     rot_id: ecs.ComponentId, 
@@ -55,11 +57,12 @@ const render = struct {
         ctx.clock += dt;
 
         ctx.gpu_device.beginPass(.{ 
-            .clear_color = .{ 0.1, 0.1, 0.1, 1.0 }, 
+            .clear_color = clear_color.srgbDecode(), 
+            .clear_depth = 1.0,
             .width = ctx.surface_size[0], 
             .height = ctx.surface_size[1]
         });
-        ctx.gpu_device.applyPipeline(ctx.pipeline);
+        ctx.pipeline.apply();
 
         const scene = w.getComponent(ctx.scene_entity, w.components.id("Scene").?, Scene).?.*;
         const view = if (scene.cam) |cam| blk: {
@@ -79,24 +82,26 @@ const render = struct {
             const rot = w.getComponent(entity, ctx.rot_id, Rotation).?.*;
             
             const model: math.Mat4 = .fromTRS(pos, .fromEuler(.fromSimd(rot.simd() * @as(math.Vec3.Simd3, @splat(std.math.pi / 180.0)))), .one);
-            const vs_params: gpu.shaders.program.VsParams = .{ .model = @bitCast(model.transpose()), .view = @bitCast(view.transpose()), .proj = @bitCast(ctx.proj.transpose()) };
-
-            ctx.gpu_device.applyBindings(.{ 
-                .vertex_buffers = .{ ctx.vbuf, null, null, null }, 
-                .index_buffer = ctx.ibuf,
-                .images = .{ ctx.img, null, null, null },
-                .samplers = .{ ctx.sampler, null, null, null }
+            const vs_params: [3][4][4]f32 = .{
+                @bitCast(model.transpose()),
+                @bitCast(view.transpose()),
+                @bitCast(ctx.proj.transpose()),
+            };
+            
+            ctx.pipeline.applyBindings(.{ 
+                .vertex_buffers = .{ ctx.vbuf.handle, null, null, null }, 
+                .index_buffer = ctx.ibuf.handle,
+                .uniform_buffers = .{ ctx.ubuf.handle, null, null, null },
+                .images = .{ ctx.img.handle, null, null, null },
+                .samplers = .{ ctx.sampler.handle, null, null, null }
             });
-            ctx.gpu_device.applyUniforms(.{ 
-                .slot = gpu.shaders.program.UB_vs_params, 
-                .data = std.mem.asBytes(&vs_params) 
-            });
+            ctx.ubuf.update(std.mem.asBytes(&vs_params));
 
-            ctx.gpu_device.draw(0, @intCast(mesh.indices.len), 1);
+            ctx.pipeline.draw(0, @intCast(mesh.indices.len), 1);
         }
 
         ctx.gpu_device.endPass();
-        ctx.gpu_device.commit();
+        ctx.gpu_device.present();
     }
 }.render;
 
@@ -146,38 +151,12 @@ pub fn main(init: std.process.Init) !void {
     
     const os: Os = try .init(init, builtin.os.tag, boot.package_id);
 
+    var platform: Platform = try .init(.initSdl());
+    defer platform.deinit();
+
     var scheduler: Scheduler = undefined;
     try scheduler.init(allocator, io, &os);
     defer scheduler.deinit();
-
-    var num: usize = 0;
-
-    const say_hi = struct {
-        fn c2(nptr: *usize, add: usize) void {
-            _ = @atomicRmw(usize, nptr, .Add, add, .monotonic);
-        }
-
-        fn c(nptr: *usize) void {
-            var counter2: Scheduler.Counter = .{};
-            var jobs: [10]Scheduler.Job.Wrap(c2) = undefined;
-
-            for (0..10) |i| {
-                jobs[i] = .{ .args = .{ nptr, i } };
-                jobs[i].submit(Scheduler.current(), .{ .counter = &counter2 });
-            }
-
-            Scheduler.current().wait(&counter2);
-        }
-    }.c;
-    
-    var counter: Scheduler.Counter = .{};
-    var main_jobs: [10]Scheduler.Job.Wrap(say_hi) = undefined;
-    for (0..10) |i| {
-        main_jobs[i] = .{ .args = .{ &num } };
-        main_jobs[i].submit(&scheduler, .{ .counter = &counter });
-    }
-    scheduler.waitBlocking(&counter);
-    std.log.info("Number: {d}", .{ num });
 
     var asset_allocator: core.TrackedAllocator = .init(allocator, "AssetRegistry");
     var asset_registry: assets.AssetRegistry = try .init(asset_allocator.allocator(), io, os, project_path);
@@ -228,19 +207,15 @@ pub fn main(init: std.process.Init) !void {
     const stored_script = world.getComponent(entity, script_component, scripting.Script).?;
     try stored_script.instantiate(entity);
 
-    var platform: Platform = try .init(.initSdl());
-    defer platform.deinit();
-
     var surface_size: [2]u32 = .{ 1280, 720 };
     const surface = try platform.createSurface(.{ .title = "crystal", .width = surface_size[0], .height = surface_size[1], .target = .primary });
     defer platform.destroySurface(surface);
 
     var gpu_allocator: core.TrackedAllocator = .init(allocator, "Gpu");
-    var gpu_device: gpu.GpuDevice = .init(.initSokol(gpu_allocator.allocator()));
+    var gpu_device: gpu.GpuDevice = .init(.initDiligent(surface.handle, surface_size));
     defer gpu_device.deinit();
-    gpu_device.start();
 
-    const shader = gpu_device.createShader(gpu.shaders.basicShaderDesc());
+    const shader = try gpu_device.createShader(gpu.shaders.basicShaderDesc());
 
     const mesh_asset = world.getComponent(entity, mesh_component, assets.AssetHandle) orelse unreachable;
     const image_asset = world.getComponent(entity, image_component, assets.AssetHandle) orelse unreachable;
@@ -249,36 +224,44 @@ pub fn main(init: std.process.Init) !void {
 
     const sab = std.mem.sliceAsBytes(mesh.vertices);
     const iab = std.mem.sliceAsBytes(mesh.indices);
-    const vbuf = gpu_device.createBuffer(.{ .type = .vertex, .data = sab, .size = sab.len });
-    const ibuf = gpu_device.createBuffer(.{ .type = .index, .data = iab, .size = iab.len });
-    const img = gpu_device.createImage(.{ 
+    const vbuf = try gpu_device.createBuffer(.{ .name = "teapot vbuf", .type = .vertex, .data = sab });
+    const ibuf = try gpu_device.createBuffer(.{ .name = "teapot ibuf", .type = .index, .data = iab });
+    const ubuf = try gpu_device.createBuffer(.{ .name = "teapot ubuf", .type = .uniform, .usage = .dynamic });
+    const img = try gpu_device.createImage(.{ 
+        .name = "teapot texture",
         .width = @intCast(image.width), 
         .height = @intCast(image.height), 
         .data = std.mem.sliceAsBytes(image.data),
-        .format = .argbf32
+        .format = image.format,
     });
 
-    const sampler = gpu_device.createSampler(.{});
-
-    const pipeline = gpu_device.createPipeline(.{
-        .shader = shader,
+    const sampler = try gpu_device.createSampler(.{});
+    const pipeline = try gpu_device.createPipeline(.{
+        .name = "Teapot",
+        .shader = shader.handle,
         .index_type = .uint32,
-        .cull_mode = .front,
+        .cull_mode = .none,
         .depth_write = true,
         .layout = &.{ 
             .{ .offset = 0, .format = .float3 }, // position
             .{ .offset = 12, .format = .float3 }, // normal
-            .{ .offset = 24, .format = .float2 }  // uv coord
+            .{ .offset = 24, .format = .float2 }  // uv
         },
     });
 
-    const proj = math.Mat4.perspective(90.0 * (std.math.pi / 180.0), @as(f32, @floatFromInt(surface_size[0])) / @as(f32, @floatFromInt(surface_size[1])), 0.1, 100.0);
+    const proj: math.Mat4 = .perspective(
+        90.0 * (std.math.pi / 180.0), 
+        @as(f32, @floatFromInt(surface_size[0])) / @as(f32, @floatFromInt(surface_size[1])), 
+        0.1,
+        100.0
+    );
 
     var render_ctx = RenderCtx{ 
         .gpu_device = &gpu_device, 
         .pipeline = pipeline, 
         .vbuf = vbuf, 
         .ibuf = ibuf, 
+        .ubuf = ubuf,
         .img = img,
         .sampler = sampler,
         .surface_size = &surface_size, 
@@ -295,11 +278,12 @@ pub fn main(init: std.process.Init) !void {
     try world.registerSystem("UpdateScripts", void, updateScripts, @constCast(&{}));
 
     var running = true;
-    var last_time = platform.getElapsedSeconds();
-    var last_asset_tick = platform.getElapsedSeconds();
+    var last_time = std.Io.Clock.awake.now(io);
+    var last_asset_tick = std.Io.Clock.awake.now(io);
     while (running) {
-        const start = platform.getElapsedSeconds();
-        const dt: f32 = @floatCast(start - last_time);
+        const start = std.Io.Clock.awake.now(io);
+        const dt = last_time.durationTo(start);
+        const dt_seconds: f32 = @floatCast(@as(f32, @floatFromInt(dt.toNanoseconds())) / std.time.ns_per_s);
         last_time = start;
 
         var frame_root: Scheduler.Counter = .{};
@@ -316,12 +300,11 @@ pub fn main(init: std.process.Init) !void {
             }
         }
 
-        world.tickAllSystems(dt);
-        try platform.swapBuffers(surface);
+        world.tickAllSystems(dt_seconds);
 
-        const end = platform.getElapsedSeconds();
+        const end = std.Io.Clock.awake.now(io);
 
-        if (end > last_asset_tick + asset_purge_rate_seconds) {
+        if (end.nanoseconds > last_asset_tick.addDuration(asset_purge_rate_seconds).nanoseconds) {
             const purged = asset_registry.cache.tick();
             last_asset_tick = end;
 
@@ -341,9 +324,9 @@ pub fn main(init: std.process.Init) !void {
             std.log.info("[Lua GC]: {f}", .{ core.SizeFormatter.fmtSize( @intCast( runtime.gcCount() * 1024 ) ) });
         }
 
-        const frame_time = end - start;
-        if (fps_seconds > frame_time) {
-            platform.waitSeconds(@floatCast(fps_seconds - frame_time));
+        const frame_time = start.durationTo(end);
+        if (frame_time.toNanoseconds() > 0) {
+            try io.sleep(frame_time, .awake);
         }
     }
 }

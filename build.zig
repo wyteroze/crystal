@@ -9,12 +9,41 @@ pub fn build(b: *std.Build) void {
     const sdk_path = b.option([]const u8, "sdk", "Path to macOS SDK (looks something like `MacOSX26.5.sdk`)")
         orelse std.zig.system.darwin.getSdk(b.allocator, b.graph.io, &target.result);
 
-    const backend = b.option(enum { gl, d3d11, d3d12, vulkan }, "backend", "Backend to use\n(default: gl)")
-        orelse .gl;
+    const backend = b.option(enum { gl, d3d11, d3d12, vulkan }, "backend", "Backend to use\n(default: gl)") orelse .gl;
+    const check_only = b.option(bool, "check_only", "Only build the `check` step (skips engine build)") orelse false;
 
     // this might be a yikes move but SDL3 needs sysroot which is identical to sdk_path
     // and having to pass it twice would be dumb and have no good use, so we do this instead
     b.sysroot = sdk_path;
+
+    // For ZLS
+    const check = b.step("check", "Check if crystal compiles");
+
+    if (check_only) {
+        const dep_engine_check = b.dependency("engine", .{
+            .target = target,
+            .optimize = optimize,
+            .sdk = sdk_path,
+            .backend = backend,
+            .skip_cmake = true,
+        });
+
+        const exe_check_mod = b.createModule(.{
+            .root_source_file = b.path("runtime/src/main.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "engine", .module = dep_engine_check.module("engine") },
+            },
+            .link_libc = true,
+        });
+
+        const exe_check = b.addExecutable(.{ .name = "crystal", .root_module = exe_check_mod });
+        check.dependOn(&exe_check.step);
+        return;
+    }
+
+    // This only runs for real builds, not zls
 
     const dep_engine = b.dependency("engine", .{ .target = target, .optimize = optimize, .sdk = sdk_path, .backend = backend });
 
@@ -36,10 +65,7 @@ pub fn build(b: *std.Build) void {
     });
     b.installArtifact(exe);
 
-    // For ZLS
     const exe_check = b.addExecutable(.{ .name = "crystal", .root_module = exe_mod });
-
-    const check = b.step("check", "Check if crystal compiles");
     check.dependOn(&exe_check.step);
 
     if (target.result.os.tag == .macos and sdk_path != null) {

@@ -35,6 +35,14 @@
             .url = "git+https://github.com/zigimg/zigimg.git#d695acd97c02e57bb151e8f659d1280f5cd6ca70",
             .hash = "zigimg-0.1.0-8_eo2oyaFwBZwJpmqPkCfVXWBrHcqbYwmrp1I6bTD3lI",
         },
+        .zig_objc = .{
+            .url = "git+https://github.com/mitchellh/zig-objc.git#c8de82ff80281215ad92900866dab7103a8efa8b",
+            .hash = "zig_objc-0.0.0-Ir_Sp9gsAQCPAJc0oF5xoWePHWP6Y6tCphDeyNUThJoi",
+        },
+        .rgfw = .{
+            .url = "git+https://github.com/ColleagueRiley/RGFW.git#38d022ab6aa0c753bec1e75c92dfbcd011c0e7f3",
+            .hash = "N-V-__8AABFmOAAf5UfIv9OGxF9OwZiU-z-qkpTx0ntZ5MjE",
+        },
     },
 
     .paths = .{ "build.zig", "build.zig.zon", "src", "vendor" },

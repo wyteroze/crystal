@@ -6,6 +6,97 @@ const types = @import("types.zig");
 const desc = @import("desc.zig");
 const Backend = @import("backend.zig").Backend;
 
+pub const GpuBuffer = struct {
+    backend: Backend,
+    handle: types.BufferHandle,
+
+    pub fn init(b: Backend, d: desc.BufferDesc) !GpuBuffer {
+        const handle = b.createBuffer(d);
+
+        return .{ .backend = b, .handle = handle };
+    }
+
+    pub fn deinit(self: *GpuBuffer) void {
+        self.backend.deleteBuffer(self.handle);
+    }
+
+    pub fn update(self: *GpuBuffer, data: []const u8) void {
+        self.backend.updateBuffer(self.handle, data);
+    }
+};
+
+pub const GpuSampler = struct {
+    backend: Backend,
+    handle: types.SamplerHandle,
+
+    pub fn init(b: Backend, d: desc.SamplerDesc) !GpuSampler {
+        const handle = b.createSampler(d);
+
+        return .{ .backend = b, .handle = handle };
+    }
+
+    pub fn deinit(self: *GpuSampler) void {
+        self.backend.deleteSampler(self.handle);
+    }
+};
+
+pub const GpuImage = struct {
+    backend: Backend,
+    handle: types.ImageHandle,
+
+    pub fn init(b: Backend, d: desc.ImageDesc) !GpuImage {
+        const handle = b.createImage(d);
+
+        return .{ .backend = b, .handle = handle };
+    }
+
+    pub fn deinit(self: *GpuImage) void {
+        self.backend.deleteImage(self.handle);
+    }
+};
+
+pub const GpuPipeline = struct {
+    backend: Backend,
+    handle: types.PipelineHandle,
+
+    pub fn init(b: Backend, d: desc.PipelineDesc) !GpuPipeline {
+        const handle = b.createPipeline(d);
+
+        return .{ .backend = b, .handle = handle };
+    }
+
+    pub fn deinit(self: *GpuPipeline) void {
+        self.backend.deletePipeline(self.handle);
+    }
+
+    pub fn apply(self: *GpuPipeline) void {
+        self.backend.applyPipeline(self.handle);
+    }
+
+    pub fn applyBindings(self: *GpuPipeline, binds: desc.Bindings) void {
+        self.backend.applyPipelineBindings(self.handle, binds);
+    }
+
+    pub fn draw(self: *GpuPipeline, base: u32, count: u32, instances: u32) void {
+        self.backend.drawPipeline(self.handle, base, count, instances);
+    }
+};
+
+pub const GpuShader = struct {
+    backend: Backend,
+    handle: types.ShaderHandle,
+
+    pub fn init(b: Backend, d: desc.ShaderDesc) !GpuShader {
+        const handle = b.createShader(d);
+
+        return .{ .backend = b, .handle = handle };
+    }
+
+    pub fn deinit(self: *GpuShader) void {
+        self.backend.deleteShader(self.handle);
+    }
+};
+
 const GpuDevice = @This();
 backend: Backend,
 
@@ -13,86 +104,50 @@ pub fn init(b: Backend) GpuDevice {
     return .{ .backend = b };
 }
 
-pub fn start(self: *GpuDevice) void {
-    switch (self.backend) {
-        .sokol => |*bk| bk.init()
-    }
+pub fn deinit(self: GpuDevice) void {
+    self.backend.deinit();
 }
 
-pub fn deinit(self: *GpuDevice) void {
-    switch (self.backend) {
-        .sokol => |*b| b.deinit()
-    }
+pub fn createBuffer(self: GpuDevice, d: desc.BufferDesc) !GpuBuffer {
+    return .init(self.backend, d);
 }
 
-pub fn createBuffer(self: *GpuDevice, d: desc.BufferDesc) types.BufferHandle {
-    return switch (self.backend) {
-        .sokol => |*b| b.createBuffer(d)
-    };
+pub fn createSampler(self: GpuDevice, d: desc.SamplerDesc) !GpuSampler {
+    return .init(self.backend, d);
 }
 
-pub fn createSampler(self: *GpuDevice, d: desc.SamplerDesc) types.SamplerHandle {
-    return switch (self.backend) {
-        .sokol => |*b| b.createSampler(d)
-    };
+pub fn createImage(self: GpuDevice, d: desc.ImageDesc) !GpuImage {
+    return .init(self.backend, d);
 }
 
-pub fn createImage(self: *GpuDevice, d: desc.ImageDesc) types.ImageHandle {
-    return switch (self.backend) {
-        .sokol => |*b| b.createImage(d)
-    };
+pub fn createPipeline(self: GpuDevice, d: desc.PipelineDesc) !GpuPipeline {
+    return .init(self.backend, d);
 }
 
-pub fn createPipeline(self: *GpuDevice, d: desc.PipelineDesc) types.PipelineHandle {
-    return switch (self.backend) {
-        .sokol => |*b| b.createPipeline(d)
-    };
+pub fn createShader(self: GpuDevice, d: desc.ShaderDesc) !GpuShader {
+    return .init(self.backend, d);
 }
 
-pub fn createShader(self: *GpuDevice, d: sokol.gfx.ShaderDesc) types.ShaderHandle {
-    return switch (self.backend) {
-        .sokol => |*b| b.createShader(d)
-    };
+pub fn applyBindings(self: GpuDevice, b: desc.Bindings) void {
+    self.backend.applyBindings(b);
 }
 
-pub fn beginPass(self: *GpuDevice, d: desc.PassDesc) void {
-    switch (self.backend) {
-        .sokol => |*b| b.beginPass(d)
-    }
+pub fn beginPass(self: GpuDevice, d: desc.PassDesc) void {
+    self.backend.beginPass(d);
 }
 
-pub fn applyPipeline(self: *GpuDevice, pipeline: types.PipelineHandle) void {
-    switch (self.backend) {
-        .sokol => |*b| b.applyPipeline(pipeline)
-    }
+pub fn endPass(self: GpuDevice) void {
+    self.backend.endPass();
 }
 
-pub fn applyBindings(self: *GpuDevice, binds: desc.Bindings) void {
-    switch (self.backend) {
-        .sokol => |*b| b.applyBindings(binds)
-    }
+pub fn draw(self: GpuDevice, base: u32, count: u32, instances: u32) void {
+    self.backend.draw(base, count, instances);
 }
 
-pub fn applyUniforms(self: *GpuDevice, unis: desc.Uniforms) void {
-    switch (self.backend) {
-        .sokol => |*b| b.applyUniforms(unis)
-    }
+pub fn commit(self: GpuDevice) void {
+    self.backend.commit();
 }
 
-pub fn draw(self: *GpuDevice, base: u32, count: u32, instances: u32) void {
-    switch (self.backend) {
-        .sokol => |*b| b.draw(base, count, instances)
-    }
-}
-
-pub fn endPass(self: *GpuDevice) void {
-    switch (self.backend) {
-        .sokol => |*b| b.endPass()
-    }
-}
-
-pub fn commit(self: *GpuDevice) void {
-    switch (self.backend) {
-        .sokol => |*b| b.commit()
-    }
+pub fn present(self: GpuDevice) void {
+    self.backend.present();
 }

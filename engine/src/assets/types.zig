@@ -1,6 +1,7 @@
 // Copyright 2026 wyteroze. Licensed under the Apache-2.0 license.
 
 const std = @import("std");
+const gpu = @import("../gpu/gpu.zig");
 
 pub const Vertex = extern struct {
     position: [3]f32,
@@ -24,7 +25,12 @@ pub const Image = struct {
     width: usize, 
     height: usize,
     path: []const u8,
-    data: []f32,
+    format: gpu.types.PixelFormat,
+    data: []u8,
+
+    pub fn bytes(self: *const Image, comptime T: type) []T {
+        return std.mem.bytesAsSlice(T, self.data);
+    }
 
     pub fn deinit(self: *const Image, allocator: std.mem.Allocator) void {
         allocator.free(self.path);

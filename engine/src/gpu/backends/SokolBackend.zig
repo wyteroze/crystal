@@ -11,7 +11,7 @@ const header_size = @sizeOf(usize);
 const SokolBackend = @This();
 allocator: std.mem.Allocator,
 
-pub fn init(self: *const SokolBackend) void {
+pub fn init(self: *const SokolBackend, _: anytype, _: anytype) void {
     gfx.setup(.{
         .logger = .{ .func = sokol.log.func },
         .allocator = .{ .alloc_fn = sokolAlloc, .free_fn = sokolFree, .user_data = @constCast(self) },

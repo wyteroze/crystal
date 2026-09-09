@@ -4,3 +4,4 @@ pub const math = @import("math/math.zig");
 pub const boot = @import("boot/boot.zig");
 pub const TrackedAllocator = @import("TrackedAllocator.zig");
 pub const SizeFormatter = @import("SizeFormatter.zig");
+pub const Color = @import("Color.zig");

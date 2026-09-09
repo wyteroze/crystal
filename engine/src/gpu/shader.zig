@@ -1,9 +1,12 @@
 // Copyright 2026 wyteroze. Licensed under the Apache-2.0 license.
 
-pub const program = @import("shaders");
-const gfx = @import("sokol").gfx;
+const desc = @import("desc.zig");
 
 // Export shader stuff
-pub fn basicShaderDesc() gfx.ShaderDesc {
-    return program.basicShaderDesc(gfx.queryBackend());
+pub fn basicShaderDesc() desc.ShaderDesc {
+    const basic = @import("shaders/basic.zig");
+    return .{ .stages = &.{
+        .{ .stage = .vertex, .source = basic.vs_source, .entrypoint = "main" },
+        .{ .stage = .fragment, .source = basic.ps_source, .entrypoint = "main" }
+    } };
 }
