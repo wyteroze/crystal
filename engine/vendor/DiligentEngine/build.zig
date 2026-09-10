@@ -65,7 +65,8 @@ pub fn build(b: *std.Build) !void {
     const build_path = try root.join(b.allocator, &.{ "build" });
 
     const install_prefix = try root.join(b.allocator, &.{ "install" });
-    const cmake_build_type = "RelWithDebInfo"; _ = optimize; // optimizeModeToCMakeBuildType(optimize);
+    // Building with debug info severely bloats .zig-cache (~1.5gb per build)
+    const cmake_build_type = "Release"; _ = optimize; // optimizeModeToCMakeBuildType(optimize);
 
     const cmake_configure = b.addSystemCommand(&.{ "cmake", "-S", src_path, "-B", build_path, "-G", "Ninja" });
     cmake_configure.setCwd(.{ .cwd_relative = src_path });

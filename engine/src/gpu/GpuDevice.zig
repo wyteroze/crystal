@@ -16,11 +16,11 @@ pub const GpuBuffer = struct {
         return .{ .backend = b, .handle = handle };
     }
 
-    pub fn deinit(self: *GpuBuffer) void {
+    pub fn deinit(self: GpuBuffer) void {
         self.backend.deleteBuffer(self.handle);
     }
 
-    pub fn update(self: *GpuBuffer, data: []const u8) void {
+    pub fn update(self: GpuBuffer, data: []const u8) void {
         self.backend.updateBuffer(self.handle, data);
     }
 };
@@ -35,7 +35,7 @@ pub const GpuSampler = struct {
         return .{ .backend = b, .handle = handle };
     }
 
-    pub fn deinit(self: *GpuSampler) void {
+    pub fn deinit(self: GpuSampler) void {
         self.backend.deleteSampler(self.handle);
     }
 };
@@ -50,7 +50,7 @@ pub const GpuImage = struct {
         return .{ .backend = b, .handle = handle };
     }
 
-    pub fn deinit(self: *GpuImage) void {
+    pub fn deinit(self: GpuImage) void {
         self.backend.deleteImage(self.handle);
     }
 };
@@ -65,19 +65,19 @@ pub const GpuPipeline = struct {
         return .{ .backend = b, .handle = handle };
     }
 
-    pub fn deinit(self: *GpuPipeline) void {
+    pub fn deinit(self: GpuPipeline) void {
         self.backend.deletePipeline(self.handle);
     }
 
-    pub fn apply(self: *GpuPipeline) void {
+    pub fn apply(self: GpuPipeline) void {
         self.backend.applyPipeline(self.handle);
     }
 
-    pub fn applyBindings(self: *GpuPipeline, binds: desc.Bindings) void {
+    pub fn applyBindings(self: GpuPipeline, binds: desc.Bindings) void {
         self.backend.applyPipelineBindings(self.handle, binds);
     }
 
-    pub fn draw(self: *GpuPipeline, base: u32, count: u32, instances: u32) void {
+    pub fn draw(self: GpuPipeline, base: u32, count: u32, instances: u32) void {
         self.backend.drawPipeline(self.handle, base, count, instances);
     }
 };
@@ -92,7 +92,7 @@ pub const GpuShader = struct {
         return .{ .backend = b, .handle = handle };
     }
 
-    pub fn deinit(self: *GpuShader) void {
+    pub fn deinit(self: GpuShader) void {
         self.backend.deleteShader(self.handle);
     }
 };

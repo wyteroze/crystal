@@ -4,24 +4,23 @@ const std = @import("std");
 const zlua = @import("zlua");
 const linker = @import("../linker/linker.zig");
 const ecs = @import("../../ecs/ecs.zig");
-const assets = @import("../../assets/assets.zig");
+const Assets = @import("../../assets/Assets.zig");
 const c = zlua.c;
 const Lua = zlua.Lua;
 const Script = @import("Script.zig");
-const types = @import("../../assets/types.zig");
 
 const Runtime = @This();
 state: *Lua,
 world: *ecs.World,
-registry: *assets.AssetRegistry,
+assets: *Assets,
 
 /// `linkState` must be called immediately after this.
-pub fn init(allocator: std.mem.Allocator, world: *ecs.World, registry: *assets.AssetRegistry) !Runtime {
+pub fn init(allocator: std.mem.Allocator, world: *ecs.World, assets: *Assets) !Runtime {
     const l: *Lua = try .init(allocator);
     l.openLibs();
 
     linker.registry.registerAll(l);
-    return .{ .state = l, .world = world, .registry = registry };
+    return .{ .state = l, .world = world, .assets = assets };
 }
 
 pub fn deinit(self: Runtime) void {
@@ -44,7 +43,7 @@ pub fn fromState(state: *Lua) *Runtime {
     return space_ptr.*;
 }
 
-pub fn loadScript(self: Runtime, source: types.ScriptSource) !Script {
+pub fn loadScript(self: Runtime, source: Assets.types.ScriptSource) !Script {
     return .init(self.state, source);
 }
 

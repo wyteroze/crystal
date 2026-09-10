@@ -353,7 +353,8 @@ CrystalPipelineHandle diligent_create_pipeline(CrystalDiligentDeviceHandle handl
     ShaderResourceVariableDesc vars[] = {
         { SHADER_TYPE_VERTEX, "VSParams", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE },
         { SHADER_TYPE_PIXEL, "Tex", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE },
-        { SHADER_TYPE_PIXEL, "Smp", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE }
+        { SHADER_TYPE_PIXEL, "Smp", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE },
+        { SHADER_TYPE_PIXEL, "LightParams", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE },
     };
     psoCreateInfo.PSODesc.ResourceLayout.Variables = vars;
     psoCreateInfo.PSODesc.ResourceLayout.NumVariables = _countof(vars);
@@ -427,6 +428,12 @@ void diligent_pipeline_apply_bindings(CrystalDiligentDeviceHandle handle, Crysta
     if (bindings.uniform_buffers[0].ptr != nullptr) {
         if (auto* var = pipeline->srb->GetVariableByName(SHADER_TYPE_VERTEX, "VSParams")) {
             var->Set(reinterpret_cast<IBuffer*>(bindings.uniform_buffers[0].ptr));
+        }
+    }
+
+    if (bindings.uniform_buffers[1].ptr != nullptr) {
+        if (auto* var = pipeline->srb->GetVariableByName(SHADER_TYPE_PIXEL, "LightParams")) {
+            var->Set(reinterpret_cast<IBuffer*>(bindings.uniform_buffers[1].ptr));
         }
     }
 

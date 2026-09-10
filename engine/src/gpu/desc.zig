@@ -7,7 +7,8 @@ pub const BufferDesc = struct {
     name: [:0]const u8,
     type: types.BufferType = .vertex,
     usage: types.BufferUsage = .immutable,
-    data: ?[]const u8 = null
+    data: ?[]const u8 = null,
+    size: usize = 0
 };
 
 pub const SamplerDesc = struct {

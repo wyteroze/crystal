@@ -4,14 +4,14 @@ const std = @import("std");
 const Source = @import("Source.zig");
 
 const DirSource = @This();
-allocator: std.mem.Allocator,
 io: std.Io,
+allocator: std.mem.Allocator,
 base_dir: std.Io.Dir,
 
 pub fn init(allocator: std.mem.Allocator, io: std.Io, path: []const u8) !DirSource {
     return .{ 
-        .allocator = allocator, 
         .io = io, 
+        .allocator = allocator, 
         .base_dir = try .createDirPathOpen(.cwd(), io, path, .{ })
     };
 }

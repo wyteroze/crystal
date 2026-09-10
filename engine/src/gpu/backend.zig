@@ -19,74 +19,74 @@ pub const Backend = union(enum) {
     }
 
     pub fn deinit(self: Backend) void {
-        switch (self) { inline else => |*b| b.deinit() }
+        switch (self) { inline else => |b| b.deinit() }
     }
 
     pub fn createBuffer(self: Backend, d: desc.BufferDesc) types.BufferHandle {
-        return switch (self) { inline else => |*b| b.createBuffer(d) };
+        return switch (self) { inline else => |b| b.createBuffer(d) };
     }
 
     pub fn deleteBuffer(self: Backend, h: types.BufferHandle) void {
-        return switch (self) { inline else => |*b| b.deleteBuffer(h) };
+        return switch (self) { inline else => |b| b.destroyBuffer(h) };
     }
 
     pub fn updateBuffer(self: Backend, h: types.BufferHandle, data: []const u8) void {
-        return switch (self) { inline else => |*b| b.updateBuffer(h, data) };
+        return switch (self) { inline else => |b| b.updateBuffer(h, data) };
     }
 
     pub fn createSampler(self: Backend, d: desc.SamplerDesc) types.SamplerHandle {
-        return switch (self) { inline else => |*b| b.createSampler(d) };
+        return switch (self) { inline else => |b| b.createSampler(d) };
     }
 
     pub fn deleteSampler(self: Backend, h: types.SamplerHandle) void {
-        return switch (self) { inline else => |*b| b.deleteSampler(h) };
+        return switch (self) { inline else => |b| b.destroySampler(h) };
     }
 
     pub fn createImage(self: Backend, d: desc.ImageDesc) types.ImageHandle {
-        return switch (self) { inline else => |*b| b.createImage(d) };
+        return switch (self) { inline else => |b| b.createImage(d) };
     }
 
     pub fn deleteImage(self: Backend, h: types.ImageHandle) void {
-        return switch (self) { inline else => |*b| b.deleteImage(h) };
+        return switch (self) { inline else => |b| b.destroyImage(h) };
     }
 
     pub fn createPipeline(self: Backend, d: desc.PipelineDesc) types.PipelineHandle {
-        return switch (self) { inline else => |*b| b.createPipeline(d) };
+        return switch (self) { inline else => |b| b.createPipeline(d) };
     }
 
     pub fn deletePipeline(self: Backend, h: types.PipelineHandle) void {
-        return switch (self) { inline else => |*b| b.deletePipeline(h) };
+        return switch (self) { inline else => |b| b.destroyPipeline(h) };
     }
 
     pub fn createShader(self: Backend, d: anytype) types.ShaderHandle {
-        return switch (self) { inline else => |*b| b.createShader(d) };
+        return switch (self) { inline else => |b| b.createShader(d) };
     }
 
     pub fn deleteShader(self: Backend, h: types.ShaderHandle) void {
-        return switch (self) { inline else => |*b| b.deleteShader(h) };
+        return switch (self) { inline else => |b| b.destroyShader(h) };
     }
 
     pub fn beginPass(self: Backend, d: desc.PassDesc) void {
-        switch (self) { inline else => |*b| b.beginPass(d) }
+        switch (self) { inline else => |b| b.beginPass(d) }
     }
 
     pub fn applyPipeline(self: Backend, pipeline: types.PipelineHandle) void {
-        switch (self) { inline else => |*b| b.applyPipeline(pipeline) }
+        switch (self) { inline else => |b| b.applyPipeline(pipeline) }
     }
 
     pub fn applyPipelineBindings(self: Backend, pipeline: types.PipelineHandle, binds: desc.Bindings) void {
-        switch (self) { inline else => |*b| b.applyPipelineBindings(pipeline, binds) }
+        switch (self) { inline else => |b| b.applyPipelineBindings(pipeline, binds) }
     }
 
     pub fn drawPipeline(self: Backend, pipeline: types.PipelineHandle, base: u32, count: u32, instances: u32) void {
-        switch (self) { inline else => |*b| b.drawPipeline(pipeline, base, count, instances) }
+        switch (self) { inline else => |b| b.drawPipeline(pipeline, base, count, instances) }
     }
 
     pub fn endPass(self: Backend) void {
-        switch (self) { inline else => |*b| b.endPass() }
+        switch (self) { inline else => |b| b.endPass() }
     }
 
     pub fn present(self: Backend) void {
-        switch (self) { inline else => |*b| b.present() }
+        switch (self) { inline else => |b| b.present() }
     }
 };

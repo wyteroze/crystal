@@ -18,6 +18,7 @@ struct VSOutput {
     float4 Position : SV_POSITION;
     float3 Normal : NORMAL;
     float2 UV : TEXCOORD0;
+    float3 WorldPos : TEXCOORD1;
 };
 
 void main(in VSInput VSIn, out VSOutput VSOut) {
@@ -25,4 +26,5 @@ void main(in VSInput VSIn, out VSOutput VSOut) {
     VSOut.Position = mul(Proj, mul(View, worldPos));
     VSOut.Normal = normalize(mul((float3x3)Model, VSIn.Normal));
     VSOut.UV = VSIn.UV;
+    VSOut.WorldPos = worldPos.xyz;
 }

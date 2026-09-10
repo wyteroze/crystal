@@ -6,7 +6,6 @@ const engine = @import("engine");
 const Platform = engine.Platform;
 const gpu = engine.gpu;
 const ecs = engine.ecs;
-const assets = engine.assets;
 const math = engine.core.math;
 const scripting = engine.scripting;
 const Os = engine.Os;
@@ -22,10 +21,10 @@ const clear_color: core.Color = .fromRgbFloat(0.1, 0.1, 0.1, 1.0);
 const RenderCtx = struct { 
     gpu_device: *gpu.GpuDevice, 
     pipeline: gpu.GpuDevice.GpuPipeline, 
-    vbuf: gpu.GpuDevice.GpuBuffer, 
-    ibuf: gpu.GpuDevice.GpuBuffer, 
+    mesh: engine.Assets.types.GpuMesh,
     ubuf: gpu.GpuDevice.GpuBuffer,
-    img: gpu.GpuDevice.GpuImage,
+    light_ubuf: gpu.GpuDevice.GpuBuffer,
+    img: engine.Assets.types.GpuImage,
     sampler: gpu.GpuDevice.GpuSampler,
     mesh_id: ecs.ComponentId, 
     pos_id: ecs.ComponentId, 
@@ -33,12 +32,19 @@ const RenderCtx = struct {
     surface_size: *[2]u32, 
     scene_entity: ecs.Entity, 
     proj: math.Mat4, 
-    clock: f32 
+    clock: f32,
+    light_params: LightParams
 };
 
 const Position = math.Vec3;
 const Rotation = math.Vec3;
 const Scene = struct { cam: ?ecs.Entity };
+
+const LightParams = struct { 
+    dir: core.math.Vec3, 
+    color: core.Color,
+    ambient: core.Color
+};
 
 const render = struct {
     fn renderMeshTextured() void {
@@ -76,8 +82,6 @@ const render = struct {
         var it = q.iterator();
         while (it.next()) |entity| {
             if (entity.getParent() == null) continue;
-            const mesh_asset = w.getComponent(entity, w.components.id("Mesh").?, assets.AssetHandle) orelse continue;
-            const mesh = mesh_asset.mesh() catch { std.log.err("'Mesh' component must be an AssetHandle to a mesh", .{}); continue; };
             const pos = w.getComponent(entity, ctx.pos_id, Position).?.*;
             const rot = w.getComponent(entity, ctx.rot_id, Rotation).?.*;
             
@@ -87,17 +91,25 @@ const render = struct {
                 @bitCast(view.transpose()),
                 @bitCast(ctx.proj.transpose()),
             };
+
+            const l = ctx.light_params;
+            const light_params_flattened: [3][4]f32 = .{
+                .{ l.dir.x, l.dir.y, l.dir.z, 0 }, // Last value is padding
+                .{ l.color.r(), l.color.g(), l.color.b(), 0 }, // Last value is padding
+                .{ l.ambient.r(), l.ambient.g(), l.ambient.b(), 0 }, // Last value is padding
+            };
             
             ctx.pipeline.applyBindings(.{ 
-                .vertex_buffers = .{ ctx.vbuf.handle, null, null, null }, 
-                .index_buffer = ctx.ibuf.handle,
-                .uniform_buffers = .{ ctx.ubuf.handle, null, null, null },
-                .images = .{ ctx.img.handle, null, null, null },
+                .vertex_buffers = .{ ctx.mesh.vertex_buffer.handle, null, null, null }, 
+                .index_buffer = ctx.mesh.index_buffer.handle,
+                .uniform_buffers = .{ ctx.ubuf.handle, ctx.light_ubuf.handle, null, null },
+                .images = .{ ctx.img.handle.handle, null, null, null },
                 .samplers = .{ ctx.sampler.handle, null, null, null }
             });
             ctx.ubuf.update(std.mem.asBytes(&vs_params));
+            ctx.light_ubuf.update(std.mem.asBytes(&light_params_flattened));
 
-            ctx.pipeline.draw(0, @intCast(mesh.indices.len), 1);
+            ctx.pipeline.draw(0, @intCast(ctx.mesh.index_count), 1);
         }
 
         ctx.gpu_device.endPass();
@@ -158,9 +170,17 @@ pub fn main(init: std.process.Init) !void {
     try scheduler.init(allocator, io, &os);
     defer scheduler.deinit();
 
-    var asset_allocator: core.TrackedAllocator = .init(allocator, "AssetRegistry");
-    var asset_registry: assets.AssetRegistry = try .init(asset_allocator.allocator(), io, os, project_path);
-    defer asset_registry.deinit();
+    var surface_size: [2]u32 = .{ 1280, 720 };
+    const surface = try platform.createSurface(.{ .title = "crystal", .width = surface_size[0], .height = surface_size[1], .target = .primary });
+    defer platform.destroySurface(surface);
+
+    var gpu_allocator: core.TrackedAllocator = .init(allocator, "Gpu");
+    var gpu_device: gpu.GpuDevice = .init(.initDiligent(surface.handle, surface_size));
+    defer gpu_device.deinit();
+
+    var asset_allocator: core.TrackedAllocator = .init(allocator, "Assets");
+    var assets: engine.Assets = try .init(asset_allocator.allocator(), io, &gpu_device, project_path);
+    defer assets.deinit();
 
     // Create the world
     var ecs_allocator: core.TrackedAllocator = .init(allocator, "ECSWorld");
@@ -168,15 +188,15 @@ pub fn main(init: std.process.Init) !void {
     defer world.deinit();
 
     var lua_allocator: core.TrackedAllocator = .init(allocator, "LuaRuntime");
-    var runtime: scripting.Runtime = try .init(lua_allocator.allocator(), &world, &asset_registry);
+    var runtime: scripting.Runtime = try .init(lua_allocator.allocator(), &world, &assets);
     defer runtime.deinit();
     runtime.setGenerational();
     runtime.linkState();
 
     // Register components
     const scene_component = try world.registerComponentNative(Scene, "Scene"); // For organizing collections of entities
-    const mesh_component = try world.registerComponentNativeShaped(assets.AssetHandle, "Mesh"); // For giving an entity a mesh appearance
-    const image_component = try world.registerComponentNativeShaped(assets.AssetHandle, "Image"); // For giving an entity an image appearance (or a texture, if it has a mesh)
+    const mesh_component = try world.registerComponentNativeShaped(engine.Assets.AssetHandle, "Mesh"); // For giving an entity a mesh appearance
+    const image_component = try world.registerComponentNativeShaped(engine.Assets.AssetHandle, "Image"); // For giving an entity an image appearance (or a texture, if it has a mesh)
     const pos_component = try world.registerComponentNativeShaped(Position, "Position"); // For moving entities
     const rot_component = try world.registerComponentNativeShaped(Rotation, "Rotation"); // For rotating entites (Euler)
     const script_component = try world.registerComponentNative(scripting.Script, "Script"); // For giving entities behavior
@@ -199,41 +219,30 @@ pub fn main(init: std.process.Init) !void {
     try entity.setParent(scene);
 
     // Add a script to the component
-    const source = try asset_registry.load("file://scripts/teapot.lua");
-    defer source.release();
-    const script = try runtime.loadScript((try source.scriptSource()).*);
+    const source = try assets.load("assets://scripts/teapot.lua");
+    defer source.cpuRelease();
+    const script = try runtime.loadScript(try source.cpuGet(.script_source));
 
     try world.addComponent(entity, script_component, scripting.Script, script);
     const stored_script = world.getComponent(entity, script_component, scripting.Script).?;
     try stored_script.instantiate(entity);
 
-    var surface_size: [2]u32 = .{ 1280, 720 };
-    const surface = try platform.createSurface(.{ .title = "crystal", .width = surface_size[0], .height = surface_size[1], .target = .primary });
-    defer platform.destroySurface(surface);
-
-    var gpu_allocator: core.TrackedAllocator = .init(allocator, "Gpu");
-    var gpu_device: gpu.GpuDevice = .init(.initDiligent(surface.handle, surface_size));
-    defer gpu_device.deinit();
-
     const shader = try gpu_device.createShader(gpu.shaders.basicShaderDesc());
 
-    const mesh_asset = world.getComponent(entity, mesh_component, assets.AssetHandle) orelse unreachable;
-    const image_asset = world.getComponent(entity, image_component, assets.AssetHandle) orelse unreachable;
-    const mesh = try mesh_asset.mesh();
-    const image = try image_asset.image();
+    const mesh_asset = world.getComponent(entity, mesh_component, engine.Assets.AssetHandle) orelse unreachable;
+    const image_asset = world.getComponent(entity, image_component, engine.Assets.AssetHandle) orelse unreachable;
+    try assets.upload(mesh_asset.*);
+    try assets.upload(image_asset.*);
+    defer mesh_asset.gpuRelease();
+    defer image_asset.gpuRelease();
+    mesh_asset.cpuRelease();
+    image_asset.cpuRelease();
 
-    const sab = std.mem.sliceAsBytes(mesh.vertices);
-    const iab = std.mem.sliceAsBytes(mesh.indices);
-    const vbuf = try gpu_device.createBuffer(.{ .name = "teapot vbuf", .type = .vertex, .data = sab });
-    const ibuf = try gpu_device.createBuffer(.{ .name = "teapot ibuf", .type = .index, .data = iab });
-    const ubuf = try gpu_device.createBuffer(.{ .name = "teapot ubuf", .type = .uniform, .usage = .dynamic });
-    const img = try gpu_device.createImage(.{ 
-        .name = "teapot texture",
-        .width = @intCast(image.width), 
-        .height = @intCast(image.height), 
-        .data = std.mem.sliceAsBytes(image.data),
-        .format = image.format,
-    });
+    const mesh = try mesh_asset.gpuGet(.mesh);
+    const image = try image_asset.gpuGet(.image);
+
+    const ubuf = try gpu_device.createBuffer(.{ .name = "teapot ubuf", .type = .uniform, .usage = .dynamic, .size = @sizeOf([3]math.Mat4) });
+    const light_ubuf = try gpu_device.createBuffer(.{ .name = "light ubuf", .type = .uniform, .usage = .dynamic, .size = 48 });
 
     const sampler = try gpu_device.createSampler(.{});
     const pipeline = try gpu_device.createPipeline(.{
@@ -259,10 +268,10 @@ pub fn main(init: std.process.Init) !void {
     var render_ctx = RenderCtx{ 
         .gpu_device = &gpu_device, 
         .pipeline = pipeline, 
-        .vbuf = vbuf, 
-        .ibuf = ibuf, 
+        .mesh = mesh,
         .ubuf = ubuf,
-        .img = img,
+        .light_ubuf = light_ubuf,
+        .img = image,
         .sampler = sampler,
         .surface_size = &surface_size, 
         .mesh_id = mesh_component, 
@@ -270,7 +279,12 @@ pub fn main(init: std.process.Init) !void {
         .rot_id = rot_component, 
         .scene_entity = scene, 
         .proj = proj, 
-        .clock = 0 
+        .clock = 0,
+        .light_params = .{
+            .dir = core.math.Vec3.new(0, 0.5, -0.5).normalize(),
+            .color = core.Color.fromRgbFloat(1.0, 1.0, 1.0, 1.0),
+            .ambient = core.Color.fromRgbFloat(0.05, 0.05, 0.05, 0.0)
+        }
     };
     try world.registerSystem("Render", RenderCtx, render, &render_ctx);
 
@@ -305,7 +319,7 @@ pub fn main(init: std.process.Init) !void {
         const end = std.Io.Clock.awake.now(io);
 
         if (end.nanoseconds > last_asset_tick.addDuration(asset_purge_rate_seconds).nanoseconds) {
-            const purged = asset_registry.cache.tick();
+            const purged = assets.tick();
             last_asset_tick = end;
 
             if (purged > 0) std.log.debug("Purged {d} assets", .{ purged });

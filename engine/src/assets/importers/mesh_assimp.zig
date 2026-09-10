@@ -5,7 +5,7 @@ const types = @import("../types.zig");
 const ImportLocation = @import("importers.zig").ImportLocation;
 const assimp = @import("assimp");
 
-pub fn importMesh(allocator: std.mem.Allocator, location: ImportLocation, path: []const u8) !types.Mesh {
+pub fn importMesh(allocator: std.mem.Allocator, location: ImportLocation) !types.Mesh {
     const flags = assimp.aiProcess_Triangulate | assimp.aiProcess_GenNormals | assimp.aiProcess_FixInfacingNormals;
     const scene = switch (location) {
         .path => |p| blk: {
@@ -53,5 +53,5 @@ pub fn importMesh(allocator: std.mem.Allocator, location: ImportLocation, path: 
         indices[i * 3 + 2] = face.mIndices[2];
     }
 
-    return .{ .vertices = vertices, .indices = indices, .path = path };
+    return .{ .vertices = vertices, .indices = indices };
 }

@@ -2,9 +2,6 @@
 
 // These are registered at runtime.
 pub const sources = .{
-    @import("CacheSource.zig"),
-    @import("CwdSource.zig"),
-    @import("PersistSource.zig"),
-    @import("TempSource.zig"),
-    @import("FileSource.zig")
+    @import("FileSource.zig"),
+    @import("AssetsSource.zig")
 };

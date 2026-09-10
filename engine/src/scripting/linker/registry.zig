@@ -10,7 +10,7 @@ const bindings = .{
     @import("../../core/math/Mat4.zig"),
     @import("../../ecs/World.zig"),
     @import("../../ecs/Entity.zig"),
-    @import("../../assets/AssetRegistry.zig")
+    @import("../../assets/Assets.zig")
 };
 
 pub fn registerAll(l: *Lua) void {

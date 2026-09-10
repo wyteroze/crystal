@@ -5,7 +5,7 @@ const types = @import("../types.zig");
 const ImportLocation = @import("importers.zig").ImportLocation;
 const zigimg = @import("zigimg");
 
-pub fn importImage(allocator: std.mem.Allocator, io: std.Io, location: ImportLocation, path: []const u8) !types.Image {
+pub fn importImage(allocator: std.mem.Allocator, io: std.Io, location: ImportLocation) !types.Image {
     var read_buf: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
     var image: zigimg.Image = switch (location) {
         .bytes => |b| try .fromMemory(allocator, b),
@@ -25,7 +25,6 @@ pub fn importImage(allocator: std.mem.Allocator, io: std.Io, location: ImportLoc
         .width = image.width, 
         .height = image.height,
         .data = data,
-        .path = path,
         .format = .rgba8
     };
 }

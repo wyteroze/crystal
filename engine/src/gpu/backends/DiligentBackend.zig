@@ -23,11 +23,15 @@ pub fn createBuffer(self: DiligentBackend, d: desc.BufferDesc) types.BufferHandl
         .name = d.name.ptr,
         .type = @intFromEnum(d.type),
         .usage = @intFromEnum(d.usage),
-        .size = if (d.data) |data| data.len else 0,
-        .data = if (d.data) |data| data.ptr else @ptrFromInt(0)
+        .size = if (d.data) |data| data.len else d.size,
+        .data = if (d.data) |data| data.ptr else @ptrFromInt(0),
     });
 
     return .{ .ptr = buf_h.ptr }; 
+}
+
+pub fn destroyBuffer(self: DiligentBackend, h: types.BufferHandle) void {
+    c.diligent_destroy_buffer(self.handle, .{ .ptr = h.ptr });
 }
 
 pub fn updateBuffer(self: DiligentBackend, h: types.BufferHandle, data: []const u8) void {
@@ -56,6 +60,10 @@ pub fn createImage(self: DiligentBackend, d: desc.ImageDesc) types.ImageHandle {
     });
 
     return .{ .ptr = img_h.ptr }; 
+}
+
+pub fn destroyImage(self: DiligentBackend, h: types.ImageHandle) void {
+    c.diligent_destroy_image(self.handle, .{ .ptr = h.ptr });
 }
 
 pub fn createPipeline(self: DiligentBackend, d: desc.PipelineDesc) types.PipelineHandle { 

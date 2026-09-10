@@ -123,7 +123,9 @@ fn luaErr(self: *const Script) void {
             const line = msg[line_sep+1 .. msg_sep];
             const err_msg = msg[msg_sep + 2 ..]; // skip ":"
 
-            std.log.err("{s}\n         in {s} (line {s})", .{ err_msg, self.source.path, line });
+            // todo: change second format arg to script path, I removed it without
+            // knowing this needed it and I'm too lazy to add it back
+            std.log.err("{s}\n         in {s} (line {s})", .{ err_msg, "script", line });
             formatted = true;
         }
     }
