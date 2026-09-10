@@ -4,16 +4,11 @@ const std = @import("std");
 const desc = @import("desc.zig");
 const types = @import("types.zig");
 
-//const SokolBackend = @import("backends/SokolBackend.zig");
 const DiligentBackend = @import("backends/DiligentBackend.zig");
 
 pub const Backend = union(enum) {
-    //sokol: SokolBackend,
     diligent: DiligentBackend,
 
-    //pub fn initSokol(allocator: std.mem.Allocator) Backend {
-    //    return .{ .sokol = .{ .allocator = allocator } };
-    //}
     pub fn initDiligent(surface_handle: ?*anyopaque, surface_size: [2]u32) Backend {
         return .{ .diligent = .init(surface_handle, surface_size) };
     }
