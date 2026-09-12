@@ -1,6 +1,6 @@
 // Copyright 2026 wyteroze. Licensed under the Apache-2.0 license.
 
-#include "diligent_shim.h"
+#include "diligent.h"
 #include "DiligentCore/Graphics/GraphicsEngine/interface/Buffer.h"
 #include "DiligentCore/Graphics/GraphicsEngine/interface/DeviceContext.h"
 #include "DiligentCore/Graphics/GraphicsEngine/interface/GraphicsTypes.h"
@@ -48,8 +48,9 @@ struct CrystalDiligentDeviceContext {
 };
 
 struct CrystalDiligentShader {
-    IShader* vs;
-    IShader* ps;
+    IShader* vs = nullptr;
+    IShader* ps = nullptr;
+    IShader* cs = nullptr;
 };
 
 struct CrystalDiligentPipeline {
@@ -58,9 +59,14 @@ struct CrystalDiligentPipeline {
     VALUE_TYPE index_type;
 };
 
+struct CrystalDiligentComputePipeline {
+    IPipelineState* pso;
+    IShaderResourceBinding* srb;
+};
+
 // Helpers
 
-FILTER_TYPE crystalFilterToDiligent(CrystalFilterType filter) {
+static FILTER_TYPE crystalFilterToDiligent(CrystalFilterType filter) {
     switch (filter) {
         case CRYSTAL_FILTER_TYPE_LINEAR:
             return FILTER_TYPE_LINEAR;
@@ -69,7 +75,7 @@ FILTER_TYPE crystalFilterToDiligent(CrystalFilterType filter) {
     }
 }
 
-TEXTURE_ADDRESS_MODE crystalWrapToDiligent(CrystalWrapType wrap) {
+static TEXTURE_ADDRESS_MODE crystalWrapToDiligent(CrystalWrapType wrap) {
     switch (wrap) {
         case CRYSTAL_WRAP_TYPE_CLAMP:
             return TEXTURE_ADDRESS_CLAMP;
@@ -78,13 +84,42 @@ TEXTURE_ADDRESS_MODE crystalWrapToDiligent(CrystalWrapType wrap) {
     }
 }
 
-SHADER_TYPE crystalShaderStageToDiligent(CrystalShaderStage stage) {
+static SHADER_TYPE crystalShaderStageToDiligent(CrystalShaderStage stage) {
     switch (stage) {
         case CRYSTAL_SHADER_STAGE_VERTEX:
             return SHADER_TYPE_VERTEX;
         case CRYSTAL_SHADER_STAGE_FRAGMENT:
             return SHADER_TYPE_PIXEL;
+        case CRYSTAL_SHADER_STAGE_COMPUTE:
+            return SHADER_TYPE_COMPUTE;
     }
+}
+
+static SHADER_TYPE crystalVisibilityToDiligent(CrystalShaderVisibility visibility) {
+    switch (visibility) {
+        case CRYSTAL_SHADER_VISIBILITY_VERTEX:
+            return SHADER_TYPE_VERTEX;
+        case CRYSTAL_SHADER_VISIBILITY_FRAGMENT:
+            return SHADER_TYPE_PIXEL;
+        case CRYSTAL_SHADER_VISIBILITY_COMPUTE:
+            return SHADER_TYPE_COMPUTE;
+        case CRYSTAL_SHADER_VISIBILITY_VERTEX_FRAGMENT:
+            return SHADER_TYPE_VERTEX | SHADER_TYPE_PIXEL;
+    }
+}
+
+static std::vector<ShaderResourceVariableDesc> buildResourceVars(const CrystalResourceDesc* resources, size_t count) {
+    std::vector<ShaderResourceVariableDesc> vars;
+    vars.reserve(count);
+    for (size_t i = 0; i < count; i++) {
+        vars.push_back({
+            crystalVisibilityToDiligent(resources[i].visibility), 
+            resources[i].name, 
+            SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE 
+        });
+    }
+
+    return vars;
 }
 
 // Implementation
@@ -160,8 +195,21 @@ CrystalBufferHandle diligent_create_buffer(CrystalDiligentDeviceHandle handle, C
         case CRYSTAL_BUFFER_TYPE_UNIFORM:
             BufDesc.BindFlags = BIND_UNIFORM_BUFFER;
             break;
+        case CRYSTAL_BUFFER_TYPE_STORAGE:
+            BufDesc.BindFlags = BIND_SHADER_RESOURCE | BIND_UNORDERED_ACCESS;
+            BufDesc.Mode = BUFFER_MODE_STRUCTURED;
+            if (desc.stride == 0) {
+                std::cerr << "Crystal C++ [FATAL]: Invalid stride for buffer of type CRYSTAL_BUFFER_TYPE_STORAGE";
+                exit(EXIT_FAILURE);
+            }
+            BufDesc.ElementByteStride = desc.stride;
+
+            break;
     }
     switch (desc.usage) {
+        case CRYSTAL_BUFFER_USAGE_DEFAULT:
+            BufDesc.Usage = USAGE_DEFAULT;
+            break;
         case CRYSTAL_BUFFER_USAGE_IMMUTABLE:
             BufDesc.Usage = USAGE_IMMUTABLE;
             break;
@@ -171,7 +219,7 @@ CrystalBufferHandle diligent_create_buffer(CrystalDiligentDeviceHandle handle, C
             break;
         case CRYSTAL_BUFFER_USAGE_STREAM:
             BufDesc.Usage = USAGE_STAGING;
-            BufDesc.CPUAccessFlags = CPU_ACCESS_WRITE | CPU_ACCESS_READ;
+            BufDesc.CPUAccessFlags = CPU_ACCESS_READ;
             break;
     }
     BufDesc.Size = desc.size;
@@ -288,7 +336,7 @@ void diligent_destroy_image(CrystalDiligentDeviceHandle handle, CrystalImageHand
 }
 
 CrystalPipelineHandle diligent_create_pipeline(CrystalDiligentDeviceHandle handle, CrystalPipelineDesc desc) {
-    auto* shaderPair = reinterpret_cast<CrystalDiligentShader*>(desc.shader.ptr);
+    auto* shaderSet = reinterpret_cast<CrystalDiligentShader*>(desc.shader.ptr);
 
     GraphicsPipelineStateCreateInfo psoCreateInfo;
     auto& psoDesc = psoCreateInfo.PSODesc;
@@ -329,8 +377,6 @@ CrystalPipelineHandle diligent_create_pipeline(CrystalDiligentDeviceHandle handl
                 numComponents = 3;
                 break;
             case FLOAT4:
-                numComponents = 4;
-                break;
             case UBYTE4_NORM:
                 numComponents = 4;
                 break;
@@ -347,17 +393,12 @@ CrystalPipelineHandle diligent_create_pipeline(CrystalDiligentDeviceHandle handl
     graphicsPipeline.InputLayout.LayoutElements = layoutElems.data();
     graphicsPipeline.InputLayout.NumElements = static_cast<uint32_t>(layoutElems.size());
 
-    psoCreateInfo.pVS = shaderPair->vs;
-    psoCreateInfo.pPS = shaderPair->ps;
+    psoCreateInfo.pVS = shaderSet->vs;
+    psoCreateInfo.pPS = shaderSet->ps;
 
-    ShaderResourceVariableDesc vars[] = {
-        { SHADER_TYPE_VERTEX, "VSParams", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE },
-        { SHADER_TYPE_PIXEL, "Tex", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE },
-        { SHADER_TYPE_PIXEL, "Smp", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE },
-        { SHADER_TYPE_PIXEL, "LightParams", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE },
-    };
-    psoCreateInfo.PSODesc.ResourceLayout.Variables = vars;
-    psoCreateInfo.PSODesc.ResourceLayout.NumVariables = _countof(vars);
+    auto vars = buildResourceVars(desc.resources, desc.resources_len);
+    psoCreateInfo.PSODesc.ResourceLayout.Variables = vars.data();
+    psoCreateInfo.PSODesc.ResourceLayout.NumVariables = static_cast<uint32_t>(vars.size());
 
     IPipelineState* pso = nullptr;
     handle->device->CreateGraphicsPipelineState(psoCreateInfo, &pso);
@@ -425,28 +466,29 @@ void diligent_pipeline_apply_bindings(CrystalDiligentDeviceHandle handle, Crysta
         handle->context->SetIndexBuffer(reinterpret_cast<IBuffer*>(bindings.index_buffer.ptr), 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     }
 
-    if (bindings.uniform_buffers[0].ptr != nullptr) {
-        if (auto* var = pipeline->srb->GetVariableByName(SHADER_TYPE_VERTEX, "VSParams")) {
-            var->Set(reinterpret_cast<IBuffer*>(bindings.uniform_buffers[0].ptr));
-        }
-    }
+    for (size_t i = 0; i < bindings.resources_len; i++) {
+        const auto& res = bindings.resources[i];
 
-    if (bindings.uniform_buffers[1].ptr != nullptr) {
-        if (auto* var = pipeline->srb->GetVariableByName(SHADER_TYPE_PIXEL, "LightParams")) {
-            var->Set(reinterpret_cast<IBuffer*>(bindings.uniform_buffers[1].ptr));
+        auto* var = pipeline->srb->GetVariableByName(SHADER_TYPE_VERTEX, res.name);
+        if (!var) var = pipeline->srb->GetVariableByName(SHADER_TYPE_PIXEL, res.name);
+        if (!var) {
+            std::cerr << "Crystal C++: No variable named '" << res.name << "'\n";
+            continue;
         }
-    }
 
-    if (bindings.images[0].ptr != nullptr) {
-        auto* tex = reinterpret_cast<ITexture*>(bindings.images[0].ptr);
-        if (auto* var = pipeline->srb->GetVariableByName(SHADER_TYPE_PIXEL, "Tex")) {
-            var->Set(tex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
-        }
-    }
-
-    if (bindings.samplers[0].ptr != nullptr) {
-        if (auto* var = pipeline->srb->GetVariableByName(SHADER_TYPE_PIXEL, "Smp")) {
-            var->Set(reinterpret_cast<ISampler*>(bindings.samplers[0].ptr));
+        switch (res.kind) {
+            case CRYSTAL_RESOURCE_KIND_UNIFORM_BUFFER:
+            case CRYSTAL_RESOURCE_KIND_STORAGE_BUFFER:
+                var->Set(reinterpret_cast<IBuffer*>(res.handle_ptr));
+                break;
+            case CRYSTAL_RESOURCE_KIND_TEXTURE: {
+                auto* tex = reinterpret_cast<ITexture*>(res.handle_ptr);
+                var->Set(tex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+                break;
+            }
+            case CRYSTAL_RESOURCE_KIND_SAMPLER:
+                var->Set(reinterpret_cast<ISampler*>(res.handle_ptr));
+                break;
         }
     }
 
@@ -457,7 +499,7 @@ CrystalShaderHandle diligent_create_shader(CrystalDiligentDeviceHandle handle, C
     auto* pair = new CrystalDiligentShader;
 
     ShaderCreateInfo shaderCI;
-    shaderCI.SourceLanguage = SHADER_SOURCE_LANGUAGE_HLSL;
+    shaderCI.SourceLanguage = SHADER_SOURCE_LANGUAGE_BYTECODE;
     shaderCI.Desc.UseCombinedTextureSamplers = false;
 
     for (size_t i = 0; i < desc.stages_len; i++) {
@@ -465,9 +507,10 @@ CrystalShaderHandle diligent_create_shader(CrystalDiligentDeviceHandle handle, C
         auto stageType = crystalShaderStageToDiligent(stageDesc.stage);
 
         shaderCI.Desc.ShaderType = stageType;
-        shaderCI.Desc.Name = stageType == SHADER_TYPE_VERTEX ? "Vertex Shader" : "Pixel Shader";
+        shaderCI.Desc.Name = stageDesc.name;
         shaderCI.EntryPoint = stageDesc.entrypoint;
-        shaderCI.Source = stageDesc.source;
+        shaderCI.ByteCode = stageDesc.source;
+        shaderCI.ByteCodeSize = stageDesc.source_len;
 
         IShader* shader = nullptr;
         handle->device->CreateShader(shaderCI, &shader);
@@ -478,8 +521,10 @@ CrystalShaderHandle diligent_create_shader(CrystalDiligentDeviceHandle handle, C
 
         if (stageType == SHADER_TYPE_VERTEX) {
             pair->vs = shader;
-        } else {
+        } else if (stageType == SHADER_TYPE_PIXEL) {
             pair->ps = shader;
+        } else if (stageType == SHADER_TYPE_COMPUTE) {
+            pair->cs = shader;
         }
     }
 
@@ -492,6 +537,97 @@ void diligent_destroy_shader(CrystalDiligentDeviceHandle handle, CrystalShaderHa
     if (shader->ps) shader->ps->Release();
 
     delete shader;
+}
+
+CrystalComputePipelineHandle diligent_create_compute_pipeline(CrystalDiligentDeviceHandle handle, CrystalComputePipelineDesc desc) {
+    auto* shaderSet = reinterpret_cast<CrystalDiligentShader*>(desc.shader.ptr);
+    if (!shaderSet->cs) {
+        std::cerr << "Crystal C++ [FATAL]: Compute pipeline created with no compute shader stage\n";
+        exit(EXIT_FAILURE);
+    }
+
+    ComputePipelineStateCreateInfo psoCreateInfo;
+    PipelineStateDesc& psoDesc = psoCreateInfo.PSODesc;
+
+    psoDesc.Name = desc.name;
+    psoDesc.PipelineType = PIPELINE_TYPE_COMPUTE;
+
+    auto vars = buildResourceVars(desc.resources, desc.resources_len);
+    psoDesc.ResourceLayout.Variables = vars.data();
+    psoDesc.ResourceLayout.NumVariables = static_cast<uint32_t>(vars.size());
+
+    psoCreateInfo.pCS = shaderSet->cs;
+
+    IPipelineState* pso = nullptr;
+    handle->device->CreateComputePipelineState(psoCreateInfo, &pso);
+    if (!pso) {
+        std::cerr << "Crystal C++ [FATAL]: Compute pipeline state creation failed\n";
+        exit(EXIT_FAILURE);
+    }
+
+    auto* pipeline = new CrystalDiligentComputePipeline;
+    pipeline->pso = pso;
+    pso->CreateShaderResourceBinding(&pipeline->srb, true);
+
+    return { .ptr = pipeline };
+}
+
+void diligent_destroy_compute_pipeline(CrystalDiligentDeviceHandle handle, CrystalComputePipelineHandle pipeH) {
+    auto pipeline = static_cast<CrystalDiligentComputePipeline*>(pipeH.ptr);
+    pipeline->srb->Release();
+    pipeline->pso->Release();
+    delete pipeline;
+}
+
+void diligent_apply_compute_pipeline(CrystalDiligentDeviceHandle handle, CrystalComputePipelineHandle pipeH) {
+    auto pipeline = static_cast<CrystalDiligentComputePipeline*>(pipeH.ptr);
+    handle->context->SetPipelineState(pipeline->pso);
+}
+
+void diligent_apply_compute_bindings(CrystalDiligentDeviceHandle handle, CrystalComputePipelineHandle pipeH, CrystalBindings bindings) {
+    auto* pipeline = static_cast<CrystalDiligentComputePipeline*>(pipeH.ptr);
+
+    for (size_t i = 0; i < bindings.resources_len; i++) {
+        auto& res = bindings.resources[i];
+
+        auto* var = pipeline->srb->GetVariableByName(SHADER_TYPE_COMPUTE, res.name);
+        if (!var) {
+            std::cerr << "Crystal C++: No compute shader variable named '" << res.name << "'\n";
+            continue;
+        }
+
+        switch (res.kind) {
+            case CRYSTAL_RESOURCE_KIND_UNIFORM_BUFFER:
+                var->Set(reinterpret_cast<IBuffer*>(res.handle_ptr));
+                break;
+            case CRYSTAL_RESOURCE_KIND_STORAGE_BUFFER: {
+                auto* buf = reinterpret_cast<IBuffer*>(res.handle_ptr);
+                var->Set(buf->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
+                break;
+            }
+            case CRYSTAL_RESOURCE_KIND_TEXTURE: {
+                auto* tex = reinterpret_cast<ITexture*>(res.handle_ptr);
+                var->Set(tex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+                break;
+            }
+            case CRYSTAL_RESOURCE_KIND_SAMPLER:
+                var->Set(reinterpret_cast<ISampler*>(res.handle_ptr));
+                break;
+        }
+    }
+    
+    handle->context->CommitShaderResources(pipeline->srb, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+}
+
+void diligent_dispatch_compute(CrystalDiligentDeviceHandle handle, CrystalComputePipelineHandle pipeH, uint32_t groupsX, uint32_t groupsY, uint32_t groupsZ) {
+    auto pipeline = static_cast<CrystalDiligentComputePipeline*>(pipeH.ptr);
+
+    DispatchComputeAttribs attrs;
+    attrs.ThreadGroupCountX = groupsX;
+    attrs.ThreadGroupCountY = groupsY;
+    attrs.ThreadGroupCountZ = groupsZ;
+
+    handle->context->DispatchCompute(attrs);
 }
 
 void diligent_begin_pass(CrystalDiligentDeviceHandle handle, CrystalPassDesc desc) {
@@ -518,4 +654,16 @@ void diligent_end_pass(CrystalDiligentDeviceHandle handle) {
 
 void diligent_present(CrystalDiligentDeviceHandle handle) {
     handle->swapchain->Present();
+}
+
+CrystalBackend diligent_query_backend() {
+#ifdef CRYSTAL_D3D11_BACKEND
+    return CRYSTAL_BACKEND_DIRECT3D11;
+#elif CRYSTAL_D3D12_BACKEND
+    return CRYSTAL_BACKEND_DIRECT3D12;
+#elif CRYSTAL_OPENGL_BACKEND
+    return CRYSTAL_BACKEND_OPENGL;
+#elif CRYSTAL_VULKAN_BACKEND
+    return CRYSTAL_BACKEND_VULKAN;
+#endif
 }

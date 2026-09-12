@@ -10,9 +10,44 @@ typedef struct { void* ptr; } CrystalBufferHandle;
 typedef struct { void* ptr; } CrystalImageHandle;
 typedef struct { void* ptr; } CrystalShaderHandle;
 typedef struct { void* ptr; } CrystalPipelineHandle;
+typedef struct { void* ptr; } CrystalComputePipelineHandle;
 typedef struct { void* ptr; } CrystalSamplerHandle;
 
+typedef enum {
+    CRYSTAL_BACKEND_OPENGL,
+    CRYSTAL_BACKEND_DIRECT3D11,
+    CRYSTAL_BACKEND_DIRECT3D12,
+    CRYSTAL_BACKEND_VULKAN
+} CrystalBackend;
+
+typedef enum {
+    CRYSTAL_RESOURCE_KIND_UNIFORM_BUFFER,
+    CRYSTAL_RESOURCE_KIND_STORAGE_BUFFER,
+    CRYSTAL_RESOURCE_KIND_TEXTURE,
+    CRYSTAL_RESOURCE_KIND_SAMPLER
+} CrystalResourceKind;
+
+typedef enum {
+    CRYSTAL_SHADER_VISIBILITY_VERTEX,
+    CRYSTAL_SHADER_VISIBILITY_FRAGMENT,
+    CRYSTAL_SHADER_VISIBILITY_COMPUTE,
+    CRYSTAL_SHADER_VISIBILITY_VERTEX_FRAGMENT
+} CrystalShaderVisibility;
+
+typedef struct {
+    const char* name;
+    CrystalResourceKind kind;
+    CrystalShaderVisibility visibility;
+} CrystalResourceDesc;
+
+typedef struct {
+    const char* name;
+    CrystalResourceKind kind;
+    void* handle_ptr;
+} CrystalBoundResource;
+
 typedef enum { 
+    CRYSTAL_BUFFER_USAGE_DEFAULT,
     CRYSTAL_BUFFER_USAGE_IMMUTABLE, 
     CRYSTAL_BUFFER_USAGE_DYNAMIC, 
     CRYSTAL_BUFFER_USAGE_STREAM 
@@ -21,7 +56,8 @@ typedef enum {
 typedef enum { 
     CRYSTAL_BUFFER_TYPE_VERTEX, 
     CRYSTAL_BUFFER_TYPE_INDEX,
-    CRYSTAL_BUFFER_TYPE_UNIFORM
+    CRYSTAL_BUFFER_TYPE_UNIFORM,
+    CRYSTAL_BUFFER_TYPE_STORAGE
 } CrystalBufferType;
 
 typedef enum { 
@@ -51,6 +87,7 @@ typedef enum {
 typedef struct {
     const char* name;
     size_t size;
+    size_t stride;
     /// DEFAULT: VERTEX
     CrystalBufferType type;
     /// DEFAULT: IMMUTABLE
@@ -105,6 +142,8 @@ typedef struct {
     CrystalShaderHandle shader;
     const CrystalVertexAttr* layout;
     size_t layout_len;
+    const CrystalResourceDesc* resources;
+    size_t resources_len;
     /// DEFAULT: NONE
     CrystalIndexType index_type;
     /// DEFAULT: NONE
@@ -112,6 +151,13 @@ typedef struct {
     /// DEFAULT: FALSE
     bool depth_write;
 } CrystalPipelineDesc;
+
+typedef struct {
+    const char* name;
+    CrystalShaderHandle shader;
+    const CrystalResourceDesc* resources;
+    size_t resources_len;
+} CrystalComputePipelineDesc;
 
 typedef struct {
     uint32_t width; 
@@ -128,22 +174,21 @@ typedef struct {
     CrystalBufferHandle vertex_buffers[4];
     /// DEFAULT: NULL
     CrystalBufferHandle index_buffer;
-    /// DEFAULT: [NULL, NULL, NULL, NULL]
-    CrystalBufferHandle uniform_buffers[4];
-    /// DEFAULT: [NULL, NULL, NULL, NULL]
-    CrystalImageHandle images[4];
-    /// DEFAULT: [NULL, NULL, NULL, NULL]
-    CrystalSamplerHandle samplers[4];
+    const CrystalBoundResource* resources;
+    size_t resources_len;
 } CrystalBindings;
 
 typedef enum {
     CRYSTAL_SHADER_STAGE_VERTEX,
     CRYSTAL_SHADER_STAGE_FRAGMENT,
+    CRYSTAL_SHADER_STAGE_COMPUTE
 } CrystalShaderStage;
 
 typedef struct {
     CrystalShaderStage stage;
+    const char* name;
     const char* source;
+    size_t source_len;
     const char* entrypoint;
 } CrystalShaderStageDesc;
 

@@ -4,6 +4,7 @@ const std = @import("std");
 const sokol = @import("sokol");
 const Translator = @import("translate_c").Translator;
 const diligent_vendor = @import("diligent_engine");
+const slang_vendor = @import("slang");
 
 // The newlines are needed for these headers so concatenating doesn't break them
 const assimp_headers =
@@ -95,11 +96,16 @@ pub fn build(b: *std.Build) !void {
     const dep_translate_c = b.dependency("translate_c", .{});
     const dep_diligent = b.dependency("diligent_engine", 
         .{ .optimize = optimize, .backend = backend, .skip_cmake = skip_cmake });
+    const dep_slang = b.dependency("slang", 
+        .{ .optimize = optimize, .skip_cmake = skip_cmake });
     const dep_assimp = b.dependency("zig_assimp", .{
         .target = target, .optimize = optimize, .formats = "STL,Obj,FBX,glTF,glTF2", .double = false, .zlib = false });
 
     // Runs cmake for diligent engine
     const diligent_step = dependencyStep(dep_diligent, "diligent");
+
+    // Runs cmake for slang
+    const slang_step = dependencyStep(dep_slang, "slang");
 
     const os_headers = switch (target.result.os.tag) {
         .windows => windows_c_headers,
@@ -127,19 +133,19 @@ pub fn build(b: *std.Build) !void {
             });
         }
 
-        const diligent_shim_translate: Translator = .init(dep_translate_c, .{
-            .c_source_file = b.path("src/gpu/shim/diligent_shim.h"),
+        const diligent_glue_translate: Translator = .init(dep_translate_c, .{
+            .c_source_file = b.path("src/gpu/glue/diligent/diligent.h"),
             .target = target,
             .optimize = optimize
         });
 
-        const diligent_shim_cpp_path = b.path("src/gpu/shim/diligent_shim.cpp");
+        const diligent_glue_cpp_path = b.path("src/gpu/glue/diligent/diligent.cpp");
 
-        diligent_shim_translate.addIncludePath(b.path("src/gpu/shim"));
-        diligent_shim_translate.addIncludePath(dep_diligent.namedLazyPath("include"));
-        diligent_shim_translate.mod.link_libcpp = true;
-        diligent_shim_translate.mod.addCSourceFile(.{
-            .file = diligent_shim_cpp_path,
+        diligent_glue_translate.addIncludePath(b.path("src/gpu/glue/diligent"));
+        diligent_glue_translate.addIncludePath(dep_diligent.namedLazyPath("include"));
+        diligent_glue_translate.mod.link_libcpp = true;
+        diligent_glue_translate.mod.addCSourceFile(.{
+            .file = diligent_glue_cpp_path,
             .flags = &.{ 
                 b.fmt("-D{s}=1", .{ diligent_vendor.targetToCFlag(target) }), 
                 b.fmt("-D{s}", .{ backend.toCFlag() }),
@@ -162,28 +168,91 @@ pub fn build(b: *std.Build) !void {
             \\]
         , .{
             b.pathResolve(&.{ b.build_root.path orelse "." }), // directory
-            b.pathResolve(&.{ diligent_shim_cpp_path.getPath(b) }), // file
+            b.pathResolve(&.{ diligent_glue_cpp_path.getPath(b) }), // file
             diligent_vendor.targetToCFlag(target), // -D{s}=1
             backend.toCFlag(), // -D{s}
             b.pathResolve(&.{ b.build_root.path orelse ".", "vendor", "DiligentEngine", "install", "include" }), // -I{s}
-            b.pathResolve(&.{ b.build_root.path orelse ".", "src", "gpu", "shim" }), // -I{s}
-            b.pathResolve(&.{ diligent_shim_cpp_path.getPath(b) }), // -c "{s}"
+            b.pathResolve(&.{ b.build_root.path orelse ".", "src", "gpu", "glue", "diligent" }), // -I{s}
+            b.pathResolve(&.{ diligent_glue_cpp_path.getPath(b) }), // -c "{s}"
         });
 
         const write_cc = b.addWriteFile("compile_commands.json", cc_entry);
         const update = b.addUpdateSourceFiles();
         update.addCopyFileToSource(write_cc.getDirectory().path(b, "compile_commands.json"), ".clangd-db/compile_commands.json");
 
-        const cdb_step = b.step("clang_db", "Generates compile_commands.json for Diligent shim");
+        const cdb_step = b.step("clang_db_diligent", "Generates compile_commands.json for Diligent glue");
         cdb_step.dependOn(&update.step);
         diligent_step.dependOn(cdb_step);
 
         if (target.result.os.tag == .macos and sdk != null) {
-            sdk.?.applyToTranslator(diligent_shim_translate);
+            sdk.?.applyToTranslator(diligent_glue_translate);
         }
 
-        diligent_shim_translate.run.step.dependOn(diligent_step);
-        break :blk diligent_shim_translate.mod;
+        diligent_glue_translate.run.step.dependOn(diligent_step);
+        break :blk diligent_glue_translate.mod;
+    };
+
+    const slang_mod = blk: {
+        if (skip_cmake) {
+            break :blk b.createModule(.{
+                .root_source_file = null,
+                .target = target,
+                .optimize = optimize,
+            });
+        }
+
+        const slang_glue_translate: Translator = .init(dep_translate_c, .{
+            .c_source_file = b.path("src/gpu/glue/slang/slang.h"),
+            .target = target,
+            .optimize = optimize
+        });
+
+        const slang_glue_cpp_path = b.path("src/gpu/glue/slang/slang.cpp");
+
+        slang_glue_translate.addIncludePath(b.path("src/gpu/glue/slang"));
+        slang_glue_translate.addIncludePath(dep_slang.namedLazyPath("include"));
+        slang_glue_translate.mod.link_libcpp = true;
+        slang_glue_translate.mod.addCSourceFile(.{
+            .file = slang_glue_cpp_path,
+            .flags = &.{ 
+                "-std=c++17" 
+            },
+        });
+
+        const cc_entry = try std.fmt.allocPrint(b.allocator,
+            \\[
+            \\  {{
+            \\      "directory": "{s}",
+            \\      "file": "{s}",
+            \\      "arguments": [
+            \\          "clang++", "-std=c++17",
+            \\          "-I{s}", "-I{s}",
+            \\          "-c", "{s}"
+            \\      ]
+            \\  }}
+            \\]
+        , .{
+            b.pathResolve(&.{ b.build_root.path orelse "." }), // directory
+            b.pathResolve(&.{ slang_glue_cpp_path.getPath(b) }), // file
+            b.pathResolve(&.{ b.build_root.path orelse ".", "vendor", "slang", "install", "include" }), // -I{s}
+            b.pathResolve(&.{ b.build_root.path orelse ".", "src", "gpu", "glue", "slang" }), // -I{s}
+            b.pathResolve(&.{ slang_glue_cpp_path.getPath(b) }), // -c "{s}"
+        });
+
+        const write_cc = b.addWriteFile("compile_commands.json", cc_entry);
+        const update = b.addUpdateSourceFiles();
+        update.addCopyFileToSource(write_cc.getDirectory().path(b, "compile_commands.json"), ".clangd-db/compile_commands.json");
+
+        const cdb_step = b.step("clang_db_slang", "Generates compile_commands.json for Slang glue");
+        cdb_step.dependOn(&update.step);
+        slang_step.dependOn(cdb_step);
+
+        if (target.result.os.tag == .macos and sdk != null) {
+            sdk.?.applyToTranslator(slang_glue_translate);
+        }
+
+        slang_glue_translate.run.step.dependOn(slang_step);
+        break :blk slang_glue_translate.mod;
     };
 
     const engine_mod = b.addModule("engine", .{
@@ -199,6 +268,7 @@ pub fn build(b: *std.Build) !void {
             .{ .name = "c", .module = translator.mod },
             .{ .name = "assimp", .module = assimp_translator.mod },
             .{ .name = "diligent", .module = diligent_mod },
+            .{ .name = "slang", .module = slang_mod }
         }
     });
 
@@ -235,6 +305,21 @@ pub fn build(b: *std.Build) !void {
 
         const diligent_vk_static_dir = dep_diligent.namedLazyPath("lib-vk-static-build");
         engine_mod.addObjectFile(diligent_vk_static_dir.path(b, "libDiligent-GraphicsEngineVk-static.a"));
+    }
+
+    // Slang
+    if (!skip_cmake) {
+        engine_mod.addIncludePath(dep_slang.namedLazyPath("include"));
+        engine_mod.addLibraryPath(dep_slang.namedLazyPath("lib"));
+
+        const slang_lib_dir = dep_slang.namedLazyPath("lib-build");
+        for (slang_vendor.static_libs) |lib_name| {
+            engine_mod.addObjectFile(slang_lib_dir.path(b, b.fmt("lib{s}.a", .{ lib_name })));
+        }
+
+        engine_mod.addObjectFile(dep_slang.namedLazyPath("lib-miniz"));
+        engine_mod.addObjectFile(dep_slang.namedLazyPath("lib-cmark"));
+        engine_mod.addObjectFile(dep_slang.namedLazyPath("lib-lz4"));
     }
 
     if (target.result.os.tag == .macos and sdk != null) {

@@ -1,8 +1,20 @@
 {
-  "$schema": "https://raw.githubusercontent.com/LuaLS/vscode-lua/master/setting/schema.json",
+  "$schema": "https://githubusercontent.com",
   "runtime.version": "Lua 5.5",
   "format.enable": true,
   "workspace": {
-    "library": ["scripts/api"]
+    "checkThirdParty": false,
+    "library": [
+      "demos/example/asets/scripts"
+    ],
+    "ignoreDir": [
+      "**/*",
+      "*"
+    ],
+    "maxPreload": 1,
+    "preloadFileSize": 1
+  },
+  "diagnostics": {
+    "ignoredFiles": "Disable"
   }
 }

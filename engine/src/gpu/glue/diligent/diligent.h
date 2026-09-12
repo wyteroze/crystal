@@ -1,7 +1,7 @@
 // Copyright 2026 wyteroze. Licensed under the Apache-2.0 license.
 
 #pragma once
-#include "crystal_type_glue.h"
+#include "../crystal_type_glue.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -35,6 +35,13 @@ void diligent_apply_pipeline(CrystalDiligentDeviceHandle handle, CrystalPipeline
 void diligent_draw_pipeline(CrystalDiligentDeviceHandle handle, CrystalShaderHandle pipeH, uint32_t base, uint32_t count, uint32_t instances);
 void diligent_pipeline_apply_bindings(CrystalDiligentDeviceHandle handle, CrystalPipelineHandle pipeH, CrystalBindings bindings);
 
+// Compute pipeline
+CrystalComputePipelineHandle diligent_create_compute_pipeline(CrystalDiligentDeviceHandle handle, CrystalComputePipelineDesc desc);
+void diligent_destroy_compute_pipeline(CrystalDiligentDeviceHandle handle, CrystalComputePipelineHandle pipeH);
+void diligent_apply_compute_pipeline(CrystalDiligentDeviceHandle handle, CrystalComputePipelineHandle pipeH);
+void diligent_apply_compute_bindings(CrystalDiligentDeviceHandle handle, CrystalComputePipelineHandle pipeH, CrystalBindings bindings);
+void diligent_dispatch_compute(CrystalDiligentDeviceHandle handle, CrystalComputePipelineHandle pipeH, uint32_t groupsX, uint32_t groupsY, uint32_t groupsZ);
+
 // Shader
 CrystalShaderHandle diligent_create_shader(CrystalDiligentDeviceHandle handle, CrystalShaderDesc desc);
 void diligent_destroy_shader(CrystalDiligentDeviceHandle handle, CrystalShaderHandle shdH);
@@ -45,6 +52,7 @@ void diligent_end_pass(CrystalDiligentDeviceHandle handle);
 
 // Misc
 void diligent_present(CrystalDiligentDeviceHandle handle);
+CrystalBackend diligent_query_backend();
 
 #ifdef __cplusplus
 }

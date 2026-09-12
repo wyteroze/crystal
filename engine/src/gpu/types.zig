@@ -4,10 +4,11 @@ pub const BufferHandle = struct { ptr: ?*anyopaque };
 pub const ImageHandle = struct { ptr: ?*anyopaque };
 pub const ShaderHandle = struct { ptr: ?*anyopaque };
 pub const PipelineHandle = struct { ptr: ?*anyopaque };
+pub const ComputePipelineHandle = struct { ptr: ?*anyopaque };
 pub const SamplerHandle = struct { ptr: ?*anyopaque };
 
-pub const BufferUsage = enum { immutable, dynamic, stream };
-pub const BufferType = enum { vertex, index, uniform };
+pub const BufferUsage = enum { default, immutable, dynamic, stream };
+pub const BufferType = enum { vertex, index, uniform, storage };
 
 pub const PixelFormat = enum {
     /// 4 channels, 8 bits each, 32 total.

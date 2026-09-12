@@ -86,11 +86,7 @@ const render = struct {
             const rot = w.getComponent(entity, ctx.rot_id, Rotation).?.*;
             
             const model: math.Mat4 = .fromTRS(pos, .fromEuler(.fromSimd(rot.simd() * @as(math.Vec3.Simd3, @splat(std.math.pi / 180.0)))), .one);
-            const vs_params: [3][4][4]f32 = .{
-                @bitCast(model.transpose()),
-                @bitCast(view.transpose()),
-                @bitCast(ctx.proj.transpose()),
-            };
+            const vs_params: [3][4][4]f32 = .{ @bitCast(model), @bitCast(view), @bitCast(ctx.proj) };
 
             const l = ctx.light_params;
             const light_params_flattened: [3][4]f32 = .{
@@ -99,13 +95,17 @@ const render = struct {
                 .{ l.ambient.r(), l.ambient.g(), l.ambient.b(), 0 }, // Last value is padding
             };
             
-            ctx.pipeline.applyBindings(.{ 
+            ctx.pipeline.applyBindings(.{
                 .vertex_buffers = .{ ctx.mesh.vertex_buffer.handle, null, null, null }, 
                 .index_buffer = ctx.mesh.index_buffer.handle,
-                .uniform_buffers = .{ ctx.ubuf.handle, ctx.light_ubuf.handle, null, null },
-                .images = .{ ctx.img.handle.handle, null, null, null },
-                .samplers = .{ ctx.sampler.handle, null, null, null }
+                .resources = &.{
+                    .{ .name = "VSParams", .handle = .{ .uniform_buffer = ctx.ubuf.handle } },
+                    .{ .name = "Tex", .handle = .{ .texture = ctx.img.handle.handle } },
+                    .{ .name = "Smp", .handle = .{ .sampler = ctx.sampler.handle } },
+                    .{ .name = "LightParams", .handle = .{ .uniform_buffer = ctx.light_ubuf.handle } }
+                }
             });
+
             ctx.ubuf.update(std.mem.asBytes(&vs_params));
             ctx.light_ubuf.update(std.mem.asBytes(&light_params_flattened));
 
@@ -175,7 +175,7 @@ pub fn main(init: std.process.Init) !void {
     defer platform.destroySurface(surface);
 
     var gpu_allocator: core.TrackedAllocator = .init(allocator, "Gpu");
-    var gpu_device: gpu.GpuDevice = .init(.initDiligent(surface.handle, surface_size));
+    var gpu_device: gpu.GpuDevice = try .init(gpu_allocator.allocator(), .initDiligent(surface.handle, surface_size));
     defer gpu_device.deinit();
 
     var asset_allocator: core.TrackedAllocator = .init(allocator, "Assets");
@@ -251,6 +251,12 @@ pub fn main(init: std.process.Init) !void {
         .index_type = .uint32,
         .cull_mode = .none,
         .depth_write = true,
+        .resources = &.{
+            .{ .name = "VSParams", .kind = .uniform_buffer, .visibility = .vertex_fragment },
+            .{ .name = "Tex", .kind = .texture, .visibility = .vertex_fragment },
+            .{ .name = "Smp", .kind = .sampler, .visibility = .vertex_fragment },
+            .{ .name = "LightParams", .kind = .uniform_buffer, .visibility = .vertex_fragment }
+        },
         .layout = &.{ 
             .{ .offset = 0, .format = .float3 }, // position
             .{ .offset = 12, .format = .float3 }, // normal

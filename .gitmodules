@@ -1,3 +1,6 @@
 [submodule "engine/vendor/DiligentEngine/src"]
 	path = engine/vendor/DiligentEngine/src
 	url = https://github.com/DiligentGraphics/DiligentEngine.git
+[submodule "engine/vendor/slang/src"]
+	path = engine/vendor/slang/src
+	url = https://github.com/shader-slang/slang.git

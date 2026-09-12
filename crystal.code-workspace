@@ -16,7 +16,20 @@
 	"settings": {
         "clangd.fallbackFlags": [
             "-I./engine/vendor/DiligentEngine/install/include",
-            "-I./engine/src/gpu/shim",
-        ]
+            "-I./engine/vendor/slang/build/Release/include",
+            "-I./engine/src/gpu/glue/diligent",
+            "-I./engine/src/gpu/glue/slang"
+        ],
+        "Lua.workspace.ignoreDir": [
+            "**/*",
+            "*"
+        ],
+        "Lua.workspace.library": [
+            "demos/example/asets/scripts"
+        ],
+        "Lua.workspace.maxPreload": 1,
+        "Lua.workspace.preloadFileSize": 1,
+        "Lua.workspace.checkThirdParty": false,
+        "Lua.diagnostics.ignoredFiles": "Disable"
 	}
 }

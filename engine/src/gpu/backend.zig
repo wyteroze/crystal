@@ -45,15 +45,7 @@ pub const Backend = union(enum) {
         return switch (self) { inline else => |b| b.destroyImage(h) };
     }
 
-    pub fn createPipeline(self: Backend, d: desc.PipelineDesc) types.PipelineHandle {
-        return switch (self) { inline else => |b| b.createPipeline(d) };
-    }
-
-    pub fn deletePipeline(self: Backend, h: types.PipelineHandle) void {
-        return switch (self) { inline else => |b| b.destroyPipeline(h) };
-    }
-
-    pub fn createShader(self: Backend, d: anytype) types.ShaderHandle {
+    pub fn createShader(self: Backend, d: desc.ShaderDesc) types.ShaderHandle {
         return switch (self) { inline else => |b| b.createShader(d) };
     }
 
@@ -63,6 +55,14 @@ pub const Backend = union(enum) {
 
     pub fn beginPass(self: Backend, d: desc.PassDesc) void {
         switch (self) { inline else => |b| b.beginPass(d) }
+    }
+
+    pub fn createPipeline(self: Backend, d: desc.PipelineDesc) types.PipelineHandle {
+        return switch (self) { inline else => |b| b.createPipeline(d) };
+    }
+
+    pub fn deletePipeline(self: Backend, h: types.PipelineHandle) void {
+        return switch (self) { inline else => |b| b.destroyPipeline(h) };
     }
 
     pub fn applyPipeline(self: Backend, pipeline: types.PipelineHandle) void {
@@ -77,11 +77,35 @@ pub const Backend = union(enum) {
         switch (self) { inline else => |b| b.drawPipeline(pipeline, base, count, instances) }
     }
 
+    pub fn createComputePipeline(self: Backend, d: desc.ComputePipelineDesc) types.ComputePipelineHandle {
+        return switch (self) { inline else => |b| b.createComputePipeline(d) };
+    }
+
+    pub fn deleteComputePipeline(self: Backend, h: types.ComputePipelineHandle) void {
+        return switch (self) { inline else => |b| b.destroyComputePipeline(h) };
+    }
+
+    pub fn applyComputePipeline(self: Backend, h: types.ComputePipelineHandle) void {
+        switch (self) { inline else => |b| b.applyComputePipeline(h) }
+    }
+
+    pub fn applyComputeBindings(self: Backend, h: types.ComputePipelineHandle, binds: desc.Bindings) void {
+        switch (self) { inline else => |b| b.applyComputeBindings(h, binds) }
+    }
+
+    pub fn dispatchCompute(self: Backend, h: types.ComputePipelineHandle, groups_x: u32, groups_y: u32, groups_z: u32) void {
+        switch (self) { inline else => |b| b.dispatchCompute(h, groups_x, groups_y, groups_z) }
+    }
+
     pub fn endPass(self: Backend) void {
         switch (self) { inline else => |b| b.endPass() }
     }
 
     pub fn present(self: Backend) void {
         switch (self) { inline else => |b| b.present() }
+    }
+
+    pub fn queryBackend(self: Backend) desc.Backend {
+        return switch (self) { inline else => |b| b.queryBackend() };
     }
 };

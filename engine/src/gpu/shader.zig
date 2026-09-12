@@ -6,7 +6,7 @@ const desc = @import("desc.zig");
 pub fn basicShaderDesc() desc.ShaderDesc {
     const basic = @import("shaders/basic.zig");
     return .{ .stages = &.{
-        .{ .stage = .vertex, .source = basic.vs_source, .entrypoint = "main" },
-        .{ .stage = .fragment, .source = basic.ps_source, .entrypoint = "main" }
+        .{ .name = "BasicShader: vertex", .stage = .vertex, .source = basic.source, .entrypoint = "vertexMain" },
+        .{ .name = "BasicShader: pixel", .stage = .fragment, .source = basic.source, .entrypoint = "fragmentMain" }
     } };
 }
