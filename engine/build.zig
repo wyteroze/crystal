@@ -165,7 +165,7 @@ pub fn build(b: *std.Build) !void {
             b.pathResolve(&.{ diligent_shim_cpp_path.getPath(b) }), // file
             diligent_vendor.targetToCFlag(target), // -D{s}=1
             backend.toCFlag(), // -D{s}
-            b.pathResolve(&.{ dep_diligent.namedLazyPath("include").getPath(b) }), // -I{s}
+            b.pathResolve(&.{ b.build_root.path orelse ".", "vendor", "DiligentEngine", "install", "include" }), // -I{s}
             b.pathResolve(&.{ b.build_root.path orelse ".", "src", "gpu", "shim" }), // -I{s}
             b.pathResolve(&.{ diligent_shim_cpp_path.getPath(b) }), // -c "{s}"
         });

@@ -64,21 +64,17 @@ pub fn build(b: *std.Build) !void {
     const src_path = try root.join(b.allocator, &.{ "src" });
     const build_path = try root.join(b.allocator, &.{ "build" });
 
-    const install_prefix = try root.join(b.allocator, &.{ "install" });
     // Building with debug info severely bloats .zig-cache (~1.5gb per build)
     const cmake_build_type = "Release"; _ = optimize; // optimizeModeToCMakeBuildType(optimize);
 
     const cmake_configure = b.addSystemCommand(&.{ "cmake", "-S", src_path, "-B", build_path, "-G", "Ninja" });
     cmake_configure.setCwd(.{ .cwd_relative = src_path });
+    const install_out = cmake_configure.addPrefixedOutputDirectoryArg("-DCMAKE_INSTALL_PREFIX=", "install");
+
     cmake_configure.addArgs(&.{
         "-DDILIGENT_BUILD_TOOLS=OFF",
-        b.fmt("-DCMAKE_INSTALL_PREFIX={s}", .{install_prefix}),
         b.fmt("-DCMAKE_BUILD_TYPE={s}", .{ cmake_build_type }),
-        b.fmt("-DCMAKE_CXX_FLAGS=-D{s} -g0 -D{s}=1 -DCRYSTAL_DILIGENT_INCLUDE={s}", .{ 
-            backend.toCFlag(), 
-            targetToCFlag(target),
-            b.pathJoin(&.{ install_prefix, "include" })
-        }),
+        b.fmt("-DCMAKE_CXX_FLAGS=-D{s} -g0 -D{s}=1", .{ backend.toCFlag(), targetToCFlag(target) }),
         boolFlag(b, "DILIGENT_BUILD_SAMPLES", samples),
         boolFlag(b, "DILIGENT_BUILD_TESTS", tests),
         boolFlag(b, "DILIGENT_NO_OPENGL", false),
@@ -87,8 +83,7 @@ pub fn build(b: *std.Build) !void {
         boolFlag(b, "DILIGENT_NO_VULKAN", backend != .vulkan)
     });
 
-    const cmake_build = b.addSystemCommand(&.{ "cmake", "--build", build_path });
-    cmake_build.addArgs(&.{ "--config", cmake_build_type, "--parallel", b.fmt("{d}", .{ try std.Thread.getCpuCount() }) });
+    const cmake_build = b.addSystemCommand(&.{ "cmake", "--build", build_path, "--config", cmake_build_type, "--parallel", b.fmt("{d}", .{ try std.Thread.getCpuCount() }) });
     cmake_build.step.dependOn(&cmake_configure.step);
 
     const cmake_install = b.addSystemCommand(&.{ "cmake", "--install", build_path });
@@ -97,17 +92,12 @@ pub fn build(b: *std.Build) !void {
     step.dependOn(&cmake_install.step);
     b.getInstallStep().dependOn(step);
 
-    const include_lazy_path = try b.allocator.create(std.Build.GeneratedFile);
-    include_lazy_path.* = .{ .step = &cmake_install.step, .path = b.pathJoin(&.{ install_prefix, "include" }) };
-    b.addNamedLazyPath("include", .{ .generated = .{ .file = include_lazy_path } });
-
-    const lib_core_lazy_path = try b.allocator.create(std.Build.GeneratedFile);
-    lib_core_lazy_path.* = .{ .step = &cmake_install.step, .path = b.pathJoin(&.{ install_prefix, "lib", "DiligentCore", cmake_build_type }) };
-    b.addNamedLazyPath("lib-core", .{ .generated = .{ .file = lib_core_lazy_path } });
+    b.addNamedLazyPath("include", install_out.path(b, "include"));
+    b.addNamedLazyPath("lib-core", install_out.path(b, b.pathJoin(&.{ "lib", "DiligentCore", cmake_build_type })));
 
     const vk_static_lazy_path = try b.allocator.create(std.Build.GeneratedFile);
     vk_static_lazy_path.* = .{
-        .step = &cmake_build.step,
+        .step = &cmake_install.step,
         .path = b.pathJoin(&.{ build_path, "DiligentCore", "Graphics", "GraphicsEngineVulkan" })
     };
     b.addNamedLazyPath("lib-vk-static-build", .{ .generated = .{ .file = vk_static_lazy_path } });
