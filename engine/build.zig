@@ -76,6 +76,82 @@ fn dependencyStep(dependency: *std.Build.Dependency, step_name: []const u8) *std
     return &found.step;
 }
 
+const CompileCommands = struct {
+    const Command = struct {
+        b: *std.Build = undefined, // This gets set when CompileCommands.addCommand is called
+        cmd: []const u8,
+        std: []const u8,
+        file_path: std.Build.LazyPath,
+        cxx_args: []const []const u8 = &.{},
+        include_paths: []const std.Build.LazyPath = &.{},
+
+        pub fn format(
+            self: Command,
+            writer: *std.Io.Writer,
+        ) !void {
+            //  {{
+            //      "directory": "{s}",
+            //      "file": "{s}",
+            //      "arguments": [
+            //          "clang++", "-std=c++17",
+            //          "-D{s}=1", "-D{s}",
+            //          "-I{s}", "-I{s}",
+            //          "-c", "{s}"
+            //      ]
+            //  }}
+
+            try writer.writeAll("{"); {
+                try writer.print("\"directory\": \"{s}\",", .{ self.b.path(".").getPath(self.b) });
+                try writer.print("\"file\": \"{s}\",", .{ self.file_path.getPath(self.b) });
+
+                try writer.writeAll("\"arguments\": ["); {
+                    try writer.print("\"{s}\", \"-std={s}\"", .{ self.cmd, self.std });
+                    for (self.cxx_args) |a| try writer.print(", \"-D{s}\"", .{ a });
+                    for (self.include_paths) |path| try writer.print(", \"-I{s}\"", .{ path.getPath(self.b) });
+                    try writer.print(", \"-c\", \"{s}\"", .{ self.file_path.getPath(self.b) });
+                } try writer.writeAll("]");
+            } try writer.writeAll("}");
+        }
+    };
+
+    b: *std.Build,
+    commands: std.ArrayList(Command),
+    step: *std.Build.Step,
+
+    pub fn init(b: *std.Build) CompileCommands {
+        return .{
+            .b = b,
+            .commands = .empty,
+            .step = b.step("compile_commands", "Generate compile_commands.json")
+        };
+    }
+
+    pub fn addCommand(self: *CompileCommands, command: Command) void {
+        const cmd = self.b.allocator.create(Command) catch @panic("Out of memory");
+        cmd.* = command;
+        cmd.b = self.b;
+
+        self.commands.append(self.b.allocator, cmd.*) catch @panic("Out of memory");
+    }
+
+    pub fn finalize(self: *CompileCommands) !void {
+        var allocating_writer: std.Io.Writer.Allocating = .init(self.b.allocator);
+        const writer = &allocating_writer.writer;
+
+        try writer.writeAll("[");
+        for (self.commands.items, 0..) |cmd, i| {
+            if (i != 0) try writer.writeAll(",");
+            try writer.print("{f}", .{ cmd });
+        }
+        try writer.writeAll("]");
+        
+        const write_cc = self.b.addWriteFile("compile_commands.json", try allocating_writer.toOwnedSlice());
+        const update = self.b.addUpdateSourceFiles();
+        update.addCopyFileToSource(write_cc.getDirectory().path(self.b, "compile_commands.json"), ".clangd-db/compile_commands.json");
+        self.step.dependOn(&update.step);
+    }
+};
+
 // There is like a 99% chance this does not compile on anything other than mac because of missing libraries
 // It shouldn't be too hard to fix though. I'm just focused on the engine for now
 pub fn build(b: *std.Build) !void {
@@ -123,6 +199,9 @@ pub fn build(b: *std.Build) !void {
     const assimp_translator: Translator =
         .init(dep_translate_c, .{ .name = "Translate assimp", .c_source_file = assimp_h, .target = target, .optimize = optimize });
 
+    var compile_commands: CompileCommands = .init(b);
+    defer compile_commands.finalize() catch @panic("Out of memory");
+
     const diligent_mod = blk: {
         if (skip_cmake) {
             break :blk b.createModule(.{
@@ -152,36 +231,19 @@ pub fn build(b: *std.Build) !void {
             },
         });
 
-        const cc_entry = try std.fmt.allocPrint(b.allocator,
-            \\[
-            \\  {{
-            \\      "directory": "{s}",
-            \\      "file": "{s}",
-            \\      "arguments": [
-            \\          "clang++", "-std=c++17",
-            \\          "-D{s}=1", "-D{s}",
-            \\          "-I{s}", "-I{s}",
-            \\          "-c", "{s}"
-            \\      ]
-            \\  }}
-            \\]
-        , .{
-            b.pathResolve(&.{ b.build_root.path orelse "." }), // directory
-            b.pathResolve(&.{ diligent_glue_cpp_path.getPath(b) }), // file
-            diligent_vendor.targetToCFlag(target), // -D{s}=1
-            backend.toCFlag(), // -D{s}
-            b.pathResolve(&.{ b.build_root.path orelse ".", "vendor", "DiligentEngine", "install", "include" }), // -I{s}
-            b.pathResolve(&.{ b.build_root.path orelse ".", "src", "gpu", "glue", "diligent" }), // -I{s}
-            b.pathResolve(&.{ diligent_glue_cpp_path.getPath(b) }), // -c "{s}"
+        diligent_step.dependOn(compile_commands.step);
+        compile_commands.addCommand(.{
+            .cmd = "clang++", .std = "c++17",
+            .file_path = diligent_glue_cpp_path,
+            .cxx_args = &.{
+                b.fmt("{s}=1", .{ diligent_vendor.targetToCFlag(target) }),
+                b.fmt("{s}", .{ backend.toCFlag() }),
+            },
+            .include_paths = &.{
+                b.path("vendor/DiligentEngine/install/include"),
+                b.path("src/gpu/glue/diligent/")
+            }
         });
-
-        const write_cc = b.addWriteFile("compile_commands.json", cc_entry);
-        const update = b.addUpdateSourceFiles();
-        update.addCopyFileToSource(write_cc.getDirectory().path(b, "compile_commands.json"), ".clangd-db/compile_commands.json");
-
-        const cdb_step = b.step("clang_db_diligent", "Generates compile_commands.json for Diligent glue");
-        cdb_step.dependOn(&update.step);
-        diligent_step.dependOn(cdb_step);
 
         if (target.result.os.tag == .macos and sdk != null) {
             sdk.?.applyToTranslator(diligent_glue_translate);
@@ -201,7 +263,7 @@ pub fn build(b: *std.Build) !void {
         }
 
         const slang_glue_translate: Translator = .init(dep_translate_c, .{
-            .c_source_file = b.path("src/gpu/glue/slang/slang.h"),
+            .c_source_file = b.path("src/gpu/glue/slang/glue_slang.h"),
             .target = target,
             .optimize = optimize
         });
@@ -218,33 +280,16 @@ pub fn build(b: *std.Build) !void {
             },
         });
 
-        const cc_entry = try std.fmt.allocPrint(b.allocator,
-            \\[
-            \\  {{
-            \\      "directory": "{s}",
-            \\      "file": "{s}",
-            \\      "arguments": [
-            \\          "clang++", "-std=c++17",
-            \\          "-I{s}", "-I{s}",
-            \\          "-c", "{s}"
-            \\      ]
-            \\  }}
-            \\]
-        , .{
-            b.pathResolve(&.{ b.build_root.path orelse "." }), // directory
-            b.pathResolve(&.{ slang_glue_cpp_path.getPath(b) }), // file
-            b.pathResolve(&.{ b.build_root.path orelse ".", "vendor", "slang", "install", "include" }), // -I{s}
-            b.pathResolve(&.{ b.build_root.path orelse ".", "src", "gpu", "glue", "slang" }), // -I{s}
-            b.pathResolve(&.{ slang_glue_cpp_path.getPath(b) }), // -c "{s}"
+        compile_commands.addCommand(.{
+            .cmd = "clang++", .std = "c++17",
+            .file_path = slang_glue_cpp_path,
+            .include_paths = &.{
+                b.path("vendor/slang/build/Release/include"),
+                b.path("src/gpu/glue/slang/")
+            }
         });
 
-        const write_cc = b.addWriteFile("compile_commands.json", cc_entry);
-        const update = b.addUpdateSourceFiles();
-        update.addCopyFileToSource(write_cc.getDirectory().path(b, "compile_commands.json"), ".clangd-db/compile_commands.json");
-
-        const cdb_step = b.step("clang_db_slang", "Generates compile_commands.json for Slang glue");
-        cdb_step.dependOn(&update.step);
-        slang_step.dependOn(cdb_step);
+        slang_step.dependOn(compile_commands.step);
 
         if (target.result.os.tag == .macos and sdk != null) {
             sdk.?.applyToTranslator(slang_glue_translate);

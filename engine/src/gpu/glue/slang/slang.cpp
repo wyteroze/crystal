@@ -1,6 +1,6 @@
 // Copyright 2026 wyteroze. Licensed under the Apache-2.0 license.
 
-#include "slang.h"
+#include "glue_slang.h"
 #include <slang.h>
 #include <slang-com-ptr.h>
 #include <string>
