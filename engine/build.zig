@@ -90,7 +90,6 @@ pub fn build(b: *std.Build) !void {
     
     const dep_sdl3 = b.dependency("sdl3", .{ .target = target, .optimize = optimize });
     const dep_zlua = b.dependency("zlua", .{ .target = target, .optimize = optimize, .lang = .lua55 });
-    const dep_sokol = b.dependency("sokol", .{ .target = target, .optimize = optimize, .gl = true });
     const dep_toml = b.dependency("toml", .{ .target = target, .optimize = optimize });
     const dep_zigimg = b.dependency("zigimg", .{ .target = target, .optimize = optimize });
     const dep_translate_c = b.dependency("translate_c", .{});
@@ -262,7 +261,6 @@ pub fn build(b: *std.Build) !void {
         .imports = &.{
             .{ .name = "sdl3", .module = dep_sdl3.module("sdl3") },
             .{ .name = "zlua", .module = dep_zlua.module("zlua") },
-            .{ .name = "sokol", .module = dep_sokol.module("sokol") },
             .{ .name = "toml", .module = dep_toml.module("toml") },
             .{ .name = "zigimg", .module = dep_zigimg.module("zigimg") },
             .{ .name = "c", .module = translator.mod },
@@ -271,15 +269,6 @@ pub fn build(b: *std.Build) !void {
             .{ .name = "slang", .module = slang_mod }
         }
     });
-
-    if (target.result.os.tag == .macos) {
-        const dep_zig_objc = b.dependency("zig_objc", .{
-            .target = target,
-            .optimize = optimize,
-            .@"add-paths" = false
-        });
-        engine_mod.addImport("objc", dep_zig_objc.module("objc"));
-    }
 
     const engine_lib = b.addLibrary(.{
         .name = "engine",
@@ -332,10 +321,6 @@ pub fn build(b: *std.Build) !void {
         engine_mod.linkFramework("OpenGL", .{});
         engine_mod.linkFramework("IOKit", .{});
         engine_mod.linkFramework("CoreServices", .{});
-
-        // Sokol
-        const scl = dep_sokol.artifact("sokol_clib");
-        sdk.?.applyToModule(scl.root_module);
 
         // Link zlib for assimp
         lib_assimp.root_module.addFrameworkPath(.{ .cwd_relative = sdk.?.frameworks });
