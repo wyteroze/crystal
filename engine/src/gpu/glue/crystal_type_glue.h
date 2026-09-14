@@ -119,6 +119,7 @@ typedef struct {
     CrystalPixelFormat format;
     /// DEFAULT: NULL 
     const char* data;
+    bool is_cubemap;
 } CrystalImageDesc;
 
 typedef enum {

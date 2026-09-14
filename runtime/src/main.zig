@@ -104,8 +104,8 @@ fn submitToRenderer(w: *ecs.World, _: f32, renderer: *render.Renderer) void {
         if (mesh == null and image == null) continue;
 
         // Upload to GPU if not already on it
-        if (mesh != null and !mesh.?.hasGpuData()) mesh.?.upload() catch @panic("Failed to upload mesh to GPU");
-        if (image != null and !image.?.hasGpuData()) image.?.upload() catch @panic("Failed to upload image to GPU");
+        if (mesh != null and !mesh.?.hasGpuData()) mesh.?.upload(.{}) catch @panic("Failed to upload mesh to GPU");
+        if (image != null and !image.?.hasGpuData()) image.?.upload(.{}) catch @panic("Failed to upload image to GPU");
 
         // This is so that if you have an image with no mesh, it's like a 2d plane in 3d space.
         // Could probably be convenient for 2D games, idk
@@ -193,13 +193,17 @@ pub fn main(init: std.process.Init) !void {
     var gpu_device: gpu.GpuDevice = try .init(gpu_allocator.allocator(), .initDiligent(surface.handle, surface_size));
     defer gpu_device.deinit();
 
-    var renderer_allocator: core.TrackedAllocator = .init(allocator, "Renderer");
-    var renderer: render.Renderer = try .init(renderer_allocator.allocator(), surface_size, &gpu_device);
-    defer renderer.deinit();
-
     var asset_allocator: core.TrackedAllocator = .init(allocator, "Assets");
     var assets: engine.Assets = try .init(asset_allocator.allocator(), io, &gpu_device, project_path);
     defer assets.deinit();
+    
+    // Skybox
+    const skybox_cubemap = try assets.load("assets://images/skybox_island.png");
+    try skybox_cubemap.upload(.{ .is_cubemap = true });
+
+    var renderer_allocator: core.TrackedAllocator = .init(allocator, "Renderer");
+    var renderer: render.Renderer = try .init(renderer_allocator.allocator(), surface_size, &gpu_device, try skybox_cubemap.gpuGet(.image));
+    defer renderer.deinit();
 
     // Create the world
     var ecs_allocator: core.TrackedAllocator = .init(allocator, "ECSWorld");

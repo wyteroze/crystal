@@ -8,6 +8,7 @@ const resource = @import("../resource.zig");
 pub const ForwardPass = @import("ForwardPass.zig");
 pub const DepthPrepassPass = @import("DepthPrepassPass.zig");
 pub const LightCullPass = @import("LightCullPass.zig");
+pub const SkyboxPass = @import("SkyboxPass.zig");
 
 pub const PassContext = struct {
     device: *gpu.GpuDevice,

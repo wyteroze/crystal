@@ -9,6 +9,11 @@ pub const AssetData = @import("AssetData.zig");
 pub const AssetUri = @import("AssetUri.zig");
 pub const types = @import("types.zig");
 
+pub const UploadContext = struct {
+    /// For images only
+    is_cubemap: bool = false
+};
+
 pub const AssetHandle = struct { 
     id: u64, 
     assets: *Assets,
@@ -76,8 +81,8 @@ pub const AssetHandle = struct {
 
     /// THIS DECREMENTS REFCOUNT OF CPU DATA
     /// Make sure to ref your cpu data if needed
-    pub fn upload(self: AssetHandle) !void {
-        try self.assets.upload(self);
+    pub fn upload(self: AssetHandle, upload_ctx: UploadContext) !void {
+        try self.assets.upload(self, upload_ctx);
         self.cpuRelease();
     }
 
@@ -170,7 +175,7 @@ pub fn load(self: *Assets, path: []const u8) !AssetHandle {
     return .{ .id = id, .assets = self };
 }
 
-pub fn upload(self: *Assets, handle: AssetHandle) !void {
+pub fn upload(self: *Assets, handle: AssetHandle, upload_ctx: UploadContext) !void {
     const entry = self.slots.getPtr(handle.id) orelse return error.InvalidHandle;
     if (entry.gpu_data != null) {
         entry.gpu_data_refcount.? += 1;
@@ -182,7 +187,7 @@ pub fn upload(self: *Assets, handle: AssetHandle) !void {
     if (!asset_type.uploadable()) return error.IncompatibleAssetType;
 
     const gpu_data: AssetData.GpuAssetData = 
-        try .fromCpuData(entry.cpu_data.?, entry.path, self.allocator, self.gpu_device);
+        try .fromCpuData(entry.cpu_data.?, entry.path, self.allocator, self.gpu_device, upload_ctx);
 
     entry.gpu_data = gpu_data;
     entry.gpu_data_refcount = 1;

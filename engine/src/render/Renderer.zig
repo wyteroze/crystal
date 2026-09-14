@@ -31,7 +31,7 @@ default_quad: assets.types.GpuMesh,
 lights_ssbo: gpu.GpuDevice.GpuBuffer,
 depth_image: gpu.GpuDevice.GpuImage,
 
-pub fn init(allocator: std.mem.Allocator, surface_size: [2]u32, gpu_device: *gpu.GpuDevice) !Renderer {
+pub fn init(allocator: std.mem.Allocator, surface_size: [2]u32, gpu_device: *gpu.GpuDevice, skybox_cubemap: gpu.GpuDevice.GpuImage) !Renderer {
     var graph: RenderGraph = .init(allocator);
     errdefer graph.deinit();
 
@@ -39,6 +39,11 @@ pub fn init(allocator: std.mem.Allocator, surface_size: [2]u32, gpu_device: *gpu
     const depth_prepass = try allocator.create(pass.DepthPrepassPass);
     errdefer allocator.destroy(depth_prepass);
     depth_prepass.* = try .init(gpu_device, depth_shader);
+
+    const skybox_shader = try gpu_device.createShader(gpu.shaders.skyboxShaderDesc());
+    const skybox_pass = try allocator.create(pass.SkyboxPass);
+    errdefer allocator.destroy(skybox_pass);
+    skybox_pass.* = try .init(gpu_device, skybox_shader, skybox_cubemap);
 
     const light_cull_shader = try gpu_device.createShader(gpu.shaders.lightCullShaderDesc());
     const light_cull_pass = try allocator.create(pass.LightCullPass);
@@ -51,6 +56,7 @@ pub fn init(allocator: std.mem.Allocator, surface_size: [2]u32, gpu_device: *gpu
     forward_pass.* = try .init(gpu_device, shader, .fromRgbFloat(0.1, 0.1, 0.1, 1.0));
 
     try graph.addNode(depth_prepass.node());
+    try graph.addNode(skybox_pass.node());
     try graph.addNode(light_cull_pass.node());
     try graph.addNode(forward_pass.node());
     try graph.markExternal(resource.lights_buffer);

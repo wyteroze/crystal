@@ -25,3 +25,11 @@ pub fn lightCullShaderDesc() desc.ShaderDesc {
         .{ .name = "LightCullShader: compute", .stage = .compute, .source = source, .entrypoint = "computeMain" }
     } };
 }
+
+pub fn skyboxShaderDesc() desc.ShaderDesc {
+    const source = @embedFile("shaders/src/skybox.slang");
+    return .{ .stages = &.{
+        .{ .name = "SkyboxShader: vertex", .stage = .vertex, .source = source, .entrypoint = "vertexMain" },
+        .{ .name = "SkyboxShader: fragment", .stage = .fragment, .source = source, .entrypoint = "fragmentMain" }
+    } };
+}

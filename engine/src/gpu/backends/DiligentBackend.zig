@@ -83,7 +83,8 @@ pub fn createImage(self: DiligentBackend, d: desc.ImageDesc) types.ImageHandle {
         .width = d.width,
         .height = d.height,
         .format = @intFromEnum(d.format),
-        .data = if (d.data) |data| data.ptr else @ptrFromInt(0)
+        .data = if (d.data) |data| data.ptr else @ptrFromInt(0),
+        .is_cubemap = d.is_cubemap
     });
 
     return .{ .ptr = img_h.ptr }; 

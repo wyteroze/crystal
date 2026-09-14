@@ -4,7 +4,6 @@ import lighting;
 
 #define TILE_SIZE 16
 #define MAX_LIGHTS_PER_TILE 256
-#define NDC_DEPTH_IS_ZERO_TO_ONE 1
 
 cbuffer cullParams : register(b0) {
     float4x4 invProj;
@@ -27,12 +26,7 @@ groupshared uint groupLightIndices[MAX_LIGHTS_PER_TILE];
 groupshared float4 groupFrustumPlanes[4];
 
 float3 viewPosFromDepth(float2 uv, float depth) {
-#if NDC_DEPTH_IS_ZERO_TO_ONE
-    float ndcZ = depth;
-#else
-    float ndcZ = depth * 2.0 - 1.0;
-#endif
-    float4 clip = float4(uv * 2.0 - 1.0, ndcZ, 1.0);
+    float4 clip = float4(uv * 2.0 - 1.0, depth, 1.0);
     clip.y = -clip.y;
 
     float4 viewPos = mul(invProj, clip);

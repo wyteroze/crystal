@@ -46,7 +46,6 @@ pub fn init(gpu_device: *gpu.GpuDevice, shader: gpu.GpuDevice.GpuShader, clear_c
 pub fn execute(self: *ForwardPass, ctx: pass.PassContext) void {
     const depth_handle = ctx.resources.get(resource.depth_buffer, .image) orelse @panic("depth_buffer resource missing!");
     ctx.device.beginPass(.{
-        .clear_color = self.clear_color.srgbDecode(),
         .width = ctx.view.viewport_size[0],
         .height = ctx.view.viewport_size[1],
         .depth_target = depth_handle

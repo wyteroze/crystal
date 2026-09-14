@@ -289,10 +289,13 @@ void diligent_destroy_sampler(CrystalDiligentDeviceHandle handle, CrystalSampler
 CrystalImageHandle diligent_create_image(CrystalDiligentDeviceHandle handle, CrystalImageDesc desc) {
     TextureDesc TexDesc;
     TexDesc.Name = desc.name;
-    TexDesc.Type = RESOURCE_DIM_TEX_2D;
+    TexDesc.Type = desc.is_cubemap ? RESOURCE_DIM_TEX_CUBE : RESOURCE_DIM_TEX_2D;
+    TexDesc.ArraySize = desc.is_cubemap ? 6 : 1;
     TexDesc.Width = desc.width;
     TexDesc.Height = desc.height;
     
+    std::cerr << "is_cubemap=" << desc.is_cubemap << " width=" << desc.width << "\n";
+
     size_t stride = 0;
     bool isDepth = false;
     switch (desc.format) {
@@ -327,6 +330,21 @@ CrystalImageHandle diligent_create_image(CrystalDiligentDeviceHandle handle, Cry
     if (isDepth) {
         TexDesc.Usage = USAGE_DEFAULT;
         handle->device->CreateTexture(TexDesc, nullptr, &tex);
+    } else if (desc.is_cubemap) {
+        TexDesc.Usage = USAGE_IMMUTABLE;
+
+        TextureSubResData subres[6];
+        const size_t faceSize = desc.width * desc.height * stride;
+        for (uint32_t face = 0; face < 6; face++) {
+            subres[face].pData = static_cast<const char*>(desc.data) + face * faceSize;
+            subres[face].Stride = desc.width * stride;
+        }
+
+        TextureData data;
+        data.pSubResources = subres;
+        data.NumSubresources = 6;
+
+        handle->device->CreateTexture(TexDesc, &data, &tex);
     } else {
         TexDesc.Usage = USAGE_IMMUTABLE;
 
@@ -339,6 +357,11 @@ CrystalImageHandle diligent_create_image(CrystalDiligentDeviceHandle handle, Cry
         data.NumSubresources = 1;
         
         handle->device->CreateTexture(TexDesc, &data, &tex);
+    }
+
+    if (!tex) {
+        std::cerr << "Crystal C++ [FATAL]: Texture creation failed for '" << desc.name << "'\n";
+        exit(EXIT_FAILURE);
     }
     
     return { .ptr = tex };
@@ -423,6 +446,10 @@ CrystalPipelineHandle diligent_create_pipeline(CrystalDiligentDeviceHandle handl
 
     IPipelineState* pso = nullptr;
     handle->device->CreateGraphicsPipelineState(psoCreateInfo, &pso);
+    if (!pso) {
+        std::cerr << "Crystal C++ [FATAL]: Pipeline creation failed for '" << desc.name << "'\n";
+        exit(EXIT_FAILURE);
+    }
 
     auto* pipeline = new CrystalDiligentPipeline;
     pipeline->pso = pso;

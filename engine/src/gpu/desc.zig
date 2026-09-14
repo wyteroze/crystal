@@ -52,7 +52,8 @@ pub const ImageDesc = struct {
     name: [:0]const u8,
     width: u32, height: u32,
     format: types.PixelFormat,
-    data: ?[]const u8 = null
+    data: ?[]const u8 = null,
+    is_cubemap: bool = false
 };
 
 pub const VertexAttr = struct {
