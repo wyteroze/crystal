@@ -156,6 +156,8 @@ CrystalDiligentDeviceHandle diligent_init(void* surfaceHandle, uint32_t surfaceS
     factoryOpenGL->CreateDeviceAndSwapChainGL(EngineCI, &device, &context, SCDesc, &swapchain);
 #elif CRYSTAL_VULKAN_BACKEND
     EngineVkCreateInfo EngineCI;
+    EngineCI.EnableValidation = true;
+    EngineCI.SetValidationLevel(VALIDATION_LEVEL_2);
     auto* factoryVk = LoadAndGetEngineFactoryVk();
     factoryVk->CreateDeviceAndContextsVk(EngineCI, &device, &context);
     
@@ -239,18 +241,16 @@ void diligent_update_buffer(CrystalDiligentDeviceHandle handle, CrystalBufferHan
     auto desc = buffer->GetDesc();
 
     switch (desc.Usage) {
+        case USAGE_DEFAULT: {
+            handle->context->UpdateBuffer(buffer, 0, size, data, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+            break;
+        }
         case USAGE_DYNAMIC:
         case USAGE_STAGING: {
-            MapHelper<uint8_t> MappedData(
-                handle->context,
-                buffer,
-                MAP_WRITE,
-                MAP_FLAG_DISCARD
-            );
-
+            MapHelper<uint8_t> MappedData(handle->context, buffer, MAP_WRITE, MAP_FLAG_DISCARD);
             std::memcpy(MappedData, data, size);
+            break;
         }
-        break;
         case USAGE_IMMUTABLE:
             std::cerr << "Crystal C++: Unable to update immutable buffer\n";
             return;
@@ -281,19 +281,20 @@ CrystalSamplerHandle diligent_create_sampler(CrystalDiligentDeviceHandle handle,
     return { .ptr = sampler };
 }
 
-void diligent_destroy_sampler(CrystalDiligentDeviceHandle handle, void* samPtr) {
-    auto sampler = static_cast<ISampler*>(samPtr);
+void diligent_destroy_sampler(CrystalDiligentDeviceHandle handle, CrystalSamplerHandle samH) {
+    auto sampler = static_cast<ISampler*>(samH.ptr);
     sampler->Release();
 }
 
 CrystalImageHandle diligent_create_image(CrystalDiligentDeviceHandle handle, CrystalImageDesc desc) {
     TextureDesc TexDesc;
-    size_t stride = 0;
-
     TexDesc.Name = desc.name;
     TexDesc.Type = RESOURCE_DIM_TEX_2D;
     TexDesc.Width = desc.width;
     TexDesc.Height = desc.height;
+    
+    size_t stride = 0;
+    bool isDepth = false;
     switch (desc.format) {
         case CRYSTAL_PIXEL_FORMAT_RGBA8:
             TexDesc.Format = TEX_FORMAT_RGBA8_UNORM_SRGB;
@@ -308,30 +309,43 @@ CrystalImageHandle diligent_create_image(CrystalDiligentDeviceHandle handle, Cry
 
             break;
         case CRYSTAL_PIXEL_FORMAT_D24_S8:
-            TexDesc.Format = Diligent::TEX_FORMAT_D24_UNORM_S8_UINT;
-            TexDesc.BindFlags = BIND_DEPTH_STENCIL;
+            TexDesc.Format = TEX_FORMAT_D24_UNORM_S8_UINT;
+            TexDesc.BindFlags = BIND_DEPTH_STENCIL | BIND_SHADER_RESOURCE;
             stride = 4;
+            isDepth = true;
 
             break;
+        case CRYSTAL_PIXEL_FORMAT_D32:
+            TexDesc.Format = TEX_FORMAT_D32_FLOAT;
+            TexDesc.BindFlags = BIND_DEPTH_STENCIL | BIND_SHADER_RESOURCE;
+            stride = 4;
+            isDepth = true;
+            break;
     }
-    TexDesc.Usage = USAGE_IMMUTABLE;
 
-    TextureSubResData subres;
-    subres.pData = desc.data;
-    subres.Stride = desc.width * stride;
-    
-    TextureData data;
-    data.pSubResources = &subres;
-    data.NumSubresources = 1;
-    
     ITexture* tex = nullptr;
-    handle->device->CreateTexture(TexDesc, &data, &tex);
+    if (isDepth) {
+        TexDesc.Usage = USAGE_DEFAULT;
+        handle->device->CreateTexture(TexDesc, nullptr, &tex);
+    } else {
+        TexDesc.Usage = USAGE_IMMUTABLE;
+
+        TextureSubResData subres;
+        subres.pData = desc.data;
+        subres.Stride = desc.width * stride;
+        
+        TextureData data;
+        data.pSubResources = &subres;
+        data.NumSubresources = 1;
+        
+        handle->device->CreateTexture(TexDesc, &data, &tex);
+    }
     
     return { .ptr = tex };
 }
 
 void diligent_destroy_image(CrystalDiligentDeviceHandle handle, CrystalImageHandle imgH) {
-    auto image = static_cast<ITextureView*>(imgH.ptr);
+    auto image = static_cast<ITexture*>(imgH.ptr);
     image->Release();
 }
 
@@ -347,7 +361,7 @@ CrystalPipelineHandle diligent_create_pipeline(CrystalDiligentDeviceHandle handl
 
     graphicsPipeline.NumRenderTargets = 1;
     graphicsPipeline.RTVFormats[0] = handle->swapchain->GetDesc().ColorBufferFormat;
-    graphicsPipeline.DSVFormat = handle->swapchain->GetDesc().DepthBufferFormat;
+    graphicsPipeline.DSVFormat = TEX_FORMAT_D32_FLOAT;
 
     switch (desc.cull_mode) {
         case NONE:
@@ -361,8 +375,15 @@ CrystalPipelineHandle diligent_create_pipeline(CrystalDiligentDeviceHandle handl
             break;
     }
 
+    auto writeMask = COLOR_MASK_NONE;
+    if (desc.color_write_mask.red) writeMask |= COLOR_MASK_RED;
+    if (desc.color_write_mask.green) writeMask |= COLOR_MASK_GREEN;
+    if (desc.color_write_mask.blue) writeMask |= COLOR_MASK_BLUE;
+    if (desc.color_write_mask.alpha) writeMask |= COLOR_MASK_ALPHA;
+    graphicsPipeline.BlendDesc.RenderTargets[0].RenderTargetWriteMask = writeMask;
     graphicsPipeline.DepthStencilDesc.DepthEnable = desc.depth_write;
     graphicsPipeline.DepthStencilDesc.DepthWriteEnable = desc.depth_write;
+    graphicsPipeline.DepthStencilDesc.DepthFunc = COMPARISON_FUNC_LESS_EQUAL;
 
     std::vector<LayoutElement> layoutElems;
     layoutElems.reserve(desc.layout_len);
@@ -478,9 +499,18 @@ void diligent_pipeline_apply_bindings(CrystalDiligentDeviceHandle handle, Crysta
 
         switch (res.kind) {
             case CRYSTAL_RESOURCE_KIND_UNIFORM_BUFFER:
-            case CRYSTAL_RESOURCE_KIND_STORAGE_BUFFER:
                 var->Set(reinterpret_cast<IBuffer*>(res.handle_ptr));
                 break;
+            case CRYSTAL_RESOURCE_KIND_STORAGE_BUFFER: {
+                auto* buf = reinterpret_cast<IBuffer*>(res.handle_ptr);
+                var->Set(buf->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+                break;
+            }
+            case CRYSTAL_RESOURCE_KIND_STORAGE_BUFFER_RW: {
+                auto* buf = reinterpret_cast<IBuffer*>(res.handle_ptr);
+                var->Set(buf->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
+                break;
+            }
             case CRYSTAL_RESOURCE_KIND_TEXTURE: {
                 auto* tex = reinterpret_cast<ITexture*>(res.handle_ptr);
                 var->Set(tex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
@@ -602,6 +632,11 @@ void diligent_apply_compute_bindings(CrystalDiligentDeviceHandle handle, Crystal
                 break;
             case CRYSTAL_RESOURCE_KIND_STORAGE_BUFFER: {
                 auto* buf = reinterpret_cast<IBuffer*>(res.handle_ptr);
+                var->Set(buf->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+                break;
+            }
+            case CRYSTAL_RESOURCE_KIND_STORAGE_BUFFER_RW: {
+                auto* buf = reinterpret_cast<IBuffer*>(res.handle_ptr);
                 var->Set(buf->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
                 break;
             }
@@ -632,7 +667,18 @@ void diligent_dispatch_compute(CrystalDiligentDeviceHandle handle, CrystalComput
 
 void diligent_begin_pass(CrystalDiligentDeviceHandle handle, CrystalPassDesc desc) {
     auto pRTV = handle->swapchain->GetCurrentBackBufferRTV();
-    auto pDSV = handle->swapchain->GetDepthBufferDSV();
+
+    ITextureView* pDSV = nullptr;
+    if (desc.has_depth_target) {
+        auto* tex = reinterpret_cast<ITexture*>(desc.depth_target.ptr);
+        pDSV = tex->GetDefaultView(TEXTURE_VIEW_DEPTH_STENCIL);
+        if (!pDSV) {
+            std::cerr << "Crystal C++ [FATAL]: depth_target has no DEPTH_STENCIL view (missing BIND_DEPTH_STENCIL?)\n";
+            exit(EXIT_FAILURE);
+        }
+    } else {
+        pDSV = handle->swapchain->GetDepthBufferDSV();
+    }
 
     handle->context->SetRenderTargets(1, &pRTV, pDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 

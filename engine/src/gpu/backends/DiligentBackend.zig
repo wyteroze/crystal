@@ -83,7 +83,7 @@ pub fn createImage(self: DiligentBackend, d: desc.ImageDesc) types.ImageHandle {
         .width = d.width,
         .height = d.height,
         .format = @intFromEnum(d.format),
-        .data = d.data.?.ptr
+        .data = if (d.data) |data| data.ptr else @ptrFromInt(0)
     });
 
     return .{ .ptr = img_h.ptr }; 
@@ -107,10 +107,28 @@ pub fn createPipeline(self: DiligentBackend, d: desc.PipelineDesc) types.Pipelin
         .layout = @ptrCast(d.layout.ptr),
         .layout_len = d.layout.len,
         .resources = resources.ptr,
-        .resources_len = resources.len
+        .resources_len = resources.len,
+        .color_write_mask = .{
+            .red = d.color_write_mask.red,
+            .green = d.color_write_mask.green,
+            .blue = d.color_write_mask.blue,
+            .alpha = d.color_write_mask.alpha
+        }
     });
 
     return .{ .ptr = pipe_h.ptr }; 
+}
+
+pub fn destroyPipeline(self: DiligentBackend, h: types.PipelineHandle) void {
+    c.diligent_destroy_pipeline(self.handle, .{ .ptr = h.ptr });
+}
+
+pub fn destroySampler(self: DiligentBackend, h: types.SamplerHandle) void {
+    c.diligent_destroy_sampler(self.handle, .{ .ptr = h.ptr });
+}
+
+pub fn destroyShader(self: DiligentBackend, h: types.ShaderHandle) void {
+    c.diligent_destroy_shader(self.handle, .{ .ptr = h.ptr });
 }
 
 pub fn createComputePipeline(self: DiligentBackend, d: desc.ComputePipelineDesc) types.ComputePipelineHandle {
@@ -168,8 +186,11 @@ pub fn beginPass(self: DiligentBackend, d: desc.PassDesc) void {
         .height = d.height,
         .clear_color = if (d.clear_color) |cc| cc.data else undefined,
         .has_clear_color = d.clear_color != null,
+
         .clear_depth = d.clear_depth orelse undefined,
-        .has_clear_depth = d.clear_depth != null
+        .has_clear_depth = d.clear_depth != null,
+        .depth_target = if (d.depth_target) |dt| .{ .ptr = dt.ptr } else undefined,
+        .has_depth_target = d.depth_target != null
     });
 }
 

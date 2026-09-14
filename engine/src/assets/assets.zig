@@ -14,11 +14,11 @@ pub const AssetHandle = struct {
     assets: *Assets,
 
     pub fn hasCpuData(self: AssetHandle) bool {
-        if (self.assets.getCpuData(self.id)) |_| true else |_| false;
+        return if (self.assets.getCpuData(self.id)) |_| true else |_| false;
     }
 
     pub fn hasGpuData(self: AssetHandle) bool {
-        if (self.assets.getGpuData(self.id)) |_| true else |_| false;
+        return if (self.assets.getGpuData(self.id)) |_| true else |_| false;
     }
 
     // handling functions for these errors at every call site would be
@@ -72,6 +72,13 @@ pub const AssetHandle = struct {
         if (!a_type.uploadable()) return error.UnuploadableAssetKind;
 
         return @field(data, @tagName(asset_type));
+    }
+
+    /// THIS DECREMENTS REFCOUNT OF CPU DATA
+    /// Make sure to ref your cpu data if needed
+    pub fn upload(self: AssetHandle) !void {
+        try self.assets.upload(self);
+        self.cpuRelease();
     }
 
     pub const __lua = .val;

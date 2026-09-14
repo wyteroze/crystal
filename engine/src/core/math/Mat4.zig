@@ -90,7 +90,7 @@ pub const Mat4 = extern struct {
         return .{ .m = .{ .{ s.x, s.y, s.z, -s.dot(eye) }, .{ u.x, u.y, u.z, -u.dot(eye) }, .{ -f.x, -f.y, -f.z, f.dot(eye) }, .{ 0, 0, 0, 1 } } };
     }
 
-    // Inverse of rotation+translation matrix, no scale
+    /// Inverse of rotation+translation matrix, no scale
     pub fn invertRT(self: Mat4) Mat4 {
         const tx = self.m[0][3];
         const ty = self.m[1][3];
@@ -103,6 +103,32 @@ pub const Mat4 = extern struct {
         result.m[2][3] = -(result.m[2][0] * tx + result.m[2][1] * ty + result.m[2][2] * tz);
 
         return result;
+    }
+
+    /// Inverse of matrix created by `perspective()`, and only valid for that.
+    pub fn invertPerspective(self: Mat4) Mat4 {
+        const a_over_f = 1.0 / self.m[0][0];
+        const one_over_f = 1.0 / self.m[1][1];
+        const c = self.m[2][3];
+        const d = self.m[2][2];
+
+        var result = Mat4.identity;
+        result.m[0][0] = a_over_f;
+        result.m[1][1] = one_over_f;
+        result.m[2][2] = 0;
+        result.m[2][3] = -1;
+        result.m[3][2] = 1.0 / c;
+        result.m[3][3] = d / c;
+
+        return result;
+    }
+
+    pub fn transformDirection(self: Mat4, v: Vec3) Vec3 {
+        return .{
+            .x = self.m[0][0] * v.x + self.m[0][1] * v.y + self.m[0][2] * v.z,
+            .y = self.m[1][0] * v.x + self.m[1][1] * v.y + self.m[1][2] * v.z,
+            .z = self.m[2][0] * v.x + self.m[2][1] * v.y + self.m[2][2] * v.z,
+        };
     }
 
     pub fn components(self: Mat4) [16]f32 {

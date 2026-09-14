@@ -23,6 +23,7 @@ typedef enum {
 typedef enum {
     CRYSTAL_RESOURCE_KIND_UNIFORM_BUFFER,
     CRYSTAL_RESOURCE_KIND_STORAGE_BUFFER,
+    CRYSTAL_RESOURCE_KIND_STORAGE_BUFFER_RW,
     CRYSTAL_RESOURCE_KIND_TEXTURE,
     CRYSTAL_RESOURCE_KIND_SAMPLER
 } CrystalResourceKind;
@@ -64,6 +65,7 @@ typedef enum {
     CRYSTAL_PIXEL_FORMAT_RGBA8, 
     CRYSTAL_PIXEL_FORMAT_RGBA16F, 
     CRYSTAL_PIXEL_FORMAT_D24_S8,
+    CRYSTAL_PIXEL_FORMAT_D32    
 } CrystalPixelFormat;
 
 typedef enum { 
@@ -138,6 +140,13 @@ typedef enum {
 } CrystalCullMode;
 
 typedef struct {
+    bool red;
+    bool green;
+    bool blue;
+    bool alpha;
+} CrystalColorWriteMask;
+
+typedef struct {
     const char* name;
     CrystalShaderHandle shader;
     const CrystalVertexAttr* layout;
@@ -150,6 +159,7 @@ typedef struct {
     CrystalCullMode cull_mode;
     /// DEFAULT: FALSE
     bool depth_write;
+    CrystalColorWriteMask color_write_mask;
 } CrystalPipelineDesc;
 
 typedef struct {
@@ -167,6 +177,9 @@ typedef struct {
 
     float clear_depth;
     bool has_clear_depth;
+
+    CrystalImageHandle depth_target;
+    bool has_depth_target;
 } CrystalPassDesc;
 
 typedef struct {

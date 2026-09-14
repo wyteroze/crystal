@@ -45,6 +45,7 @@ pub const ScriptSource = struct {
 
 // GPU-specific. Stored in GPU memory
 
+pub const GpuImage = gpu.GpuDevice.GpuImage;
 pub const GpuMesh = struct {
     vertex_buffer: gpu.GpuDevice.GpuBuffer,
     index_buffer: gpu.GpuDevice.GpuBuffer,
@@ -54,13 +55,5 @@ pub const GpuMesh = struct {
     pub fn deinit(self: GpuMesh) void {
         self.vertex_buffer.deinit();
         self.index_buffer.deinit();
-    }
-};
-
-pub const GpuImage = struct {
-    handle: gpu.GpuDevice.GpuImage,
-
-    pub fn deinit(self: GpuImage) void {
-        self.handle.deinit();
     }
 };

@@ -100,15 +100,15 @@ pub const GpuAssetData = union(AssetType) {
                 const img_name = try std.mem.concat(allocator, u8, &.{ "'", name, "'", " Image" });
                 defer allocator.free(img_name);
 
-                return .{ .image = .{ .handle = 
-                    try gpu_device.createImage(.{ 
+                return .{ .image =
+                     try gpu_device.createImage(.{ 
                         .name = "teapot texture",
                         .width = @intCast(i.width), 
                         .height = @intCast(i.height), 
                         .data = std.mem.sliceAsBytes(i.data),
                         .format = i.format,
-                    })
-                } };
+                    }) 
+                };
             },
             
             else => unreachable

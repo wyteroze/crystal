@@ -23,6 +23,9 @@ pub const Vec3 = extern struct {
     pub fn scale(self: Vec3, s: f32) Vec3 { return .fromSimd(self.simd() * @as(Simd3, @splat(s))); }
     pub fn length(self: Vec3) f32 { return @sqrt(self.dot(self)); }
 
+    pub fn toRadians(self: Vec3) Vec3 { return .fromSimd(self.simd() * @as(Simd3, @splat(std.math.pi / 180.0))); }
+    pub fn toDegrees(self: Vec3) Vec3 { return .fromSimd(self.simd() * @as(Simd3, @splat(180.0 / std.math.pi))); }
+
     pub fn cross(self: Vec3, other: Vec3) Vec3 {
         const a = self.simd();
         const b = other.simd();

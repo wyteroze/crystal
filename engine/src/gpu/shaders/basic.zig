@@ -1,1 +1,0 @@
-pub const source = @embedFile("src/basic.slang");

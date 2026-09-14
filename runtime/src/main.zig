@@ -12,110 +12,14 @@ const Os = engine.Os;
 const core = engine.core;
 const toml = engine.toml;
 const Scheduler = engine.Scheduler;
+const render = engine.render;
 
 const target_fps = 120;
 const fps_seconds: f32 = 1.0 / @as(f32, @floatCast(target_fps));
 const asset_purge_rate_seconds: std.Io.Duration = .fromSeconds(1);
 const clear_color: core.Color = .fromRgbFloat(0.1, 0.1, 0.1, 1.0);
 
-const RenderCtx = struct { 
-    gpu_device: *gpu.GpuDevice, 
-    pipeline: gpu.GpuDevice.GpuPipeline, 
-    mesh: engine.Assets.types.GpuMesh,
-    ubuf: gpu.GpuDevice.GpuBuffer,
-    light_ubuf: gpu.GpuDevice.GpuBuffer,
-    img: engine.Assets.types.GpuImage,
-    sampler: gpu.GpuDevice.GpuSampler,
-    mesh_id: ecs.ComponentId, 
-    pos_id: ecs.ComponentId, 
-    rot_id: ecs.ComponentId, 
-    surface_size: *[2]u32, 
-    scene_entity: ecs.Entity, 
-    proj: math.Mat4, 
-    clock: f32,
-    light_params: LightParams
-};
-
-const Position = math.Vec3;
-const Rotation = math.Vec3;
 const Scene = struct { cam: ?ecs.Entity };
-
-const LightParams = struct { 
-    dir: core.math.Vec3, 
-    color: core.Color,
-    ambient: core.Color
-};
-
-const render = struct {
-    fn renderMeshTextured() void {
-
-    }
-
-    fn renderMesh() void {
-
-    }
-
-    fn renderImage() void {
-
-    }
-
-    pub fn render(w: *ecs.World, dt: f32, ctx: *RenderCtx) void {
-        ctx.clock += dt;
-
-        ctx.gpu_device.beginPass(.{ 
-            .clear_color = clear_color.srgbDecode(), 
-            .clear_depth = 1.0,
-            .width = ctx.surface_size[0], 
-            .height = ctx.surface_size[1]
-        });
-        ctx.pipeline.apply();
-
-        const scene = w.getComponent(ctx.scene_entity, w.components.id("Scene").?, Scene).?.*;
-        const view = if (scene.cam) |cam| blk: {
-            const pos = (w.getComponent(cam, w.components.id("Position").?, Position) orelse &math.Vec3.zero);
-            const rot = (w.getComponent(cam, w.components.id("Rotation").?, Rotation) orelse &math.Vec3.zero);
-
-            break :blk math.Mat4.fromTRS(pos.*, .fromEuler(.fromSimd(rot.*.simd() * @as(math.Vec3.Simd3, @splat(std.math.pi / 180.0)))), .one).invertRT();
-        } else math.Mat4.identity;
-
-        var q = w.query(&.{ ctx.mesh_id, ctx.pos_id, ctx.rot_id });
-        var it = q.iterator();
-        while (it.next()) |entity| {
-            if (entity.getParent() == null) continue;
-            const pos = w.getComponent(entity, ctx.pos_id, Position).?.*;
-            const rot = w.getComponent(entity, ctx.rot_id, Rotation).?.*;
-            
-            const model: math.Mat4 = .fromTRS(pos, .fromEuler(.fromSimd(rot.simd() * @as(math.Vec3.Simd3, @splat(std.math.pi / 180.0)))), .one);
-            const vs_params: [3][4][4]f32 = .{ @bitCast(model), @bitCast(view), @bitCast(ctx.proj) };
-
-            const l = ctx.light_params;
-            const light_params_flattened: [3][4]f32 = .{
-                .{ l.dir.x, l.dir.y, l.dir.z, 0 }, // Last value is padding
-                .{ l.color.r(), l.color.g(), l.color.b(), 0 }, // Last value is padding
-                .{ l.ambient.r(), l.ambient.g(), l.ambient.b(), 0 }, // Last value is padding
-            };
-            
-            ctx.pipeline.applyBindings(.{
-                .vertex_buffers = .{ ctx.mesh.vertex_buffer.handle, null, null, null }, 
-                .index_buffer = ctx.mesh.index_buffer.handle,
-                .resources = &.{
-                    .{ .name = "VSParams", .handle = .{ .uniform_buffer = ctx.ubuf.handle } },
-                    .{ .name = "Tex", .handle = .{ .texture = ctx.img.handle.handle } },
-                    .{ .name = "Smp", .handle = .{ .sampler = ctx.sampler.handle } },
-                    .{ .name = "LightParams", .handle = .{ .uniform_buffer = ctx.light_ubuf.handle } }
-                }
-            });
-
-            ctx.ubuf.update(std.mem.asBytes(&vs_params));
-            ctx.light_ubuf.update(std.mem.asBytes(&light_params_flattened));
-
-            ctx.pipeline.draw(0, @intCast(ctx.mesh.index_count), 1);
-        }
-
-        ctx.gpu_device.endPass();
-        ctx.gpu_device.present();
-    }
-}.render;
 
 fn updateScripts(w: *ecs.World, dt: f32, _: *void) void {
     const script_component = w.components.id("Script").?;
@@ -124,8 +28,119 @@ fn updateScripts(w: *ecs.World, dt: f32, _: *void) void {
     var iter = scripts.iterator();
     while (iter.next()) |e| {
         const scr = w.getComponent(e, script_component, scripting.Script) orelse continue;
-        _ = scr.callMethod("OnUpdate", &.{}, &.{ dt }) catch {};
+        _ =  scr.callMethod("OnUpdate", &.{}, &.{ dt }) catch {};
     }
+}
+
+fn submitToRenderer(w: *ecs.World, _: f32, renderer: *render.Renderer) void {
+    const mesh_id = w.components.id("Mesh").?;
+    const image_id = w.components.id("Image").?;
+    const pos_id = w.components.id("Position").?;
+    const rot_id = w.components.id("Rotation").?;
+    const scale_id = w.components.id("Scale").?;
+    const scene_id = w.components.id("Scene").?;
+    const light_id = w.components.id("Light").?;
+
+    const allocator = renderer.frame_allocator.allocator();
+    var objects: std.ArrayList(render.types.RenderObject) = .empty;
+    var lights: std.ArrayList(gpu.types.GpuLight) = .empty;
+
+    const camera = blk: {
+        var iter = w.query(&.{ scene_id }).iterator();
+        break :blk if (iter.next()) |entity| if (w.getComponent(entity, scene_id, Scene)) |scene| scene.cam else null else null;
+    };
+    const cam_pos = blk: {
+        const cam = camera orelse break :blk math.Vec3.zero;
+        const pos = w.getComponent(cam, pos_id, math.Vec3) orelse break :blk math.Vec3.zero;
+        break :blk pos.*;
+    };
+    const cam_rot = blk: {
+        const cam = camera orelse break :blk math.Vec3.zero;
+        const rot = w.getComponent(cam, rot_id, math.Vec3) orelse break :blk math.Vec3.zero;
+        break :blk rot.*;
+    };
+
+    const view = math.Mat4.fromTRS(cam_pos, .fromEuler(cam_rot.toRadians()), .one).invertRT();
+    const proj: math.Mat4 = .perspective(
+        90.0 * (std.math.pi / 180.0), 
+        @as(f32, @floatFromInt(renderer.surface_size[0])) / @as(f32, @floatFromInt(renderer.surface_size[1])), 
+        0.1,
+        100.0
+    );
+
+    const light_query = w.query(&.{ light_id });
+    var light_iter = light_query.iterator();
+    while (light_iter.next()) |entity| {
+        const l = w.getComponent(entity, light_id, render.types.Light).?;
+        const pos: math.Vec3 = if (w.getComponent(entity, pos_id, math.Vec3)) |p| p.* else .zero;
+        const rot: math.Vec3 = if (w.getComponent(entity, rot_id, math.Vec3)) |r| r.* else .zero;
+
+        const pos_or_dir = switch (l.kind) {
+            .point => pos,
+            .directional => blk: {
+                const rot_mat = math.Quat.fromEuler(rot.toRadians()).toMat4();
+                break :blk rot_mat.transformDirection(.new(0, 0, 1)).normalize();
+            }
+        };
+
+        lights.append(allocator, .{
+            .position_or_dir = pos_or_dir.arr(),
+            .kind = @intFromEnum(l.kind),
+            .color = .{ l.color.r(), l.color.g(), l.color.b() },
+            .intensity = l.intensity,
+            .radius = switch (l.kind) { .point => |pp| pp.radius, .directional => 0 },
+        }) catch @panic("Out of memory");
+    }
+
+
+    // TODO: Make querying better. Quite limited right now
+    const query = w.query(&.{ mesh_id, image_id });
+    var iter = query.iterator();
+    while (iter.next()) |entity| {
+        const mesh = w.getComponent(entity, mesh_id, engine.Assets.AssetHandle);
+        const image = w.getComponent(entity, image_id, engine.Assets.AssetHandle);
+
+        // No visual appearance
+        if (mesh == null and image == null) continue;
+
+        // Upload to GPU if not already on it
+        if (mesh != null and !mesh.?.hasGpuData()) mesh.?.upload() catch @panic("Failed to upload mesh to GPU");
+        if (image != null and !image.?.hasGpuData()) image.?.upload() catch @panic("Failed to upload image to GPU");
+
+        // This is so that if you have an image with no mesh, it's like a 2d plane in 3d space.
+        // Could probably be convenient for 2D games, idk
+        const mesh_data = if (mesh) |m| m.gpuGet(.mesh) catch continue else renderer.default_quad;
+        // Mesh with no image = plain white
+        const image_data = if (image) |i| i.gpuGet(.image) catch continue else renderer.default_image;
+        
+        const pos: math.Vec3 = if (w.getComponent(entity, pos_id, math.Vec3)) |p| p.* else .zero;
+        const rot: math.Vec3 = if (w.getComponent(entity, rot_id, math.Vec3)) |r| r.* else .zero;
+        const scale: math.Vec3 = if (w.getComponent(entity, scale_id, math.Vec3)) |scale| scale.* else .one;
+        // Not visible (or invalid), don't waste resources rendering it.
+        if (scale.x <= 0 or scale.y <= 0 or scale.z <= 0) continue;
+        
+        const model: math.Mat4 = .fromTRS(pos, .fromEuler(rot.toRadians()), scale);
+
+        objects.append(allocator, .{ 
+            .model = model, 
+            .mesh = mesh_data, 
+            .material = .{ 
+                .image = image_data, 
+                .sampler = renderer.sampler 
+            }
+        }) catch @panic("Out of memory");
+    }
+
+    renderer.render(
+        .{ 
+            .view_matrix = view,
+            .proj_matrix = proj, 
+            .viewport_size = renderer.surface_size 
+        }, .{ 
+            .objects = objects,
+            .lights = lights
+        }
+    ) catch |e| std.log.err("render() failed: {s}", .{ @errorName(e) });
 }
 
 pub fn main(init: std.process.Init) !void {
@@ -178,6 +193,10 @@ pub fn main(init: std.process.Init) !void {
     var gpu_device: gpu.GpuDevice = try .init(gpu_allocator.allocator(), .initDiligent(surface.handle, surface_size));
     defer gpu_device.deinit();
 
+    var renderer_allocator: core.TrackedAllocator = .init(allocator, "Renderer");
+    var renderer: render.Renderer = try .init(renderer_allocator.allocator(), surface_size, &gpu_device);
+    defer renderer.deinit();
+
     var asset_allocator: core.TrackedAllocator = .init(allocator, "Assets");
     var assets: engine.Assets = try .init(asset_allocator.allocator(), io, &gpu_device, project_path);
     defer assets.deinit();
@@ -194,12 +213,16 @@ pub fn main(init: std.process.Init) !void {
     runtime.linkState();
 
     // Register components
+    // TODO: Register these once somewhere, and access them there
+    // instead of having to do world.components.id() over and over again.
     const scene_component = try world.registerComponentNative(Scene, "Scene"); // For organizing collections of entities
-    const mesh_component = try world.registerComponentNativeShaped(engine.Assets.AssetHandle, "Mesh"); // For giving an entity a mesh appearance
-    const image_component = try world.registerComponentNativeShaped(engine.Assets.AssetHandle, "Image"); // For giving an entity an image appearance (or a texture, if it has a mesh)
-    const pos_component = try world.registerComponentNativeShaped(Position, "Position"); // For moving entities
-    const rot_component = try world.registerComponentNativeShaped(Rotation, "Rotation"); // For rotating entites (Euler)
+    _ = try world.registerComponentNativeShaped(engine.Assets.AssetHandle, "Mesh"); // For giving an entity a mesh appearance
+    _ = try world.registerComponentNativeShaped(engine.Assets.AssetHandle, "Image"); // For giving an entity an image appearance (or a texture, if it has a mesh)
+    const pos_component = try world.registerComponentNativeShaped(math.Vec3, "Position"); // For moving entities
+    const rot_component = try world.registerComponentNativeShaped(math.Vec3, "Rotation"); // For rotating entites (Euler)
+    const scale_component = try world.registerComponentNativeShaped(math.Vec3, "Scale"); // For scaling entities
     const script_component = try world.registerComponentNative(scripting.Script, "Script"); // For giving entities behavior
+    const light_component = try world.registerComponentNativeShaped(render.types.Light, "Light"); // For creating sources of illumination
     _ = try world.registerComponentNativeShaped([]const u8, "Name"); // For naming an entity (we don't use it, but lua does)
 
     // Create a scene inside of the world
@@ -207,13 +230,23 @@ pub fn main(init: std.process.Init) !void {
 
     // Make a camera for the scene
     const camera = try world.spawnEntity();
-    try world.addComponent(camera, pos_component, Position, .new(0, 0, 0));
-    try world.addComponent(camera, rot_component, Rotation, .new(0, 0, 0));
+    try world.addComponent(camera, pos_component, math.Vec3, .new(0, 0, 0));
+    try world.addComponent(camera, rot_component, math.Vec3, .new(0, 0, 0));
+    try world.addComponent(camera, scale_component, math.Vec3, .new(1, 1, 1));
 
     try world.addComponent(scene, scene_component, Scene, .{ .cam = camera });
 
     // Spawn a new entity
     const entity = try world.spawnEntity();
+
+    const light = try world.spawnEntity();
+    try world.addComponent(light, light_component, render.types.Light, .{
+        .color = .fromRgbFloat(1.0, 1.0, 1.0, 1.0),
+        .intensity = 5,
+        .kind = .{ .point = .{ .radius = 10 } }
+    });
+    try world.addComponent(light, pos_component, math.Vec3, .zero);
+    try light.setParent(scene);
 
     // Parent the component under the scene
     try entity.setParent(scene);
@@ -227,73 +260,7 @@ pub fn main(init: std.process.Init) !void {
     const stored_script = world.getComponent(entity, script_component, scripting.Script).?;
     try stored_script.instantiate(entity);
 
-    const shader = try gpu_device.createShader(gpu.shaders.basicShaderDesc());
-
-    const mesh_asset = world.getComponent(entity, mesh_component, engine.Assets.AssetHandle) orelse unreachable;
-    const image_asset = world.getComponent(entity, image_component, engine.Assets.AssetHandle) orelse unreachable;
-    try assets.upload(mesh_asset.*);
-    try assets.upload(image_asset.*);
-    defer mesh_asset.gpuRelease();
-    defer image_asset.gpuRelease();
-    mesh_asset.cpuRelease();
-    image_asset.cpuRelease();
-
-    const mesh = try mesh_asset.gpuGet(.mesh);
-    const image = try image_asset.gpuGet(.image);
-
-    const ubuf = try gpu_device.createBuffer(.{ .name = "teapot ubuf", .type = .uniform, .usage = .dynamic, .size = @sizeOf([3]math.Mat4) });
-    const light_ubuf = try gpu_device.createBuffer(.{ .name = "light ubuf", .type = .uniform, .usage = .dynamic, .size = 48 });
-
-    const sampler = try gpu_device.createSampler(.{});
-    const pipeline = try gpu_device.createPipeline(.{
-        .name = "Teapot",
-        .shader = shader.handle,
-        .index_type = .uint32,
-        .cull_mode = .none,
-        .depth_write = true,
-        .resources = &.{
-            .{ .name = "VSParams", .kind = .uniform_buffer, .visibility = .vertex_fragment },
-            .{ .name = "Tex", .kind = .texture, .visibility = .vertex_fragment },
-            .{ .name = "Smp", .kind = .sampler, .visibility = .vertex_fragment },
-            .{ .name = "LightParams", .kind = .uniform_buffer, .visibility = .vertex_fragment }
-        },
-        .layout = &.{ 
-            .{ .offset = 0, .format = .float3 }, // position
-            .{ .offset = 12, .format = .float3 }, // normal
-            .{ .offset = 24, .format = .float2 }  // uv
-        },
-    });
-
-    const proj: math.Mat4 = .perspective(
-        90.0 * (std.math.pi / 180.0), 
-        @as(f32, @floatFromInt(surface_size[0])) / @as(f32, @floatFromInt(surface_size[1])), 
-        0.1,
-        100.0
-    );
-
-    var render_ctx = RenderCtx{ 
-        .gpu_device = &gpu_device, 
-        .pipeline = pipeline, 
-        .mesh = mesh,
-        .ubuf = ubuf,
-        .light_ubuf = light_ubuf,
-        .img = image,
-        .sampler = sampler,
-        .surface_size = &surface_size, 
-        .mesh_id = mesh_component, 
-        .pos_id = pos_component, 
-        .rot_id = rot_component, 
-        .scene_entity = scene, 
-        .proj = proj, 
-        .clock = 0,
-        .light_params = .{
-            .dir = core.math.Vec3.new(0, 0.5, -0.5).normalize(),
-            .color = core.Color.fromRgbFloat(1.0, 1.0, 1.0, 1.0),
-            .ambient = core.Color.fromRgbFloat(0.05, 0.05, 0.05, 0.0)
-        }
-    };
-    try world.registerSystem("Render", RenderCtx, render, &render_ctx);
-
+    try world.registerSystem("submitToRenderer", render.Renderer, submitToRenderer, &renderer);
     // dear god
     try world.registerSystem("UpdateScripts", void, updateScripts, @constCast(&{}));
 
@@ -346,7 +313,7 @@ pub fn main(init: std.process.Init) !void {
 
         const frame_time = start.durationTo(end);
         if (frame_time.toNanoseconds() > 0) {
-            try io.sleep(frame_time, .awake);
+            io.sleep(frame_time, .awake) catch {};
         }
     }
 }

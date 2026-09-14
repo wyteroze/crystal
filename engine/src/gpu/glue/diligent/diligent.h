@@ -53,6 +53,7 @@ void diligent_end_pass(CrystalDiligentDeviceHandle handle);
 // Misc
 void diligent_present(CrystalDiligentDeviceHandle handle);
 CrystalBackend diligent_query_backend();
+CrystalImageHandle diligent_get_depth_buffer(CrystalDiligentDeviceHandle handle);
 
 #ifdef __cplusplus
 }
