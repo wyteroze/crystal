@@ -9,6 +9,7 @@ pub const ForwardPass = @import("ForwardPass.zig");
 pub const DepthPrepassPass = @import("DepthPrepassPass.zig");
 pub const LightCullPass = @import("LightCullPass.zig");
 pub const SkyboxPass = @import("SkyboxPass.zig");
+pub const UiPass = @import("UiPass.zig");
 
 pub const PassContext = struct {
     device: *gpu.GpuDevice,
@@ -22,6 +23,7 @@ pub const PassNode = struct {
     ptr: *anyopaque,
     reads: []const resource.ResourceRef,
     writes: []const resource.ResourceRef,
+    after: []const []const u8 = &.{},
     name: []const u8,
 
     execute_fn: *const fn (ptr: *anyopaque, ctx: PassContext) void,

@@ -21,7 +21,7 @@ const clear_color: core.Color = .fromRgbFloat(0.1, 0.1, 0.1, 1.0);
 
 const Scene = struct { cam: ?ecs.Entity };
 
-fn updateScripts(w: *ecs.World, dt: f32, _: *void) void {
+fn updateScripts(w: *ecs.World, dt: f32) void {
     const script_component = w.components.id("Script").?;
 
     const scripts = w.query(&.{ script_component });
@@ -32,7 +32,9 @@ fn updateScripts(w: *ecs.World, dt: f32, _: *void) void {
     }
 }
 
-fn submitToRenderer(w: *ecs.World, _: f32, renderer: *render.Renderer) void {
+fn submitToRenderer(w: *ecs.World, ui_world: *ecs.World, renderer: *render.Renderer) void {
+    const allocator = renderer.frame_allocator.allocator();
+
     const mesh_id = w.components.id("Mesh").?;
     const image_id = w.components.id("Image").?;
     const pos_id = w.components.id("Position").?;
@@ -41,9 +43,32 @@ fn submitToRenderer(w: *ecs.World, _: f32, renderer: *render.Renderer) void {
     const scene_id = w.components.id("Scene").?;
     const light_id = w.components.id("Light").?;
 
-    const allocator = renderer.frame_allocator.allocator();
+    var ui_objects: std.ArrayList(render.types.UiObject) = .empty;
     var objects: std.ArrayList(render.types.RenderObject) = .empty;
     var lights: std.ArrayList(gpu.types.GpuLight) = .empty;
+
+    // 2D world (for UI)
+    {
+        const pos_2d_id = ui_world.components.id("Position").?;
+        const size_2d_id = ui_world.components.id("Size").?;
+        const color_id = ui_world.components.id("Color").?;
+
+        const query = ui_world.query(&.{ pos_2d_id, size_2d_id });
+        var iter = query.iterator();
+        while (iter.next()) |entity| {
+            const pos: math.Vec2 = if (ui_world.getComponent(entity, pos_2d_id, math.Vec2)) |p| p.* else .zero;
+            const size: math.Vec2 = if (ui_world.getComponent(entity, size_2d_id, math.Vec2)) |p| p.* else .zero;
+            const color: core.Color = if (ui_world.getComponent(entity, color_id, core.Color)) |c| c.* else .fromRgbFloat(0.0, 0.0, 0.0, 1.0);
+
+            ui_objects.append(allocator, .{
+                .pos = pos.arr(),
+                .size = size.arr(),
+                .color = color
+            }) catch @panic("Out of memory");
+        }
+    }
+
+    // 3D world
 
     const camera = blk: {
         var iter = w.query(&.{ scene_id }).iterator();
@@ -126,7 +151,7 @@ fn submitToRenderer(w: *ecs.World, _: f32, renderer: *render.Renderer) void {
             .mesh = mesh_data, 
             .material = .{ 
                 .image = image_data, 
-                .sampler = renderer.sampler 
+                .sampler = renderer.default_sampler 
             }
         }) catch @panic("Out of memory");
     }
@@ -137,10 +162,15 @@ fn submitToRenderer(w: *ecs.World, _: f32, renderer: *render.Renderer) void {
             .proj_matrix = proj, 
             .viewport_size = renderer.surface_size 
         }, .{ 
+            .ui_objects = ui_objects,
             .objects = objects,
-            .lights = lights
+            .lights = lights,
         }
     ) catch |e| std.log.err("render() failed: {s}", .{ @errorName(e) });
+}
+
+fn submitUiToRenderer(w: *ecs.World, _: f32, renderer: *render.Renderer) void {
+    _ = w; _ = renderer;
 }
 
 pub fn main(init: std.process.Init) !void {
@@ -210,6 +240,11 @@ pub fn main(init: std.process.Init) !void {
     var world: ecs.World = .init(ecs_allocator.allocator());
     defer world.deinit();
 
+    // Create the UI world
+    var ecs_ui_allocator: core.TrackedAllocator = .init(allocator, "ECSWorld (UI)");
+    var ui_world: ecs.World = .init(ecs_ui_allocator.allocator());
+    defer ui_world.deinit();
+
     var lua_allocator: core.TrackedAllocator = .init(allocator, "LuaRuntime");
     var runtime: scripting.Runtime = try .init(lua_allocator.allocator(), &world, &assets);
     defer runtime.deinit();
@@ -264,9 +299,15 @@ pub fn main(init: std.process.Init) !void {
     const stored_script = world.getComponent(entity, script_component, scripting.Script).?;
     try stored_script.instantiate(entity);
 
-    try world.registerSystem("submitToRenderer", render.Renderer, submitToRenderer, &renderer);
-    // dear god
-    try world.registerSystem("UpdateScripts", void, updateScripts, @constCast(&{}));
+    // 2D world + components for UI
+    const pos_2d_component = try ui_world.registerComponentNativeShaped(math.Vec2, "Position");
+    const size_2d_component = try ui_world.registerComponentNativeShaped(math.Vec2, "Size");
+    const color_component = try ui_world.registerComponentNativeShaped(core.Color, "Color");
+
+    const ui_entity = try ui_world.spawnEntity();
+    try ui_world.addComponent(ui_entity, pos_2d_component, math.Vec2, .zero);
+    try ui_world.addComponent(ui_entity, size_2d_component, math.Vec2, .new(640.0, 360.0));
+    try ui_world.addComponent(ui_entity, color_component, core.Color, .fromRgbFloat(0.0, 0.0, 0.0, 0.5));
 
     var running = true;
     var last_time = std.Io.Clock.awake.now(io);
@@ -277,9 +318,8 @@ pub fn main(init: std.process.Init) !void {
         const dt_seconds: f32 = @floatCast(@as(f32, @floatFromInt(dt.toNanoseconds())) / std.time.ns_per_s);
         last_time = start;
 
-        var frame_root: Scheduler.Counter = .{};
-
-        scheduler.waitBlocking(&frame_root);
+        updateScripts(&world, dt_seconds);
+        submitToRenderer(&world, &ui_world, &renderer);
 
         while (platform.pollEvent()) |e| {
             switch (e) {

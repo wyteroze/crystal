@@ -10,13 +10,15 @@ data: *anyopaque,
 /// Decremented on completion
 counter: ?*Counter = null,
 priority: JobPriority = .normal,
+affinity: JobAffinity = .any,
 
 pub fn Wrap(comptime func: anytype) type {
     return struct {
         args: std.meta.ArgsTuple(@TypeOf(func)),
 
-        pub fn submit(self: *@This(), scheduler: *Scheduler, opts: struct {
-            priority: Job.JobPriority = .normal,
+        pub fn submit(self: *const @This(), scheduler: *Scheduler, opts: struct {
+            priority: JobPriority = .normal,
+            affinity: JobAffinity = .any,
             counter: ?*Counter = null
         }) void {
             const wrapped = struct {
@@ -31,7 +33,8 @@ pub fn Wrap(comptime func: anytype) type {
                 .func = wrapped, 
                 .data = @ptrCast(&self.args),
                 .counter = opts.counter,
-                .priority = opts.priority
+                .priority = opts.priority,
+                .affinity = opts.affinity
             });
         }
     };
@@ -43,4 +46,11 @@ pub const JobPriority = enum(u8) {
     normal = 2,
     low = 3,
     background = 4
+};
+
+pub const JobAffinity = enum {
+    /// Job can run on any thread
+    any,
+    /// Job can only run on main thread
+    main
 };

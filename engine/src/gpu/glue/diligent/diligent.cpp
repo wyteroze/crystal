@@ -408,6 +408,15 @@ CrystalPipelineHandle diligent_create_pipeline(CrystalDiligentDeviceHandle handl
     graphicsPipeline.DepthStencilDesc.DepthWriteEnable = desc.depth_write;
     graphicsPipeline.DepthStencilDesc.DepthFunc = COMPARISON_FUNC_LESS_EQUAL;
 
+    if (desc.alpha_blend_enabled) {
+        auto& rt0 = psoCreateInfo.GraphicsPipeline.BlendDesc.RenderTargets[0];
+        rt0.BlendEnable = desc.alpha_blend_enabled;
+        rt0.SrcBlend = BLEND_FACTOR_SRC_ALPHA;
+        rt0.DestBlend = BLEND_FACTOR_INV_SRC_ALPHA;
+        rt0.SrcBlendAlpha = BLEND_FACTOR_SRC_ALPHA;
+        rt0.DestBlendAlpha = BLEND_FACTOR_INV_SRC_ALPHA;
+    }
+
     std::vector<LayoutElement> layoutElems;
     layoutElems.reserve(desc.layout_len);
     for (size_t i = 0; i < desc.layout_len; i++) {

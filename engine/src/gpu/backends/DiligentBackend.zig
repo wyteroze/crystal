@@ -114,7 +114,8 @@ pub fn createPipeline(self: DiligentBackend, d: desc.PipelineDesc) types.Pipelin
             .green = d.color_write_mask.green,
             .blue = d.color_write_mask.blue,
             .alpha = d.color_write_mask.alpha
-        }
+        },
+        .alpha_blend_enabled = d.alpha_blend_enabled
     });
 
     return .{ .ptr = pipe_h.ptr }; 

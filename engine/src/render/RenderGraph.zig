@@ -89,6 +89,28 @@ pub fn compile(self: *RenderGraph) !void {
         }
     }
 
+    for (self.nodes.items, 0..) |node, i| {
+        for (node.after) |dep_name| {
+            var producer_idx: ?usize = null;
+            for (self.nodes.items, 0..) |other, j| {
+                if (std.mem.eql(u8, other.name, dep_name)) {
+                    producer_idx = j;
+                    break;
+                }
+            }
+
+            const idx = producer_idx orelse {
+                std.log.err("Node '{s}' has 'after' dependency on '{s}', but no such node exists.", .{ node.name, dep_name });
+                return error.UnsatisfiedDependency;
+            };
+
+            const entry = try edges.getOrPut(idx);
+            if (!entry.found_existing) entry.value_ptr.* = .empty;
+            try entry.value_ptr.append(self.allocator, i);
+            in_degree[i] += 1;
+        }
+    }
+
     var queue: std.ArrayList(usize) = .empty;
     defer queue.deinit(self.allocator);
     var cursor: usize = 0;

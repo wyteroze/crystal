@@ -33,7 +33,7 @@ pub fn build(b: *std.Build) !void {
 
     cmake_configure.addArgs(&.{
         b.fmt("-DCMAKE_BUILD_TYPE={s}", .{ cmake_build_type }),
-        "-DSLANG_LIB_TYPE=STATIC",
+        "-DSLANG_LIB_TYPE=SHARED",
         boolFlag(b, "SLANG_ENABLE_TESTS", true),
         boolFlag(b, "SLANG_ENABLE_EXAMPLES", true),
         boolFlag(b, "SLANG_ENABLE_GFX", true),
@@ -68,7 +68,7 @@ pub fn build(b: *std.Build) !void {
     b.addNamedLazyPath("include", include_path);
     b.addNamedLazyPath("lib", lib_path);
     
-    b.addNamedLazyPath("lib-build", .{ .cwd_relative = try root.join(b.allocator, &.{ "build", "Debug", "lib" }) });
+    b.addNamedLazyPath("lib-build", .{ .cwd_relative = try root.join(b.allocator, &.{ "build", "Release", "lib" }) });
     b.addNamedLazyPath("lib-miniz", .{ .cwd_relative = try root.join(b.allocator, &.{ "build", "external", "miniz", "libminiz.a" }) });
     b.addNamedLazyPath("lib-cmark", .{ .cwd_relative = try root.join(b.allocator, &.{ "build", "external", "cmark", "src", "libcmark-gfm.a" }) });
     b.addNamedLazyPath("lib-lz4", .{ .cwd_relative = try root.join(b.allocator, &.{ "build", "external", "lz4", "build", "cmake", "liblz4.a" }) });

@@ -67,3 +67,7 @@ pub fn pollEvent(_: SdlBackend) ?desc.PlatformEvent {
         else => null,
     };
 }
+
+pub fn showError(_: SdlBackend, msg: [:0]const u8) void {
+    sdl3.message_box.showSimple(.{ .error_dialog = true }, "Sorry, something happened.", msg, null) catch {};
+}

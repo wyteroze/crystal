@@ -37,8 +37,18 @@ pub fn init(gpu_device: *gpu.GpuDevice, shader: gpu.GpuDevice.GpuShader, clear_c
                 .{ .offset = 24, .format = .float2 },
             },
         }),
-        .vs_ubuf = try gpu_device.createBuffer(.{ .name = "Vs ubuf", .type = .uniform, .usage = .dynamic, .size = @sizeOf([3]math.Mat4) }),
-        .light_ubuf = try gpu_device.createBuffer(.{ .name = "Light ubuf", .type = .uniform, .usage = .dynamic, .size = @sizeOf(gpu.types.GpuLightParams) }),
+        .vs_ubuf = try gpu_device.createBuffer(.{ 
+            .name = "Vs ubuf", 
+            .type = .uniform, 
+            .usage = .dynamic, 
+            .size = @sizeOf([3]math.Mat4) 
+        }),
+        .light_ubuf = try gpu_device.createBuffer(.{ 
+            .name = "Light ubuf", 
+            .type = .uniform, 
+            .usage = .dynamic, 
+            .size = @sizeOf(gpu.types.GpuLightParams) 
+        }),
         .clear_color = clear_color
     };
 }

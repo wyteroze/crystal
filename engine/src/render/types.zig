@@ -17,7 +17,14 @@ pub const RenderObject = struct {
     material: Material
 };
 
+pub const UiObject = struct {
+    pos: [2]f32,
+    size: [2]f32,
+    color: core.Color,
+};
+
 pub const RenderScene = struct {
+    ui_objects: std.ArrayList(UiObject),
     objects: std.ArrayList(RenderObject),
     lights: std.ArrayList(gpu.types.GpuLight),
 };

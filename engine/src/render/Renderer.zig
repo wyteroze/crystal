@@ -23,8 +23,7 @@ allocator: std.mem.Allocator,
 frame_allocator: std.heap.ArenaAllocator,
 gpu_device: *gpu.GpuDevice,
 graph: RenderGraph,
-sampler: gpu.GpuDevice.GpuSampler,
-shader: gpu.GpuDevice.GpuShader,
+default_sampler: gpu.GpuDevice.GpuSampler,
 surface_size: [2]u32,
 default_image: gpu.GpuDevice.GpuImage,
 default_quad: assets.types.GpuMesh,
@@ -50,15 +49,21 @@ pub fn init(allocator: std.mem.Allocator, surface_size: [2]u32, gpu_device: *gpu
     errdefer allocator.destroy(light_cull_pass);
     light_cull_pass.* = try .init(gpu_device, light_cull_shader, surface_size);
 
-    const shader = try gpu_device.createShader(gpu.shaders.basicShaderDesc());
+    const forward_shader = try gpu_device.createShader(gpu.shaders.basicShaderDesc());
     const forward_pass = try allocator.create(pass.ForwardPass);
     errdefer allocator.destroy(forward_pass);
-    forward_pass.* = try .init(gpu_device, shader, .fromRgbFloat(0.1, 0.1, 0.1, 1.0));
+    forward_pass.* = try .init(gpu_device, forward_shader, .fromRgbFloat(0.1, 0.1, 0.1, 1.0));
+
+    const ui_shader = try gpu_device.createShader(gpu.shaders.uiShaderDesc());
+    const ui_pass = try allocator.create(pass.UiPass);
+    errdefer allocator.destroy(ui_pass);
+    ui_pass.* = try .init(gpu_device, ui_shader, surface_size);
 
     try graph.addNode(depth_prepass.node());
     try graph.addNode(skybox_pass.node());
     try graph.addNode(light_cull_pass.node());
     try graph.addNode(forward_pass.node());
+    try graph.addNode(ui_pass.node());
     try graph.markExternal(resource.lights_buffer);
     try graph.compile();
 
@@ -67,8 +72,7 @@ pub fn init(allocator: std.mem.Allocator, surface_size: [2]u32, gpu_device: *gpu
         .frame_allocator = .init(allocator),
         .gpu_device = gpu_device,
         .graph = graph,
-        .sampler = try gpu_device.createSampler(.{}),
-        .shader = shader,
+        .default_sampler = try gpu_device.createSampler(.{}),
         .surface_size = surface_size,
         .default_image = try gpu_device.createImage(.{
             .name = "Default image",
@@ -89,6 +93,7 @@ pub fn init(allocator: std.mem.Allocator, surface_size: [2]u32, gpu_device: *gpu
             }),
             .index_buffer = try gpu_device.createBuffer(.{
                 .name = "Default quad index buffer",
+                .type = .index,
                 .data = std.mem.sliceAsBytes(([_]u32{
                     0, 2, 1,
                     1, 2, 3
@@ -115,8 +120,7 @@ pub fn init(allocator: std.mem.Allocator, surface_size: [2]u32, gpu_device: *gpu
 
 pub fn deinit(self: *Renderer) void {
     self.graph.deinit();
-    self.sampler.deinit();
-    self.shader.deinit();
+    self.default_sampler.deinit();
     self.default_image.deinit();
     self.default_quad.deinit();
     self.frame_allocator.deinit();

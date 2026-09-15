@@ -33,3 +33,7 @@ pub fn destroySurface(self: *Platform, h: types.SurfaceHandle) void {
 pub fn pollEvent(self: *Platform) ?desc.PlatformEvent {
     return switch (self.backend) { inline else => |*b| b.pollEvent() };
 }
+
+pub fn showError(self: Platform, msg: [:0]const u8) void {
+    switch (self.backend) { inline else => |*b| b.showError(msg) }
+}

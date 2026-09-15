@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Zig Run macOS",
+      "label": "Build + run Crystal",
       "type": "shell",
       "command": "zig build run -Dbackend=vulkan -- --project=demos/example/",
       "problemMatcher": [],

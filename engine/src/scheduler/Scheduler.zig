@@ -26,6 +26,7 @@ workers: []std.Thread,
 // One for each job priority (critical, high, normal, low, background)
 deques: [std.meta.fields(Job.JobPriority).len][]Deque(Job),
 running: std.atomic.Value(bool) = .init(true),
+main_worker_id: usize = 0,
 
 var next_submit_worker: std.atomic.Value(usize) = .init(0);
 threadlocal var worker_id: usize = 0;
@@ -87,7 +88,6 @@ pub fn init(self: *Scheduler, allocator: std.mem.Allocator, io: std.Io, os: *con
         const core = topology.cores[i];
         self.workers[i] = try std.Thread.spawn(.{}, workerMain, .{ self, core });
     }
-
 }
 
 pub fn deinit(self: *Scheduler) void {
@@ -121,12 +121,22 @@ fn workerMain(self: *Scheduler, parent_core: Os.Scheduling.Core) void {
     tls_self = self;
     worker_id = parent_core.id;
 
+    var spins: usize = 0;
     const home = &self.home_fibers[worker_id];
     while (self.running.load(.acquire)) {
         const runnable = self.popNextRunnable() orelse {
-            std.Thread.yield() catch {};
+            spins += 1;
+            // TODO: Improve this. Doing it this way introduces latency issues
+            if (spins < 100) {
+                std.atomic.spinLoopHint();
+            } else if (spins < 1000) {
+                std.Thread.yield() catch {};
+            } else {
+                self.io.sleep(.fromNanoseconds(std.time.ns_per_ms), .awake) catch {};
+            }
             continue;
         };
+        spins = 0;
 
         const fiber = self.resolveRunnable(runnable);
         //std.log.debug("workerMain: got fiber {*}", .{ fiber });
@@ -161,8 +171,10 @@ fn attachJob(self: *Scheduler, fiber: *Fiber, job: Job) void {
 }
 
 pub fn submit(self: *Scheduler, job: Job) void {
-    const target = if (tls_self == self) worker_id
+    const target = if (job.affinity == .main) self.main_worker_id
+        else if (tls_self == self) worker_id
         else next_submit_worker.fetchAdd(1, .monotonic) % self.workers.len;
+
     self.deques[@intFromEnum(job.priority)][target].pushToBottom(job);
 }
 
@@ -212,9 +224,12 @@ pub fn publishPendingPark(self: *Scheduler) void {
 }
 
 pub fn makeRunnable(self: *Scheduler, fiber: *Fiber) void {
-    //std.log.debug("makeRunnable: {*}, {d}", .{ fiber, worker_id });
     fiber.state = .idle;
-    self.ready_fibers[worker_id].pushToBottom(fiber);
+    const target = blk: {
+        if (fiber.job) |j| if (j.affinity == .main) break :blk self.main_worker_id;
+        break :blk worker_id;
+    };
+    self.ready_fibers[target].pushToBottom(fiber);
 }
 
 pub fn wait(self: *Scheduler, counter: *Counter) void {

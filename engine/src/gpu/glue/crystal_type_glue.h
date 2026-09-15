@@ -161,6 +161,7 @@ typedef struct {
     /// DEFAULT: FALSE
     bool depth_write;
     CrystalColorWriteMask color_write_mask;
+    bool alpha_blend_enabled;
 } CrystalPipelineDesc;
 
 typedef struct {

@@ -33,7 +33,7 @@ pub const BoundResource = struct {
 pub const BufferDesc = struct {
     name: [:0]const u8,
     type: types.BufferType = .vertex,
-    usage: types.BufferUsage = .immutable,
+    usage: types.BufferUsage = .default,
     data: ?[]const u8 = null,
     size: usize = 0,
     /// This usually isn't needed unless type == .storage, otherwise it's the byte size of one element.
@@ -90,7 +90,8 @@ pub const PipelineDesc = struct {
     index_type: types.IndexType = .none,
     cull_mode: CullMode = .none,
     depth_write: bool = false,
-    color_write_mask: ColorWriteMask = .all()
+    color_write_mask: ColorWriteMask = .all(),
+    alpha_blend_enabled: bool = false
 };
 
 pub const ComputePipelineDesc = struct {

@@ -33,3 +33,11 @@ pub fn skyboxShaderDesc() desc.ShaderDesc {
         .{ .name = "SkyboxShader: fragment", .stage = .fragment, .source = source, .entrypoint = "fragmentMain" }
     } };
 }
+
+pub fn uiShaderDesc() desc.ShaderDesc {
+    const source = @embedFile("shaders/src/ui.slang");
+    return .{ .stages = &.{
+        .{ .name = "UiShader: vertex", .stage = .vertex, .source = source, .entrypoint = "vertexMain" },
+        .{ .name = "UiShader: fragment", .stage = .fragment, .source = source, .entrypoint = "fragmentMain" }
+    } };
+}
