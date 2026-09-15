@@ -205,6 +205,20 @@ pub fn main(init: std.process.Init) !void {
             @panic("Failed to find boot info. This means either the executable wasn't built as a baked project when it should have been, or the 'game.crypak' file was deleted or moved.");
         }
     };
+
+    var sig: core.Signal.Signal(usize) = .init(allocator);
+    defer sig.deinit();
+    
+    const connection = try sig.connect(struct {
+        fn c(num: usize) void {
+            std.log.debug("I'm so cool I'm {d} cools!", .{ num });
+        }
+    }.c);
+
+    sig.fire(1);
+    sig.fire(5);
+    connection.disconnect();
+    sig.fire(0);
     
     const os: Os = try .init(init, builtin.os.tag, boot.package_id);
 
