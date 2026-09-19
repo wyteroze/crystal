@@ -16,6 +16,7 @@ pub const Binding = @import("Binding.zig").Binding;
 
 pub const value = @import("value.zig").value;
 pub const module = @import("module.zig").module;
+pub const signal = @import("signal.zig").signal;
 pub const reference = @import("reference.zig").reference;
 pub const registry = @import("registry.zig");
 pub const util = @import("util.zig");

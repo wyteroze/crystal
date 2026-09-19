@@ -5,4 +5,4 @@ pub const boot = @import("boot/boot.zig");
 pub const TrackedAllocator = @import("TrackedAllocator.zig");
 pub const SizeFormatter = @import("SizeFormatter.zig");
 pub const Color = @import("Color.zig");
-pub const Signal = @import("Signal.zig");
+pub const signal = @import("signal.zig");

@@ -30,6 +30,13 @@
         "Lua.workspace.maxPreload": 1,
         "Lua.workspace.preloadFileSize": 1,
         "Lua.workspace.checkThirdParty": false,
-        "Lua.diagnostics.ignoredFiles": "Disable"
+        "Lua.diagnostics.ignoredFiles": "Disable",
+        "search.exclude": {
+            "**/vendor": true,
+            "**/.clangd-db": true,
+            "**/.zig-cache": true,
+            "**/zig-pkg": true,
+            "**/*.code-search": true
+        }
 	}
 }

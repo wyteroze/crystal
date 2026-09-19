@@ -1,6 +1,8 @@
 // Copyright 2026 wyteroze. Licensed under the Apache-2.0 license.
 
 const std = @import("std");
+const core = @import("../core/core.zig");
+const signal = core.signal;
 const World = @import("World.zig");
 const ComponentId = @import("ComponentId.zig");
 
@@ -108,6 +110,15 @@ pub fn getComponent(self: Entity, id: ComponentId, comptime T: type) ?*T {
 pub fn getName(self: Entity) ?[]const u8 {
     const name_component = self.getComponent(self.world.components.id("Name").?, []const u8) orelse return null;
     return name_component;
+}
+
+// this is so messy man.. TODO: make it better
+pub fn updated(self: Entity) *signal.Signal(.{ f32 }) {
+    return &self.world.update_signals.items[self.index];
+}
+
+pub fn destroyed(self: Entity) *signal.Signal(.{}) {
+    return &self.world.destroy_signals.items[self.index];
 }
 
 pub fn format(self: Entity, buf: []u8) []const u8 {
@@ -353,6 +364,14 @@ pub const registerLua = struct {
         } else if (std.mem.eql(u8, key, "Id")) {
             l.pushInteger(@intCast(self.toU64()));
             return 1;
+        } else if (std.mem.eql(u8, key, "Events")) {
+            l.newTable();
+            linker.util.pushVal(l, *signal.Signal(.{ f32 }), self.updated());
+            l.setField(-2, "Updated");
+            linker.util.pushVal(l, *signal.Signal(.{}), self.destroyed());
+            l.setField(-2, "Destroyed");
+
+            return 1;
         } else {
             // fallback to exising methods
             l.getMetatable(1) catch { l.pushNil(); return 1; };
@@ -396,6 +415,11 @@ pub const registerLua = struct {
     }
 
     pub fn registerLua(l: *zlua.Lua) void {
+        // Updated
+        linker.signal(l, signal.Signal(.{ f32 }));
+        // Destroyed
+        linker.signal(l, signal.Signal(.{}));
+        
         linker.reference(l, ChildrenSlidingWindow, .{
             .name = .auto,
             .scope = .{ .module = "ecs.entity" },

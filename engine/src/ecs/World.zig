@@ -8,6 +8,7 @@ const SystemRegistry = @import("SystemRegistry.zig");
 const SparseSet = @import("SparseSet.zig");
 const Query = @import("Query.zig");
 const Hierarchy = @import("Hierarchy.zig");
+const Signal = @import("../core/signal.zig").Signal;
 
 const field_types: std.StaticStringMap(ComponentId.FieldType) = blk: {
     const math = @import("../core/math/math.zig");
@@ -43,6 +44,8 @@ alive: std.ArrayList(bool),
 free: std.ArrayList(u32),
 
 hierarchy: Hierarchy,
+update_signals: std.ArrayList(Signal(.{ f32 })),
+destroy_signals: std.ArrayList(Signal( .{} )),
 
 pub fn init(allocator: std.mem.Allocator) World {
     return .{
@@ -53,6 +56,8 @@ pub fn init(allocator: std.mem.Allocator) World {
         .generations = .empty,
         .alive = .empty,
         .free = .empty,
+        .update_signals = .empty,
+        .destroy_signals = .empty,
         .hierarchy = .init(allocator)
     };
 }
@@ -66,6 +71,11 @@ pub fn deinit(self: *World) void {
     self.generations.deinit(self.allocator);
     self.alive.deinit(self.allocator);
     self.free.deinit(self.allocator);
+
+    for (self.destroy_signals.items) |*ds| ds.deinit();
+    for (self.update_signals.items) |*us| us.deinit();
+    self.destroy_signals.deinit(self.allocator);
+    self.update_signals.deinit(self.allocator);
 }
 
 // Components
@@ -135,14 +145,33 @@ pub fn getComponents(self: *World, entity: Entity) ![]ComponentId {
 pub fn spawnEntity(self: *World) !Entity {
     if (self.free.pop()) |idx| {
         self.alive.items[idx] = true;
-        return .{ .index = idx, .generation = self.generations.items[idx], .world = self };
+        self.update_signals.items[idx] = .init(self.allocator);
+        self.destroy_signals.items[idx] = .init(self.allocator);
+
+        return .{
+            .index = idx,
+            .generation = self.generations.items[idx],
+            .world = self
+        };
     }
 
     const idx: u32 = @intCast(self.generations.items.len);
     try self.generations.append(self.allocator, 0);
     try self.alive.append(self.allocator, true);
 
-    return .{ .index = idx, .generation = 0, .world = self };
+    if (idx >= self.update_signals.items.len) {
+        try self.update_signals.append(self.allocator, .init(self.allocator));
+        try self.destroy_signals.append(self.allocator, .init(self.allocator));
+    } else {
+        self.update_signals.items[idx] = .init(self.allocator);
+        self.destroy_signals.items[idx] = .init(self.allocator);
+    }
+
+    return .{ 
+        .index = idx, 
+        .generation = 0, 
+        .world = self
+    };
 }
 
 pub fn isEntityAlive(self: *World, entity: Entity) bool {
@@ -156,7 +185,10 @@ pub fn destroyEntity(self: *World, entity: Entity) void {
     if (!self.isEntityAlive(entity)) return;
     for (self.storages.items) |*s| s.remove(entity);
 
-    self.alive.items[entity.index]= false;
+    entity.destroyed().fire(.{});
+    entity.destroyed().deinit();
+    entity.updated().deinit();
+    self.alive.items[entity.index] = false;
     self.generations.items[entity.index] +%= 1;
     self.free.append(self.allocator, entity.index) catch {};
 }
@@ -221,7 +253,8 @@ pub fn unregisterSystem(self: *World, name: []const u8) void {
     self.systems.unregister(name);
 }
 
-pub fn tickAllSystems(self: *World, dt: f32) void {
+pub fn update(self: *World, dt: f32) void {
+    for (self.update_signals.items) |*s| s.fire(.{ dt });
     self.systems.runAll(self, dt);
 }
 
