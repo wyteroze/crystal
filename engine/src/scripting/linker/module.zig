@@ -8,6 +8,8 @@ const Binding = @import("Binding.zig").Binding;
 const Lua = zlua.Lua;
 
 pub fn module(l: *Lua, comptime recipe: recipes.LuaModuleRecipe) void {
+    l.newTable();
+    
     _ = l.pushStringZ(recipe.name);
     l.setField(-2, "__name");
 
@@ -56,9 +58,9 @@ pub fn module(l: *Lua, comptime recipe: recipes.LuaModuleRecipe) void {
                     }
                 }
                 lua.getMetatable(1) catch return 0;
-                l.getField(-1, "__methods");
-                l.pushValue(2);
-                _ = l.getTable(-2);
+                _ = lua.getField(-1, "__methods");
+                lua.pushValue(2);
+                _ = lua.getTable(-2);
 
                 return 1;
             }

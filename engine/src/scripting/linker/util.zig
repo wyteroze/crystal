@@ -81,6 +81,8 @@ pub fn luaErr(l: *Lua, err: anyerror, comptime ctx: anytype) noreturn {
 }
 
 pub fn moduleRegister(l: *Lua, mod_path: [:0]const u8, field_name: [:0]const u8) void {
+    const v_idx = l.getTop();
+
     _ = l.getGlobal("package");
     _ = l.getField(-1, "loaded");
     l.remove(-2);
@@ -88,30 +90,28 @@ pub fn moduleRegister(l: *Lua, mod_path: [:0]const u8, field_name: [:0]const u8)
     const mod_type = l.getField(-1, mod_path);
     if (mod_type == .nil) {
         l.pop(1);
-
         l.newTable();
         l.pushValue(-1);
         l.setField(-3, mod_path);
     }
 
-    l.pushValue(-3);
+    l.pushValue(v_idx);
     l.setField(-2, field_name);
 
-    l.remove(-2);
-    l.pop(1);
+    l.setTop(v_idx - 1);
 }
 
 pub fn registerTopLevelModule(l: *Lua, mod_path: [:0]const u8) void {
-    // Get `package.loaded`
+    const v_idx = l.getTop();
+
     _ = l.getGlobal("package");
     _ = l.getField(-1, "loaded");
-    l.remove(-2); // pop `package`, we don't need it
+    l.remove(-2);
 
-    // move what we're registering to the top of the stack, then set
-    l.pushValue(-2);
+    l.pushValue(v_idx);
     l.setField(-2, mod_path);
 
-    l.remove(-1); // now pop `loaded`
+    l.setTop(v_idx - 1);
 }
 
 pub fn autoPush(l: *Lua, comptime func: anytype) void {

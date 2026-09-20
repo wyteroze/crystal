@@ -13,6 +13,7 @@ const core = engine.core;
 const toml = engine.toml;
 const Scheduler = engine.Scheduler;
 const render = engine.render;
+const Input = engine.Input;
 
 const target_fps = 120;
 const fps_seconds: f32 = 1.0 / @as(f32, @floatCast(target_fps));
@@ -20,17 +21,6 @@ const asset_purge_rate_seconds: std.Io.Duration = .fromSeconds(1);
 const clear_color: core.Color = .fromRgbFloat(0.1, 0.1, 0.1, 1.0);
 
 const Scene = struct { cam: ?ecs.Entity };
-
-fn updateScripts(w: *ecs.World, dt: f32) void {
-    const script_component = w.components.id("Script").?;
-
-    const scripts = w.query(&.{ script_component });
-    var iter = scripts.iterator();
-    while (iter.next()) |e| {
-        const scr = w.getComponent(e, script_component, scripting.Script) orelse continue;
-        _ =  scr.callMethod("OnUpdate", &.{}, &.{ dt }) catch {};
-    }
-}
 
 fn submitToRenderer(w: *ecs.World, ui_world: *ecs.World, renderer: *render.Renderer) void {
     const allocator = renderer.frame_allocator.allocator();
@@ -208,12 +198,18 @@ pub fn main(init: std.process.Init) !void {
     
     const os: Os = try .init(init, builtin.os.tag, boot.package_id);
 
-    var platform: Platform = try .init(.initSdl());
-    defer platform.deinit();
-
     var scheduler: Scheduler = undefined;
     try scheduler.init(allocator, io, &os);
     defer scheduler.deinit();
+
+    var platform_allocator: core.TrackedAllocator = .init(allocator, "Platform");
+    var platform: Platform = try .init(platform_allocator.allocator(), .initSdl());
+    defer platform.deinit();
+
+    var input_allocator: core.TrackedAllocator = .init(allocator, "Input");
+    var input: Input = undefined;
+    try input.init(input_allocator.allocator(), &platform);
+    defer input.deinit();
 
     var surface_size: [2]u32 = .{ 1280, 720 };
     const surface = try platform.createSurface(.{ .title = "crystal", .width = surface_size[0], .height = surface_size[1], .target = .primary });
@@ -246,7 +242,7 @@ pub fn main(init: std.process.Init) !void {
     defer ui_world.deinit();
 
     var lua_allocator: core.TrackedAllocator = .init(allocator, "LuaRuntime");
-    var runtime: scripting.Runtime = try .init(lua_allocator.allocator(), &world, &assets);
+    var runtime: scripting.Runtime = try .init(lua_allocator.allocator(), &world, &assets, &input);
     defer runtime.deinit();
     runtime.setGenerational();
     runtime.linkState();
@@ -310,6 +306,22 @@ pub fn main(init: std.process.Init) !void {
     try ui_world.addComponent(ui_entity, color_component, core.Color, .fromRgbFloat(0.0, 0.0, 0.0, 0.5));
 
     var running = true;
+
+    const event_con = try platform.platform_event.connect(struct {
+        fn c(ctx: anytype, e: Platform.desc.PlatformEvent) void {
+            switch (e) {
+                .quit => ctx[0].* = false,
+                .surface_resize => |sz| {
+                    ctx[1].*[0] = sz.width;
+                    ctx[1].*[1] = sz.height;
+                },
+
+                else => {}
+            }
+        }
+    }.c, @constCast(&.{ &running, &surface_size }));
+    defer event_con.disconnect();
+
     var last_time = std.Io.Clock.awake.now(io);
     var last_asset_tick = std.Io.Clock.awake.now(io);
     while (running) {
@@ -318,20 +330,9 @@ pub fn main(init: std.process.Init) !void {
         const dt_seconds: f32 = @floatCast(@as(f32, @floatFromInt(dt.toNanoseconds())) / std.time.ns_per_s);
         last_time = start;
 
-        updateScripts(&world, dt_seconds);
-        submitToRenderer(&world, &ui_world, &renderer);
-
-        while (platform.pollEvent()) |e| {
-            switch (e) {
-                .quit => running = false,
-                .surface_resize => |sz| {
-                    surface_size[0] = sz.width;
-                    surface_size[1] = sz.height;
-                },
-            }
-        }
-
+        platform.poll();
         world.update(dt_seconds);
+        submitToRenderer(&world, &ui_world, &renderer);
 
         const end = std.Io.Clock.awake.now(io);
 

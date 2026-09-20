@@ -83,11 +83,11 @@ pub const Property = struct {
 };
 
 pub const Properties = union(enum) {
-    prop_fields: []Property,
+    prop_fields: []const Property,
     custom_fns: [2]?Fn,
     custom_lua_fns: [2]?LuaFn,
 
-    pub fn fields(f: []Property) Properties {
+    pub fn fields(f: []const Property) Properties {
         return .{ .prop_fields = f };
     }
     pub fn custom(comptime get: anytype, comptime set: anytype) Properties {

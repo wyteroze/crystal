@@ -54,9 +54,9 @@ pub fn reference(l: *Lua, comptime T: type, comptime recipe: recipes.LuaReferenc
                     }
                 }
                 lua.getMetatable(1) catch return 0;
-                l.getField(-1, "__methods");
-                l.pushValue(2);
-                _ = l.getTable(-2);
+                _ = lua.getField(-1, "__methods");
+                lua.pushValue(2);
+                _ = lua.getTable(-2);
 
                 return 1;
             }

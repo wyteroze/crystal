@@ -4,6 +4,7 @@ Copyright 2026 wyteroze. Licensed under the Apache-2.0 license.
 
 local cmath = require("core.math")
 local assets = require("assets")
+local input = require("input")
 
 local Teapot = {}
 Teapot.__index = Teapot
@@ -32,6 +33,25 @@ function Teapot.new(entity)
 
     entity.Events.Destroyed:Connect(function()
         print(("%s is being destroyed!"):format(self._entity.Name))
+    end)
+
+    
+    input.Keyboards.Connected:Connect(function(k)
+        print("Keyboard connected:", k.Id)
+
+        local kb = input:GetKeyboard(k.Id)
+        print(kb)
+
+        kb.KeyPressed:Connect(function(key)
+            print("Pressed", key)
+        end)
+
+        kb.KeyReleased:Connect(function(key)
+            print("Released", key)
+        end)
+    end)
+    input.Keyboards.Disconnected:Connect(function(kb)
+        print("Keyboard disconnected:", kb)
     end)
 
     return self

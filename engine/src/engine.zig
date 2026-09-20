@@ -10,3 +10,4 @@ pub const Os = @import("os/Os.zig");
 pub const toml = @import("toml");
 pub const Scheduler = @import("scheduler/Scheduler.zig");
 pub const render = @import("render/render.zig");
+pub const Input = @import("input/Input.zig");
