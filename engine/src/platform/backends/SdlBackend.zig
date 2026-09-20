@@ -91,25 +91,27 @@ pub fn pollEvent(_: SdlBackend) ?desc.PlatformEvent {
         .mouse_removed => |e| return .{ .mouse_disconnected = .{
             .id = e.id.value
         } },
+        // We use ID 1 as the default, because 0 is treated as 
+        // invalid mouse in SDL.
         .mouse_button_down => |e| return .{ .mouse_button_down = .{
-            .window_id = e.window_id orelse 0,
-            .mouse_id = if (e.id) |id| id.value else 0,
+            .window_id = e.window_id orelse 1,
+            .mouse_id = if (e.id) |id| id.value else 1,
             .button = sdlMouseButtonToPlatformMouseButton(e.button)
         } },
         .mouse_button_up => |e| return .{ .mouse_button_up = .{
-            .window_id = e.window_id orelse 0,
-            .mouse_id = if (e.id) |id| id.value else 0,
+            .window_id = e.window_id orelse 1,
+            .mouse_id = if (e.id) |id| id.value else 1,
             .button = sdlMouseButtonToPlatformMouseButton(e.button)
         } },
         .mouse_motion => |e| return .{ .mouse_moved = .{
-            .window_id = e.window_id orelse 0,
-            .mouse_id = if (e.id) |id| id.value else 0,
+            .window_id = e.window_id orelse 1,
+            .mouse_id = if (e.id) |id| id.value else 1,
             .position = .{ e.x, e.y },
             .delta = .{ e.x_rel, e.y_rel }
         } },
         .mouse_wheel => |e| return .{ .mouse_scrolled = .{
-            .window_id = e.window_id orelse 0,
-            .mouse_id = if (e.id) |id| id.value else 0,
+            .window_id = e.window_id orelse 1,
+            .mouse_id = if (e.id) |id| id.value else 1,
             .delta = .{ e.scroll_x, e.scroll_y }
         } },
         .gamepad_added => |e| return .{ .gamepad_connected = .{

@@ -47,9 +47,7 @@ fn luaConnect(comptime SignalType: type) fn (l: *Lua) i32 {
                 fn c(sig_ctx: *LuaSignalCtx, args: SignalType.Args) void {
                     _ = sig_ctx.lua.getIndexRaw(zlua.registry_index, sig_ctx.ref);
                     inline for (args) |a| util.pushVal(sig_ctx.lua, @TypeOf(a), a);
-                    sig_ctx.lua.protectedCall(.{ .args = args.len, .results = 0 }) catch |e| {
-                        std.log.err("Signal callback errored: '{s}'", .{ @errorName(e) });
-                    };
+                    sig_ctx.lua.protectedCall(.{ .args = args.len, .results = 0 }) catch |e| util.luaErr(sig_ctx.lua, e, .{});
                 }
             }.c, ctx) catch |e| util.luaErr(l, e, .{});
 

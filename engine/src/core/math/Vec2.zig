@@ -3,7 +3,7 @@
 const std = @import("std");
 
 pub const Vec2 = extern struct {
-    pub const Simd2 = @Vector(3, f32);
+    pub const Simd2 = @Vector(2, f32);
     x: f32, y: f32,
 
     pub const zero: Vec2 = .{ .x = 0, .y = 0 };

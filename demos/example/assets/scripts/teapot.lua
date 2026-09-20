@@ -54,6 +54,26 @@ function Teapot.new(entity)
         print("Keyboard disconnected:", kb)
     end)
 
+    input.Mice.Connected:Connect(function(ms) 
+        print("Mouse connected:", ms.Id)
+
+        local ms = input:GetMouse(ms.Id)
+        print(ms)
+
+        ms.ButtonPressed:Connect(function(btn) 
+            print("Pressed", btn)
+        end)
+        ms.ButtonReleased:Connect(function(btn) 
+            print("Released", btn)
+        end)
+        ms.Moved:Connect(function(delta, pos)
+            print("Moved delta =", delta, "pos =", pos)
+        end)
+        ms.Scrolled:Connect(function(delta)
+            print("Scrolled", delta)
+        end)
+    end)
+
     return self
 end
 

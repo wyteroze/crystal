@@ -6,13 +6,15 @@ const Lua = @import("zlua").Lua;
 /// Every binding must be registered here to be linked
 const bindings = .{
     @import("../../core/math/Vec3.zig"),
+    @import("../../core/math/Vec2.zig"),
     @import("../../core/math/Quat.zig"),
     @import("../../core/math/Mat4.zig"),
     @import("../../ecs/World.zig"),
     @import("../../ecs/Entity.zig"),
     @import("../../assets/Assets.zig"),
     @import("../../input/Input.zig"),
-    @import("../../input/devices/KeyboardDevice.zig")
+    @import("../../input/devices/KeyboardDevice.zig"),
+    @import("../../input/devices/MouseDevice.zig")
 };
 
 pub fn registerAll(l: *Lua) void {

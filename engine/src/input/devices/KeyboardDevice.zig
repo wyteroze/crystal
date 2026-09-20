@@ -22,25 +22,20 @@ pub fn init(allocator: std.mem.Allocator, id: usize) KeyboardDevice {
 }
 
 pub fn deinit(self: *KeyboardDevice) void {
-    if (self.keys_pressed.count() > 0) {
-        var iter = self.keys_pressed.keyIterator();
-        while (iter.next()) |kp| std.log.warn("{f}", .{ kp.* });
-        std.log.warn("The keys above are currently in KeyboardDevice {d}'s pressed keys list even though it's being deinitialized. Were any events dropped during its lifetime?", .{ self.id });
-    }
-
     self.keys_pressed.deinit();
     self.key_pressed.deinit();
     self.key_released.deinit();
 }
 
-pub fn keyPressed(self: *KeyboardDevice, event: Platform.desc.KeyboardEvent) void {
+pub fn keyPressed(self: *KeyboardDevice, event: Platform.desc.KeyboardEvent) !void {
     self.key_pressed.fire(.{ event.keycode });
-    self.keys_pressed.put(event.keycode, true) catch |e| @panic(@errorName(e));
+    try self.keys_pressed.put(event.keycode, true);
 }
 
 pub fn keyReleased(self: *KeyboardDevice, event: Platform.desc.KeyboardEvent) void {
     self.key_released.fire(.{ event.keycode });
-    if (!self.keys_pressed.remove(event.keycode)) std.log.warn("keyReleased() called on KeyboardDevice {d} for a key that isn't pressed", .{ self.id });
+    if (!self.keys_pressed.remove(event.keycode)) 
+        std.log.warn("keyReleased() called on KeyboardDevice {d} for a key that isn't pressed", .{ self.id });
 }
 
 pub fn isKeyDown(self: *KeyboardDevice, key: Platform.desc.Keycode) bool {
@@ -53,15 +48,19 @@ pub const registerLua = struct {
     const zlua = @import("zlua");
     const KeyboardDeviceBind = linker.Binding(KeyboardDevice, true);
 
+    fn pushSignal(l: *zlua.Lua, sig: anytype) void {
+        linker.util.pushVal(l, @TypeOf(sig), sig);
+    }
+
     fn keyboardDeviceGet(l: *zlua.Lua) i32 {
         const self = KeyboardDeviceBind.check(l, 1);
         const key = l.toString(2) catch |e| linker.util.luaErr(l, e, .{ []const u8, 2 });
         
         if (std.mem.eql(u8, key, "KeyPressed")) {
-            linker.util.pushVal(l, *signal.Signal(.{ Platform.desc.Keycode }), &self.key_pressed);
+            pushSignal(l, &self.key_pressed);
             return 1;
         } else if (std.mem.eql(u8, key, "KeyReleased")) {
-            linker.util.pushVal(l, *signal.Signal(.{ Platform.desc.Keycode }), &self.key_released);
+            pushSignal(l, &self.key_released);
             return 1;
         }  else if (std.mem.eql(u8, key, "Id")) {
             l.pushInteger(@intCast(self.id));
