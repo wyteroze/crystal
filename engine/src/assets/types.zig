@@ -43,6 +43,24 @@ pub const ScriptSource = struct {
     }
 };
 
+pub const Glyph = struct {
+    codepoint: u32,
+    size: [2]u32,
+    bearing: [2]i32,
+    advance: f32,
+    pixels: []u8
+};
+
+pub const Font = struct {
+    glyphs: []Glyph,
+    pixel_size: u32,
+
+    pub fn deinit(self: *const Font, allocator: std.mem.Allocator) void {
+        for (self.glyphs) |g| allocator.free(g.pixels);
+        allocator.free(self.glyphs);
+    }
+};
+
 // GPU-specific. Stored in GPU memory
 
 pub const GpuImage = gpu.GpuDevice.GpuImage;

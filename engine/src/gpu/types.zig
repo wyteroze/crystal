@@ -18,7 +18,8 @@ pub const PixelFormat = enum {
     /// Depth stencil
     /// 2 channels. 24 bits for depth, 8 bits for stencil, 32 total.
     d24_s8,
-    d32
+    d32,
+    r8_unorm
 };
 
 pub const IndexType = enum { none, uint16, uint32 };

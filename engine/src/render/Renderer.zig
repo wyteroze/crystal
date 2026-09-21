@@ -65,6 +65,8 @@ pub fn init(allocator: std.mem.Allocator, surface_size: [2]u32, gpu_device: *gpu
     try graph.addNode(forward_pass.node());
     try graph.addNode(ui_pass.node());
     try graph.markExternal(resource.lights_buffer);
+    try graph.markExternal(resource.default_sampler);
+    try graph.markExternal(resource.default_image);
     try graph.compile();
 
     return .{ 
@@ -134,6 +136,8 @@ pub fn render(self: *Renderer, view: types.RenderView, scene: types.RenderScene)
     self.graph.resources.map.clearRetainingCapacity();
     try self.graph.resources.put(resource.lights_buffer, .{ .storage_buffer = self.lights_ssbo.handle });
     try self.graph.resources.put(resource.depth_buffer, .{ .image = self.depth_image.handle });
+    try self.graph.resources.put(resource.default_image, .{ .image = self.default_image.handle });
+    try self.graph.resources.put(resource.default_sampler, .{ .sampler = self.default_sampler.handle });
     
     const ctx: pass.PassContext = .{
         .device = self.gpu_device,

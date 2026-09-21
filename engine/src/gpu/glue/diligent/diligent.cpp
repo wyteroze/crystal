@@ -115,7 +115,7 @@ static std::vector<ShaderResourceVariableDesc> buildResourceVars(const CrystalRe
         vars.push_back({
             crystalVisibilityToDiligent(resources[i].visibility), 
             resources[i].name, 
-            SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE 
+            SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC
         });
     }
 
@@ -293,6 +293,7 @@ CrystalImageHandle diligent_create_image(CrystalDiligentDeviceHandle handle, Cry
     TexDesc.ArraySize = desc.is_cubemap ? 6 : 1;
     TexDesc.Width = desc.width;
     TexDesc.Height = desc.height;
+    TexDesc.MipLevels = 1;
     
     std::cerr << "is_cubemap=" << desc.is_cubemap << " width=" << desc.width << "\n";
 
@@ -323,6 +324,11 @@ CrystalImageHandle diligent_create_image(CrystalDiligentDeviceHandle handle, Cry
             TexDesc.BindFlags = BIND_DEPTH_STENCIL | BIND_SHADER_RESOURCE;
             stride = 4;
             isDepth = true;
+            break;
+        case CRYSTAL_PIXEL_FORMAT_R8_UNORM:
+            TexDesc.Format = TEX_FORMAT_R8_UNORM;
+            TexDesc.BindFlags = BIND_SHADER_RESOURCE;
+            stride = 1;
             break;
     }
 

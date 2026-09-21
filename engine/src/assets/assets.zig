@@ -3,11 +3,17 @@
 const std = @import("std");
 const gpu = @import("../gpu/gpu.zig");
 const Source = @import("sources/Source.zig");
+const render = @import("../render/render.zig");
 const DirSource = @import("sources/DirSource.zig");
 const asset_sources = @import("sources/sources.zig").sources;
 pub const AssetData = @import("AssetData.zig");
 pub const AssetUri = @import("AssetUri.zig");
 pub const types = @import("types.zig");
+
+pub const LoadContext = struct {
+    // For fonts only
+    pixel_size: u32 = 0
+};
 
 pub const UploadContext = struct {
     /// For images only
@@ -57,7 +63,8 @@ pub const AssetHandle = struct {
     pub fn cpuGet(self: AssetHandle, comptime asset_type: AssetData.AssetType) !switch (asset_type) {
         .mesh => types.Mesh,
         .image => types.Image,
-        .script_source => types.ScriptSource
+        .script_source => types.ScriptSource,
+        .font => types.Font
     } {
         const data = try self.assets.getCpuData(self.id);
         const a_type = @as(AssetData.AssetType, data);
@@ -69,6 +76,7 @@ pub const AssetHandle = struct {
     pub fn gpuGet(self: AssetHandle, comptime asset_type: AssetData.AssetType) !switch (asset_type) {
         .mesh => types.GpuMesh,
         .image => types.GpuImage,
+        .font => render.text.FontAtlas,
         .script_source => unreachable
     } {
         const data = try self.assets.getGpuData(self.id);
@@ -154,7 +162,7 @@ pub fn deinit(self: *Assets) void {
     self.sources.deinit();
 }
 
-pub fn load(self: *Assets, path: []const u8) !AssetHandle {
+pub fn load(self: *Assets, path: []const u8, load_ctx: LoadContext) !AssetHandle {
     const uri: AssetUri = try .parse(self.allocator, path);
     defer uri.deinit(self.allocator);
 
@@ -169,7 +177,7 @@ pub fn load(self: *Assets, path: []const u8) !AssetHandle {
     };
 
     const bytes = try source.source().read(uri.path);
-    const data: AssetData.CpuAssetData = try .parse(self.allocator, self.io, path, bytes);
+    const data: AssetData.CpuAssetData = try .parse(self.allocator, self.io, path, bytes, load_ctx);
     try self.slots.put(id, .{ .cpu_data = data, .cpu_data_refcount = 1, .path = try self.allocator.dupe(u8, path) });
 
     return .{ .id = id, .assets = self };
@@ -253,7 +261,14 @@ pub const registerLua = struct {
     fn luaLoadAsset(l: *zlua.Lua) !i32 {
         const r: *Runtime = .fromState(l);
         const uri = l.toString(1) catch |e| linker.util.luaErr(l, e, .{ []const u8, 1 });
-        const handle = try r.assets.load(uri);
+        // Quick bandaid patch, because right now loading fonts requires you to pass a size
+        // for FreeType to actually render the font. In the future when we render with SDFs
+        // instead of using bitmaps, providing a size won't be needed and Lua will be able
+        // to load fonts like any other asset.
+        if (std.mem.find(u8, uri, ".ttf") != null) {
+            return error.LoadingFontsNotAllowedFromLua;
+        }
+        const handle = try r.assets.load(uri, .{});
 
         HandleBind.push(l, handle);
         return 1;

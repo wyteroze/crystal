@@ -12,7 +12,7 @@ const Signal = @import("../core/signal.zig").Signal;
 
 const field_types: std.StaticStringMap(ComponentId.FieldType) = blk: {
     const math = @import("../core/math/math.zig");
-    const assets = @import("../assets/assets.zig");
+    const assets = @import("../assets/Assets.zig");
     const render = @import("../render/render.zig");
 
     break :blk .initComptime(.{
@@ -24,7 +24,8 @@ const field_types: std.StaticStringMap(ComponentId.FieldType) = blk: {
         .{ "Quat", ComponentId.FieldType.ofType(math.Quat) },
         .{ "Mat4", ComponentId.FieldType.ofType(math.Mat4) },
         .{ "Asset", ComponentId.FieldType.ofType(assets.AssetHandle) },
-        .{ "Light", ComponentId.FieldType.ofType(render.types.Light) }
+        .{ "Light", ComponentId.FieldType.ofType(render.types.Light) },
+        .{ "Text", ComponentId.FieldType.ofType(render.types.Text) }
     });
 };
 

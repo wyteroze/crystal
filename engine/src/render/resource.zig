@@ -9,12 +9,15 @@ pub const depth_buffer: ResourceRef = .fromName("depth_buffer");
 pub const lights_buffer: ResourceRef = .fromName("lights_buffer");
 pub const light_grid: ResourceRef = .fromName("light_grid");
 pub const light_index_list: ResourceRef = .fromName("light_index_list");
+pub const default_image: ResourceRef = .fromName("default_image");
+pub const default_sampler: ResourceRef = .fromName("default_sampler");
 
-pub const ResourceKind = enum { image, buffer, storage_buffer };
+pub const ResourceKind = enum { image, buffer, storage_buffer, sampler };
 pub const ResourceHandle = union(ResourceKind) {
     image: gpu.types.ImageHandle,
     buffer: gpu.types.BufferHandle,
     storage_buffer: gpu.types.BufferHandle,
+    sampler: gpu.types.SamplerHandle
 };
 
 pub const ResourceRef = struct {
@@ -44,7 +47,8 @@ pub const ResourceTable = struct {
     pub fn get(self: *ResourceTable, ref: ResourceRef, comptime kind: ResourceKind) ?switch (kind) {
         .image => gpu.types.ImageHandle,
         .buffer => gpu.types.BufferHandle,
-        .storage_buffer => gpu.types.BufferHandle
+        .storage_buffer => gpu.types.BufferHandle,
+        .sampler => gpu.types.SamplerHandle
     } {
         const handle = self.map.get(ref.id) orelse return null;
         return switch (handle) {

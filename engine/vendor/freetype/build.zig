@@ -31,7 +31,8 @@ pub fn build(b: *std.Build) !void {
         boolFlag(b, "FT_DISABLE_BZIP2", false),
         boolFlag(b, "FT_DISABLE_PNG", false),
         boolFlag(b, "FT_DISABLE_HARFBUZZ", false),
-        boolFlag(b, "FT_DISABLE_BROTLI", false)
+        boolFlag(b, "FT_DISABLE_BROTLI", false),
+        boolFlag(b, "FT_DISABLE_HVF", false),
     });
 
     const cmake_build = b.addSystemCommand(&.{ "cmake", "--build", build_path, "--config", cmake_build_type, "--parallel", b.fmt("{d}", .{ try std.Thread.getCpuCount() }) });

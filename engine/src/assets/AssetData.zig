@@ -5,16 +5,18 @@ const types = @import("types.zig");
 const gpu = @import("../gpu/gpu.zig");
 const Assets = @import("Assets.zig");
 const importers = @import("importers/importers.zig");
+const render = @import("../render/render.zig");
 
 pub const AssetResidency = enum { cpu, gpu };
 pub const AssetType = enum { 
     mesh, 
     image, 
+    font,
     script_source,
 
     pub fn uploadable(self: AssetType) bool {
         return switch (self) {
-            .mesh, .image => true,
+            .mesh, .image, .font => true,
             else => false
         };
     }
@@ -28,6 +30,7 @@ pub const AssetData = union(AssetResidency) {
 pub const CpuAssetData = union(AssetType) {
     mesh: types.Mesh,
     image: types.Image,
+    font: types.Font,
     script_source: types.ScriptSource,
 
     pub fn deinit(self: CpuAssetData, allocator: std.mem.Allocator) void {
@@ -36,7 +39,7 @@ pub const CpuAssetData = union(AssetType) {
         }
     }
 
-    pub fn parse(allocator: std.mem.Allocator, io: std.Io, path: []const u8, bytes: []u8) !CpuAssetData {
+    pub fn parse(allocator: std.mem.Allocator, io: std.Io, path: []const u8, bytes: []u8, load_ctx: Assets.LoadContext) !CpuAssetData {
         const ext = std.Io.Dir.path.extension(path);
 
         if (std.mem.eql(u8, ext, ".obj") 
@@ -66,6 +69,11 @@ pub const CpuAssetData = union(AssetType) {
             return .{ .script_source = .{ .type = .bytecode, .data = bytes } };
         }
 
+        if (std.mem.eql(u8, ext, ".ttf")) {
+            defer allocator.free(bytes);
+            return .{ .font = try importers.font_freetype.importFont(allocator, .{ .bytes = bytes }, .{ .pixel_size = load_ctx.pixel_size }) };
+        }
+
         std.log.err("unknown file type '{s}'", .{ ext });
         return error.UnknownFileType;
     }
@@ -74,6 +82,7 @@ pub const CpuAssetData = union(AssetType) {
 pub const GpuAssetData = union(AssetType) {
     mesh: types.GpuMesh,
     image: types.GpuImage,
+    font: render.text.FontAtlas,
 
     // Not supported
     script_source: noreturn,
@@ -134,6 +143,12 @@ pub const GpuAssetData = union(AssetType) {
                         .is_cubemap = false
                     }) 
                 };
+            },
+            .font => |f| {
+                const font_name = try std.mem.concatWithSentinel(allocator, u8, &.{ "'", name, "'", " Font" }, 0);
+                defer allocator.free(font_name);
+
+                return .{ .font = try .bake(allocator, font_name, gpu_device, f) };
             },
             
             else => unreachable

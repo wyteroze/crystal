@@ -7,13 +7,16 @@ const resource = @import("../resource.zig");
 const pass = @import("pass.zig");
 const core = @import("../../core/core.zig");
 const Assets = @import("../../assets/Assets.zig");
+const text = @import("../text/text.zig");
 const math = core.math;
 
 const GpuUiParams = extern struct {
     ortho: [4][4]f32,
     pos: [2]f32,
     size: [2]f32,
-    color: [4]f32
+    color: [4]f32,
+    uv_pos: [2]f32,
+    uv_size: [2]f32
 };
 
 const UiPass = @This();
@@ -39,6 +42,8 @@ pub fn init(device: *gpu.GpuDevice, shader: gpu.GpuDevice.GpuShader, surface_siz
         },
         .resources = &.{
             .{ .name = "vsParams", .visibility = .vertex_fragment, .kind = .uniform_buffer },
+            .{ .name = "atlasTexture", .visibility = .fragment, .kind = .texture },
+            .{ .name = "atlasSampler", .visibility = .fragment, .kind = .sampler }
         },
         .index_type = .uint32
     });
@@ -94,21 +99,31 @@ fn execute(self: *UiPass, ctx: pass.PassContext) void {
     });
     self.pipeline.apply();
 
+    const default_image_handle = ctx.resources.get(resource.default_image, .image) orelse @panic("default_image resource missing!");
+    const default_sampler_handle = ctx.resources.get(resource.default_sampler, .sampler) orelse @panic("default_sampler resource missing!");
+
     for (ctx.scene.ui_objects.items) |ui_obj| {
         const vs_params: GpuUiParams = .{
             .ortho = self.ortho_matrix.m,
             .pos = ui_obj.pos,
             .size = ui_obj.size,
-            .color = ui_obj.color.data
+            .color = ui_obj.color.data,
+            .uv_pos = ui_obj.uv_pos,
+            .uv_size = ui_obj.uv_size
         };
 
         self.vs_ubuf.update(std.mem.asBytes(&vs_params));
+
+        const texture_handle = ui_obj.texture orelse default_image_handle;
+        const sampler_handle = ui_obj.sampler orelse default_sampler_handle;
 
         self.pipeline.applyBindings(.{
             .vertex_buffers = .{ self.ui_quad.vertex_buffer.handle, null, null, null },
             .index_buffer = self.ui_quad.index_buffer.handle,
             .resources = &.{
-                .{ .name = "vsParams", .handle = .{ .uniform_buffer = self.vs_ubuf.handle } }
+                .{ .name = "vsParams", .handle = .{ .uniform_buffer = self.vs_ubuf.handle } },
+                .{ .name = "atlasTexture", .handle = .{ .texture = texture_handle } },
+                .{ .name = "atlasSampler", .handle = .{ .sampler = sampler_handle } }
             }
         });
         self.pipeline.draw(0, self.ui_quad.index_count, 1);
@@ -120,7 +135,7 @@ fn execute(self: *UiPass, ctx: pass.PassContext) void {
 pub fn node(self: *UiPass) pass.PassNode {
     return .{
         .name = "UiPass",
-        .reads = &.{},
+        .reads = &.{ resource.default_sampler, resource.default_image },
         .writes = &.{},
         .after = &.{ "ForwardPass" },
         .ptr = self,

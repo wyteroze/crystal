@@ -4,7 +4,23 @@ const std = @import("std");
 const core = @import("../core/core.zig");
 const math = core.math;
 const gpu = @import("../gpu/gpu.zig");
-const assets = @import("../assets/assets.zig");
+const assets = @import("../assets/Assets.zig");
+
+// TODO: Put this in a better place
+pub const Text = struct {
+    font: assets.AssetHandle,
+    size: u32,
+    content: []const u8,
+    color: core.Color,
+
+    /// Since all components' strings must be heap-allocated, this frees the last
+    /// string and dupes the given string. You should use the same allocator
+    /// for every setText call.
+    pub fn setText(self: *Text, allocator: std.mem.Allocator, text: []const u8) !void {
+        allocator.free(self.content);
+        self.content = try allocator.dupe(u8, text);
+    }
+};
 
 pub const Material = struct {
     image: assets.types.GpuImage,
@@ -21,6 +37,14 @@ pub const UiObject = struct {
     pos: [2]f32,
     size: [2]f32,
     color: core.Color,
+    uv_pos: [2]f32 = @splat(0),
+    // A UV size of 0 means that there is no texture, and this is
+    // just a plain colored object.
+    uv_size: [2]f32 = @splat(0),
+    // These must both be defined at once,
+    // one can't be null while the other isn't.
+    sampler: ?gpu.types.SamplerHandle = null,
+    texture: ?gpu.types.ImageHandle = null,
 };
 
 pub const RenderScene = struct {

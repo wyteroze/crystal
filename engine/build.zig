@@ -391,6 +391,8 @@ pub fn build(b: *std.Build) !void {
         engine_mod.linkFramework("OpenGL", .{});
         engine_mod.linkFramework("IOKit", .{});
         engine_mod.linkFramework("CoreServices", .{});
+        engine_mod.linkFramework("CoreGraphics", .{});
+        engine_mod.linkFramework("CoreText", .{});
 
         // Link zlib for assimp
         lib_assimp.root_module.addFrameworkPath(.{ .cwd_relative = sdk.?.frameworks });

@@ -42,19 +42,45 @@ fn submitToRenderer(w: *ecs.World, ui_world: *ecs.World, renderer: *render.Rende
         const pos_2d_id = ui_world.components.id("Position").?;
         const size_2d_id = ui_world.components.id("Size").?;
         const color_id = ui_world.components.id("Color").?;
+        const text_id = ui_world.components.id("Text").?;
 
-        const query = ui_world.query(&.{ pos_2d_id, size_2d_id });
+        const query = ui_world.query(&.{ pos_2d_id, size_2d_id, text_id });
         var iter = query.iterator();
         while (iter.next()) |entity| {
             const pos: math.Vec2 = if (ui_world.getComponent(entity, pos_2d_id, math.Vec2)) |p| p.* else .zero;
             const size: math.Vec2 = if (ui_world.getComponent(entity, size_2d_id, math.Vec2)) |p| p.* else .zero;
             const color: core.Color = if (ui_world.getComponent(entity, color_id, core.Color)) |c| c.* else .fromRgbFloat(0.0, 0.0, 0.0, 1.0);
+            const text: ?render.types.Text = if (ui_world.getComponent(entity, text_id, render.types.Text)) |t| t.* else null;
 
             ui_objects.append(allocator, .{
                 .pos = pos.arr(),
                 .size = size.arr(),
                 .color = color
             }) catch @panic("Out of memory");
+
+            if (text) |txt| {
+                if (!txt.font.hasGpuData()) txt.font.upload(.{}) catch @panic("Failed to upload font to GPU");
+                // This should really be an error instead of just silently continuing
+                const atlas = txt.font.gpuGet(.font) catch continue;
+
+                var pen = pos;
+                for (txt.content) |ch| {
+                    const glyph = atlas.glyphs.get(ch) orelse continue;
+
+                    ui_objects.append(allocator, .{
+                        .pos = .{ pen.x + glyph.bearing[0], pen.y - glyph.bearing[1] + @as(f32, @floatFromInt(txt.size)) },
+                        .size = glyph.size,
+                        .color = txt.color,
+                        .uv_pos = glyph.uv_pos,
+                        .uv_size = glyph.uv_size,
+                        .sampler = atlas.sampler.handle,
+                        .texture = atlas.texture.handle
+                        
+                    }) catch @panic("Out of memory");
+
+                    pen = pen.add(.new(glyph.advance, 0));
+                }
+            }
         }
     }
 
@@ -224,7 +250,7 @@ pub fn main(init: std.process.Init) !void {
     defer assets.deinit();
     
     // Skybox
-    const skybox_cubemap = try assets.load("assets://images/skybox_island.png");
+    const skybox_cubemap = try assets.load("assets://images/skybox_island.png", .{});
     try skybox_cubemap.upload(.{ .is_cubemap = true });
 
     var renderer_allocator: core.TrackedAllocator = .init(allocator, "Renderer");
@@ -271,7 +297,7 @@ pub fn main(init: std.process.Init) !void {
 
     // Camera script
     {
-        const source = try assets.load("assets://scripts/camera.lua");
+        const source = try assets.load("assets://scripts/camera.lua", .{});
         defer source.cpuRelease();
         const script = try runtime.loadScript(try source.cpuGet(.script_source));
 
@@ -298,7 +324,7 @@ pub fn main(init: std.process.Init) !void {
     try entity.setParent(scene);
 
     // Add a script to the component
-    const source = try assets.load("assets://scripts/teapot.lua");
+    const source = try assets.load("assets://scripts/teapot.lua", .{});
     defer source.cpuRelease();
     const script = try runtime.loadScript(try source.cpuGet(.script_source));
 
@@ -310,11 +336,20 @@ pub fn main(init: std.process.Init) !void {
     const pos_2d_component = try ui_world.registerComponentNativeShaped(math.Vec2, "Position");
     const size_2d_component = try ui_world.registerComponentNativeShaped(math.Vec2, "Size");
     const color_component = try ui_world.registerComponentNativeShaped(core.Color, "Color");
+    const text_component = try ui_world.registerComponentNativeShaped(render.types.Text, "Text");
 
     const ui_entity = try ui_world.spawnEntity();
     try ui_world.addComponent(ui_entity, pos_2d_component, math.Vec2, .zero);
     try ui_world.addComponent(ui_entity, size_2d_component, math.Vec2, .new(640.0, 360.0));
     try ui_world.addComponent(ui_entity, color_component, core.Color, .fromRgbFloat(0.0, 0.0, 0.0, 0.5));
+
+    const font = try assets.load("assets://fonts/SpaceGrotesk-VariableFont.ttf", .{ .pixel_size = 24 });
+    try ui_world.addComponent(ui_entity, text_component, render.types.Text, .{
+        .font = font,
+        .color = .fromRgbFloat(1, 1, 1, 1),
+        .content = try allocator.dupe(u8, "In new york I milly rock"),
+        .size = 24
+    });
 
     var running = true;
 
@@ -367,6 +402,10 @@ pub fn main(init: std.process.Init) !void {
 
             std.log.info("[Lua GC]: {f}", .{ core.SizeFormatter.fmtSize( @intCast( runtime.gcCount() * 1024 ) ) });
         }
+        
+        const txt = try std.fmt.allocPrint(allocator, "{d:.2} FPS", .{ 1.0/dt_seconds });
+        try ui_entity.getComponent(text_component, render.types.Text).?.setText(allocator, txt);
+        allocator.free(txt);
 
         const frame_time = start.durationTo(end);
         if (frame_time.toNanoseconds() > 0) {
