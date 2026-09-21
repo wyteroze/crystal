@@ -14,6 +14,12 @@ const assimp_headers =
     \\
 ;
 
+const freetype_headers =
+    \\#include "ft2build.h"
+    \\#include FT_FREETYPE_H
+    \\
+;
+
 // These 3 following headers are specifically for
 // implementations of each backend in os/backends/*os name*.
 // Headers for other reasons most likely have a better place
@@ -169,10 +175,9 @@ pub fn build(b: *std.Build) !void {
     const dep_toml = b.dependency("toml", .{ .target = target, .optimize = optimize });
     const dep_zigimg = b.dependency("zigimg", .{ .target = target, .optimize = optimize });
     const dep_translate_c = b.dependency("translate_c", .{});
-    const dep_diligent = b.dependency("diligent_engine", 
-        .{ .optimize = optimize, .backend = backend, .skip_cmake = skip_cmake });
-    const dep_slang = b.dependency("slang", 
-        .{ .optimize = optimize, .skip_cmake = skip_cmake });
+    const dep_diligent = b.dependency("diligent_engine", .{ .optimize = optimize, .backend = backend, .skip_cmake = skip_cmake });
+    const dep_slang = b.dependency("slang", .{ .optimize = optimize, .skip_cmake = skip_cmake });
+    const dep_freetype = b.dependency("freetype", .{ .optimize = optimize, .skip_cmake = skip_cmake });
     const dep_assimp = b.dependency("zig_assimp", .{
         .target = target, .optimize = optimize, .formats = "STL,Obj,FBX,glTF,glTF2", .double = false, .zlib = false });
 
@@ -181,6 +186,9 @@ pub fn build(b: *std.Build) !void {
 
     // Runs cmake for slang
     const slang_step = dependencyStep(dep_slang, "slang");
+
+    // Runs cmake for freetype
+    const freetype_step = dependencyStep(dep_freetype, "freetype");
 
     const os_headers = switch (target.result.os.tag) {
         .windows => windows_c_headers,
@@ -192,12 +200,20 @@ pub fn build(b: *std.Build) !void {
 
     const c_src = b.addWriteFiles();
     const assimp_h = c_src.add("assimp.h", assimp_headers);
+    const freetype_h = c_src.add("freetype.h", freetype_headers);
     const wrapper_h = c_src.add("wrapper.h", os_headers);
 
     const translator: Translator =
         .init(dep_translate_c, .{ .name = "Translate system headers", .c_source_file = wrapper_h, .target = target, .optimize = optimize });
     const assimp_translator: Translator =
         .init(dep_translate_c, .{ .name = "Translate assimp", .c_source_file = assimp_h, .target = target, .optimize = optimize });
+    const freetype_translator: Translator =
+        .init(dep_translate_c, .{ .name = "Translate freetype", .c_source_file = freetype_h, .target = target, .optimize = optimize });
+
+    if (!skip_cmake) {
+        freetype_translator.addIncludePath(dep_freetype.namedLazyPath("include"));
+        freetype_translator.run.step.dependOn(freetype_step);
+    }
 
     var compile_commands: CompileCommands = .init(b);
     defer compile_commands.finalize() catch @panic("Out of memory");
@@ -311,7 +327,8 @@ pub fn build(b: *std.Build) !void {
             .{ .name = "c", .module = translator.mod },
             .{ .name = "assimp", .module = assimp_translator.mod },
             .{ .name = "diligent", .module = diligent_mod },
-            .{ .name = "slang", .module = slang_mod }
+            .{ .name = "slang", .module = slang_mod },
+            .{ .name = "freetype", .module = freetype_translator.mod }
         }
     });
 
@@ -326,6 +343,13 @@ pub fn build(b: *std.Build) !void {
     engine_mod.linkLibrary(lib_assimp);
     engine_mod.addIncludePath(lib_assimp.getEmittedIncludeTree());
     assimp_translator.addIncludePath(lib_assimp.getEmittedIncludeTree());
+
+    // Freetype
+    if (!skip_cmake) {
+        engine_mod.addIncludePath(dep_freetype.namedLazyPath("include"));
+        engine_mod.addLibraryPath(dep_freetype.namedLazyPath("lib"));
+        engine_mod.linkSystemLibrary("freetype", .{});
+    }
 
     // DiligentEngine (Core)
     if (!skip_cmake) {
@@ -359,6 +383,7 @@ pub fn build(b: *std.Build) !void {
     if (target.result.os.tag == .macos and sdk != null) {
         sdk.?.applyToTranslator(translator);
         sdk.?.applyToTranslator(assimp_translator);
+        sdk.?.applyToTranslator(freetype_translator);
         sdk.?.applyToModule(engine_mod);
 
         engine_mod.linkFramework("CoreVideo", .{});
