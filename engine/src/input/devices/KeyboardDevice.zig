@@ -38,7 +38,7 @@ pub fn keyReleased(self: *KeyboardDevice, event: Platform.desc.KeyboardEvent) vo
         std.log.warn("keyReleased() called on KeyboardDevice {d} for a key that isn't pressed", .{ self.id });
 }
 
-pub fn isKeyDown(self: *KeyboardDevice, key: Platform.desc.Keycode) bool {
+pub fn isKeyPressed(self: *KeyboardDevice, key: Platform.desc.Keycode) bool {
     return self.keys_pressed.contains(key);
 }
 
@@ -87,7 +87,7 @@ pub const registerLua = struct {
             .scope = .{ .module = "input.devices.KeyboardDevice" },
             .properties = .luaCustom(keyboardDeviceGet, keyboardDeviceSet),
             .methods = &.{
-                .named("IsKeyDown", KeyboardDevice.isKeyDown)
+                .named("IsKeyPressed", KeyboardDevice.isKeyPressed)
             }
         });
     }

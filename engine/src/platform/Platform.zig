@@ -42,3 +42,19 @@ pub fn poll(self: *Platform) void {
 pub fn showError(self: Platform, msg: [:0]const u8) void {
     switch (self.backend) { inline else => |*b| b.showError(msg) }
 }
+
+pub fn setCursorLocked(self: Platform, mode: bool) void {
+    switch (self.backend) { inline else => |*b| b.setCursorLocked(mode) }
+}
+
+pub fn getCursorLocked(self: Platform) bool {
+    return switch (self.backend) { inline else => |*b| b.getCursorLocked() };
+}
+
+pub fn setCursorVisible(self: Platform, mode: bool) void {
+    switch (self.backend) { inline else => |*b| b.setCursorVisible(mode) }
+}
+
+pub fn getCursorVisible(self: Platform) bool {
+    return switch (self.backend) { inline else => |*b| b.getCursorVisible() };
+}

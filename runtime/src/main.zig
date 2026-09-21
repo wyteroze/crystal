@@ -128,8 +128,8 @@ fn submitToRenderer(w: *ecs.World, ui_world: *ecs.World, renderer: *render.Rende
         // Mesh with no image = plain white
         const image_data = if (image) |i| i.gpuGet(.image) catch continue else renderer.default_image;
         
-        const pos: math.Vec3 = if (w.getComponent(entity, pos_id, math.Vec3)) |p| p.* else .zero;
         const rot: math.Vec3 = if (w.getComponent(entity, rot_id, math.Vec3)) |r| r.* else .zero;
+        const pos: math.Vec3 = if (w.getComponent(entity, pos_id, math.Vec3)) |p| p.* else .zero;
         const scale: math.Vec3 = if (w.getComponent(entity, scale_id, math.Vec3)) |scale| scale.* else .one;
         // Not visible (or invalid), don't waste resources rendering it.
         if (scale.x <= 0 or scale.y <= 0 or scale.z <= 0) continue;
@@ -269,6 +269,17 @@ pub fn main(init: std.process.Init) !void {
     try world.addComponent(camera, rot_component, math.Vec3, .new(0, 0, 0));
     try world.addComponent(camera, scale_component, math.Vec3, .new(1, 1, 1));
 
+    // Camera script
+    {
+        const source = try assets.load("assets://scripts/camera.lua");
+        defer source.cpuRelease();
+        const script = try runtime.loadScript(try source.cpuGet(.script_source));
+
+        try world.addComponent(camera, script_component, scripting.Script, script);
+        const stored_script = world.getComponent(camera, script_component, scripting.Script).?;
+        try stored_script.instantiate(camera);
+    }
+
     try world.addComponent(scene, scene_component, Scene, .{ .cam = camera });
 
     // Spawn a new entity
@@ -330,6 +341,7 @@ pub fn main(init: std.process.Init) !void {
         const dt_seconds: f32 = @floatCast(@as(f32, @floatFromInt(dt.toNanoseconds())) / std.time.ns_per_s);
         last_time = start;
 
+        input.tick();
         platform.poll();
         world.update(dt_seconds);
         submitToRenderer(&world, &ui_world, &renderer);

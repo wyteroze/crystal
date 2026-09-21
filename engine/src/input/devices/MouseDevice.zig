@@ -14,6 +14,9 @@ button_released: signal.Signal(.{ Platform.desc.MouseButton }),
 moved_evt: signal.Signal(.{ math.Vec2, math.Vec2 }),
 scrolled_evt: signal.Signal(.{ math.Vec2 }),
 id: usize,
+frame_pos: math.Vec2 = .zero,
+frame_delta: math.Vec2 = .zero,
+scroll_delta: math.Vec2 = .zero,
 
 pub fn init(allocator: std.mem.Allocator, id: usize) MouseDevice {
     return .{ 
@@ -50,15 +53,37 @@ pub fn isButtonDown(self: *MouseDevice, key: Platform.desc.MouseButton) bool {
     return self.buttons_pressed.contains(key);
 }
 
+pub fn getDelta(self: *MouseDevice) math.Vec2 {
+    return self.frame_delta;
+}
+
+pub fn getPosition(self: *MouseDevice) math.Vec2 {
+    return self.frame_pos;
+}
+
+pub fn getScrollDelta(self: *MouseDevice) math.Vec2 {
+    return self.scroll_delta;
+}
+
+pub fn resetDeltas(self: *MouseDevice) void {
+    self.frame_delta = .zero;
+    self.scroll_delta = .zero;
+}
+
 pub fn scrolled(self: *MouseDevice, event: Platform.desc.MouseScrollEvent) void {
-    self.scrolled_evt.fire(.{ math.Vec2.new(event.delta[0], event.delta[1]) });
+    const delta = math.Vec2.new(event.delta[0], event.delta[1]);
+
+    self.scroll_delta = delta;
+    self.scrolled_evt.fire(.{ delta });
 }
 
 pub fn moved(self: *MouseDevice, event: Platform.desc.MouseMoveEvent) void {
-    self.moved_evt.fire(.{
-        math.Vec2.new(event.delta[0], event.delta[1]),
-        math.Vec2.new(event.position[0], event.position[1])
-    });
+    const delta = math.Vec2.new(event.delta[0], event.delta[1]);
+    const pos = math.Vec2.new(event.position[0], event.position[1]);
+
+    self.frame_delta = delta;
+    self.frame_pos = pos;
+    self.moved_evt.fire(.{ delta, pos });
 }
 
 pub const __lua = .ref;
@@ -114,7 +139,10 @@ pub const registerLua = struct {
             .scope = .{ .module = "input.devices.MouseDevice" },
             .properties = .luaCustom(mouseDeviceGet, mouseDeviceSet),
             .methods = &.{
-                .named("IsButtonDown", MouseDevice.isButtonDown)
+                .named("IsButtonDown", MouseDevice.isButtonDown),
+                .named("GetDelta", MouseDevice.getDelta),
+                .named("GetPosition", MouseDevice.getPosition),
+                .named("GetScrollDelta", MouseDevice.getScrollDelta)
             }
         });
     }

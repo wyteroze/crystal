@@ -120,37 +120,39 @@ fn onPlatformEvent(self: *Input, event: Platform.desc.PlatformEvent) !void {
             (self.getKeyboard(e.keyboard_id) orelse return).keyReleased(e); 
         },
         .mouse_connected => |e| {
-            std.log.debug("Mouse connected, id = {d}", .{ e.id });
             try self.mice.put(@intCast(e.id), .init(self.allocator, e.id));
             self.mouse_connected.fire(.{ self.getMouse(e.id).? });
         },
         .mouse_disconnected => |e| {
-            std.log.debug("Mouse disconnected, id = {d}", .{ e.id });
             var ms = self.mice.fetchRemove(@intCast(e.id))
                 orelse { std.log.err("Attempt to disconnect mouse id {d}, but it doesn't exist/isn't registered", .{ e.id }); return; };
             self.mouse_disconnected.fire(.{ &ms.value });
         },
         .mouse_button_down => |e| {
-            std.log.debug("Button down, id = {d}", .{ e.mouse_id });
             try self.unimouse.buttonDown(e); 
             try (self.getMouse(e.mouse_id) orelse return).buttonDown(e);
         },
         .mouse_button_up => |e| {
-            std.log.debug("Button up, id = {d}", .{ e.mouse_id });
             self.unimouse.buttonUp(e); 
             (self.getMouse(e.mouse_id) orelse return).buttonUp(e);
         },
         .mouse_scrolled => |e| {
-            std.log.debug("Scrolled, id = {d}", .{ e.mouse_id });
             self.unimouse.scrolled(e); 
             (self.getMouse(e.mouse_id) orelse return).scrolled(e);
         },
         .mouse_moved => |e| {
-            std.log.debug("Moved, id = {d}", .{ e.mouse_id });
             self.unimouse.moved(e); 
             (self.getMouse(e.mouse_id) orelse return).moved(e);
         },
         else => {}
+    }
+}
+
+// Called at the start of every frame
+pub fn tick(self: *Input) void {
+    var ms_iter = self.mice.valueIterator();
+    while (ms_iter.next()) |ms| {
+        ms.resetDeltas();
     }
 }
 
@@ -168,6 +170,22 @@ pub fn getGamepad(self: *Input, id: usize) ?*devices.GamepadDevice {
 
 pub fn getTouchDevice(self: *Input, id: usize) ?*devices.TouchDevice {
     return self.touch_devices.getPtr(id);
+}
+
+pub fn setCursorLocked(self: *Input, mode: bool) void {
+    self.platform.setCursorLocked(mode);
+}
+
+pub fn getCursorLocked(self: *Input) bool {
+    return self.platform.getCursorLocked();
+}
+
+pub fn setCursorVisible(self: *Input, mode: bool) void {
+    self.platform.setCursorVisible(mode);
+}
+
+pub fn getCursorVisible(self: *Input) bool {
+    return self.platform.getCursorVisible();
 }
 
 pub const registerLua = struct {
@@ -219,8 +237,13 @@ pub const registerLua = struct {
             l.setField(-2, "Disconnected");
 
             return 1;
-        }
-        else {
+        } else if (std.mem.eql(u8, key, "CursorLocked")) {
+            l.pushBoolean(self.getCursorLocked());
+            return 1;
+        } else if (std.mem.eql(u8, key, "CursorVisible")) {
+            l.pushBoolean(self.getCursorVisible());
+            return 1;
+        } else {
             // fallback to exising methods
             l.getMetatable(1) catch { l.pushNil(); return 1; };
             _ = l.getField(-1, "__methods");
@@ -232,7 +255,25 @@ pub const registerLua = struct {
     }
 
     fn luaSet(l: *zlua.Lua) i32 {
-        l.raiseErrorStr("'input' is read-only", .{});
+        const r: *Runtime = .fromState(l);
+        const self = r.input;
+        const key = l.toString(2) catch |e| linker.util.luaErr(l, e, .{ []const u8, 2 });
+
+        if (std.mem.eql(u8, key, "CursorLocked")) {
+            l.checkType(3, .boolean);
+            self.setCursorLocked(l.toBoolean(3));
+            return 0;
+        } else if (std.mem.eql(u8, key, "CursorVisible")) {
+            l.checkType(3, .boolean);
+            self.setCursorVisible(l.toBoolean(3));
+            return 0;
+        } else if (std.mem.eql(u8, key, "Keyboards")
+            or std.mem.eql(u8, key, "Mice")
+        ) {
+            l.raiseErrorStr("'input.%s' is read-only", .{});
+        } else {
+            l.raiseErrorStr("'input.%s' doesn't exist", .{});
+        }
     }
 
     fn luaGetKeyboard(l: *zlua.Lua) i32 {

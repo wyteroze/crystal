@@ -141,6 +141,32 @@ pub fn showError(_: SdlBackend, msg: [:0]const u8) void {
     sdl3.message_box.showSimple(.{ .error_dialog = true }, "Sorry, something happened.", msg, null) catch {};
 }
 
+pub fn setCursorLocked(_: SdlBackend, mode: bool) void {
+    const windows = sdl3.video.getWindows() catch |e| { std.log.err("Failed to get windows: {s}", .{ @errorName(e) }); return; };
+    defer sdl3.free(windows);
+
+    sdl3.mouse.setWindowRelativeMode(windows[0], mode) catch |e| std.log.err("Failed to set cursor lock mode: {s}", .{ @errorName(e) });
+}
+
+pub fn getCursorLocked(_: SdlBackend) bool {
+    const windows = sdl3.video.getWindows() catch |e| { std.log.err("Failed to get windows: {s}", .{ @errorName(e) }); return false; };
+    defer sdl3.free(windows);
+
+    return sdl3.mouse.getWindowRelativeMode(windows[0]);
+}
+
+pub fn setCursorVisible(_: SdlBackend, mode: bool) void {
+    if (mode) {
+        sdl3.mouse.show() catch |e| std.log.err("Error when trying to show cursor: {s}", .{ @errorName(e) });
+    } else {
+        sdl3.mouse.hide() catch |e| std.log.err("Error when trying to hide cursor: {s}", .{ @errorName(e) });
+    }
+}
+
+pub fn getCursorVisible(_: SdlBackend) bool {
+    return sdl3.mouse.visible();
+}
+
 const KeyPair = struct { sdl: sdl3.keycode.Keycode, plat: desc.Keycode };
 const key_pairs = [_]KeyPair{
     .{ .sdl = .return_key, .plat = .Return },
