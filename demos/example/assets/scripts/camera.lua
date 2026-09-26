@@ -81,6 +81,10 @@ function Camera:_setup()
             if input.CursorVisible then input.CursorVisible = false end
         end
     end)
+
+    input.Mice.Scrolled:Connect(function(delta)
+        self.Speed = math.max(0, self.Speed + delta.Y)
+    end)
 end
 
 function Camera:_step(dt)
@@ -89,9 +93,10 @@ function Camera:_step(dt)
 
     -- TODO: Allow vec * (or /) number 
     
-    local moveX = (btn(kb:IsKeyPressed("D"))-btn(kb:IsKeyPressed("A")))/10
-    local moveY = (btn(kb:IsKeyPressed("Space"))-btn(kb:IsKeyPressed("LeftShift")))/10
-    local moveZ = (btn(kb:IsKeyPressed("S"))-btn(kb:IsKeyPressed("W")))/10
+    -- 5 m/s
+    local moveX = (btn(kb:IsKeyPressed("D"))-btn(kb:IsKeyPressed("A")))*dt*self.Speed
+    local moveY = (btn(kb:IsKeyPressed("Space"))-btn(kb:IsKeyPressed("LeftShift")))*dt*self.Speed
+    local moveZ = (btn(kb:IsKeyPressed("S"))-btn(kb:IsKeyPressed("W")))*dt*self.Speed
     
     local msDelta = input.CursorLocked and ms:GetDelta() or cmath.Vec2.new(0, 0)
     local rot = self._entity.Components.Rotation

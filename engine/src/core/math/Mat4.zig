@@ -98,9 +98,9 @@ pub const Mat4 = extern struct {
 
         var result: Mat4 = .{ .m = .{ .{ self.m[0][0], self.m[1][0], self.m[2][0], 0 }, .{ self.m[0][1], self.m[1][1], self.m[2][1], 0 }, .{ self.m[0][2], self.m[1][2], self.m[2][2], 0 }, .{ 0, 0, 0, 1 } } };
 
-        result.m[0][3] = -(result.m[0][0] * tx + result.m[0][1] * ty + result.m[0][2] * tz);
-        result.m[1][3] = -(result.m[1][0] * tx + result.m[1][1] * ty + result.m[1][2] * tz);
-        result.m[2][3] = -(result.m[2][0] * tx + result.m[2][1] * ty + result.m[2][2] * tz);
+        result.m[0][3] = -(self.m[0][0] * tx + self.m[1][0] * ty + self.m[2][0] * tz);
+        result.m[1][3] = -(self.m[0][1] * tx + self.m[1][1] * ty + self.m[2][1] * tz);
+        result.m[2][3] = -(self.m[0][2] * tx + self.m[1][2] * ty + self.m[2][2] * tz);
 
         return result;
     }

@@ -63,7 +63,12 @@ fn execute(self: *SkyboxPass, ctx: pass.PassContext) void {
         .color_target = color_handle
     });
 
-    const inv_view = ctx.view.view_matrix.invertRT();
+    var rotation_only_view = ctx.view.view_matrix;
+    rotation_only_view.m[0][3] = 0;
+    rotation_only_view.m[1][3] = 0;
+    rotation_only_view.m[2][3] = 0;
+
+    const inv_view = rotation_only_view.invertRT();
     const inv_proj = ctx.view.proj_matrix.invertPerspective();
     const inv_view_proj = inv_view.mul(inv_proj);
     self.view_ubo.update(std.mem.asBytes(&inv_view_proj));

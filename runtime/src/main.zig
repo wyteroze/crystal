@@ -65,8 +65,10 @@ fn submitToRenderer(w: *ecs.World, ui_world: *ecs.World, renderer: *render.Rende
         90.0 * (std.math.pi / 180.0), 
         // It doesn't matter whether we use logical/pixel size here, we just need the aspect ratio
         @as(f32, @floatFromInt(renderer.surface_logical_size[0])) / @as(f32, @floatFromInt(renderer.surface_logical_size[1])), 
-        0.1,
-        100.0
+        // 50cm
+        0.5,
+        // 1km
+        1000.0
     );
 
     const light_query = w.query(&.{ light_id });
