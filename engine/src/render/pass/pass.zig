@@ -13,7 +13,7 @@ pub const UiPass = @import("UiPass.zig");
 
 pub const PassContext = struct {
     device: *gpu.GpuDevice,
-    view: *const types.RenderView,
+    view: *const types.RenderFrame,
     scene: *const types.RenderScene,
     resources: *resource.ResourceTable,
     frame_allocator: std.mem.Allocator

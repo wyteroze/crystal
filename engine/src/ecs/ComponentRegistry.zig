@@ -3,6 +3,7 @@
 const std = @import("std");
 const ComponentId = @import("ComponentId.zig");
 
+pub const DtorFn = *const fn ([]u8) void;
 const ComponentRegistry = @This();
 
 allocator: std.mem.Allocator,
@@ -14,7 +15,7 @@ pub const ComponentInfo = struct {
     size: u32,
     alignment: u32,
     fields: []ComponentId.FieldDesc,
-    dtor: ?*const fn (bytes: []u8) void = null
+    dtor: ?DtorFn = null
 };
 
 pub fn init(allocator: std.mem.Allocator) ComponentRegistry {
@@ -31,19 +32,19 @@ pub fn deinit(self: *ComponentRegistry) void {
     self.ids.deinit();
 }
 
-pub fn registerNative(self: *ComponentRegistry, comptime T: type, name: []const u8) !ComponentId {
-    return self.registerNativeImpl(T, name, &.{});
+pub fn registerNative(self: *ComponentRegistry, comptime T: type, name: []const u8, dtor: ?DtorFn) !ComponentId {
+    return self.registerNativeImpl(T, name, &.{}, dtor);
 }
 
-pub fn registerNativeShaped(self: *ComponentRegistry, comptime T: type, name: []const u8) !ComponentId {
+pub fn registerNativeShaped(self: *ComponentRegistry, comptime T: type, name: []const u8, dtor: ?DtorFn) !ComponentId {
     const field = try self.allocator.dupe(ComponentId.FieldDesc, &.{
         .{ .name = "value", .type = .ofType(T), .offset = 0 }
     });
 
-    return self.registerNativeImpl(T, name, field);
+    return self.registerNativeImpl(T, name, field, dtor);
 }
 
-fn registerNativeImpl(self: *ComponentRegistry, comptime T: type, name: []const u8, fields: []ComponentId.FieldDesc) !ComponentId {
+fn registerNativeImpl(self: *ComponentRegistry, comptime T: type, name: []const u8, fields: []ComponentId.FieldDesc, dtor: ?DtorFn) !ComponentId {
     if (self.ids.get(name)) |e| return e;
 
     const c_id: ComponentId = .{ .value = @intCast(self.infos.items.len) };
@@ -51,7 +52,8 @@ fn registerNativeImpl(self: *ComponentRegistry, comptime T: type, name: []const 
         .name = name,
         .size = @sizeOf(T),
         .alignment = @alignOf(T),
-        .fields = fields
+        .fields = fields,
+        .dtor = dtor
     });
 
     try self.ids.put(name, c_id);

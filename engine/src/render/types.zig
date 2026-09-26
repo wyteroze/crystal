@@ -45,18 +45,28 @@ pub const UiObject = struct {
     // one can't be null while the other isn't.
     sampler: ?gpu.types.SamplerHandle = null,
     texture: ?gpu.types.ImageHandle = null,
+    is_text: bool = false
 };
 
 pub const RenderScene = struct {
-    ui_objects: std.ArrayList(UiObject),
-    objects: std.ArrayList(RenderObject),
-    lights: std.ArrayList(gpu.types.GpuLight),
+    ui_objects: []UiObject,
+    objects: []RenderObject,
+    lights: []gpu.types.GpuLight
 };
 
-pub const RenderView = struct {
+pub const RenderFrame = struct {
     viewport_size: [2]u32,
     view_matrix: math.Mat4,
     proj_matrix: math.Mat4,
+};
+
+pub const RenderViewRequest = struct {
+    frame: RenderFrame,
+    scene: RenderScene,
+    // If null, renders straight to swapchain.
+    // This is much better for performance,
+    // so use it when possible.
+    target: ?gpu.types.ImageHandle
 };
 
 pub const LightKind = enum { point, directional };

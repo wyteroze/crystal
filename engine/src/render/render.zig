@@ -5,4 +5,5 @@ pub const types = @import("types.zig");
 pub const text = @import("text/text.zig");
 pub const resource = @import("resource.zig");
 pub const Renderer = @import("Renderer.zig");
+pub const RenderView = @import("RenderView.zig");
 pub const RenderGraph = @import("RenderGraph.zig");

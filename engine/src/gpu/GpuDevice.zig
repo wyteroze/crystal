@@ -45,11 +45,13 @@ pub const GpuSampler = struct {
 pub const GpuImage = struct {
     backend: Backend,
     handle: types.ImageHandle,
+    width: u32,
+    height: u32,
 
     pub fn init(b: Backend, d: desc.ImageDesc) !GpuImage {
         const handle = b.createImage(d);
 
-        return .{ .backend = b, .handle = handle };
+        return .{ .backend = b, .handle = handle, .width = d.width, .height = d.height };
     }
 
     pub fn deinit(self: GpuImage) void {

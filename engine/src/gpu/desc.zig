@@ -53,7 +53,8 @@ pub const ImageDesc = struct {
     width: u32, height: u32,
     format: types.PixelFormat,
     data: ?[]const u8 = null,
-    is_cubemap: bool = false
+    is_cubemap: bool = false,
+    is_render_target: bool = false
 };
 
 pub const VertexAttr = struct {
@@ -91,7 +92,8 @@ pub const PipelineDesc = struct {
     cull_mode: CullMode = .none,
     depth_write: bool = false,
     color_write_mask: ColorWriteMask = .all(),
-    alpha_blend_enabled: bool = false
+    alpha_blend_enabled: bool = false,
+    color_format: types.PixelFormat = .bgra8
 };
 
 pub const ComputePipelineDesc = struct {
@@ -111,6 +113,7 @@ pub const PassDesc = struct {
     clear_color: ?core.Color = null,
     clear_depth: ?f32 = null,
     depth_target: ?types.ImageHandle = null,
+    color_target: ?types.ImageHandle = null
 };
 
 // TODO: The [4] (or similar in other places) is a remnant

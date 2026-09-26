@@ -53,12 +53,14 @@ pub fn deinit(self: *SkyboxPass, allocator: std.mem.Allocator) void {
 
 fn execute(self: *SkyboxPass, ctx: pass.PassContext) void {
     const depth_handle = ctx.resources.get(resource.depth_buffer, .image) orelse @panic("depth_buffer resource missing!");
+    const color_handle = ctx.resources.get(resource.color_target, .image);
     ctx.device.beginPass(.{
         .clear_color = .fromRgbFloat(0.1, 0.1, 0.1, 1.0),
         .clear_depth = 1.0,
         .width = ctx.view.viewport_size[0],
         .height = ctx.view.viewport_size[1],
-        .depth_target = depth_handle
+        .depth_target = depth_handle,
+        .color_target = color_handle
     });
 
     const inv_view = ctx.view.view_matrix.invertRT();
@@ -82,7 +84,7 @@ fn execute(self: *SkyboxPass, ctx: pass.PassContext) void {
 pub fn node(self: *SkyboxPass) pass.PassNode {
     return .{
         .name = "SkyboxPass",
-        .reads = &.{ resource.depth_buffer },
+        .reads = &.{ resource.depth_buffer, resource.color_target },
         .writes = &.{},
         .ptr = self,
         .execute_fn = struct {

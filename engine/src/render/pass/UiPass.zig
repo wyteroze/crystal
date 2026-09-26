@@ -16,7 +16,8 @@ const GpuUiParams = extern struct {
     size: [2]f32,
     color: [4]f32,
     uv_pos: [2]f32,
-    uv_size: [2]f32
+    uv_size: [2]f32,
+    is_text: u32,
 };
 
 const UiPass = @This();
@@ -26,9 +27,10 @@ sampler: gpu.GpuDevice.GpuSampler,
 vs_ubuf: gpu.GpuDevice.GpuBuffer,
 ui_quad: Assets.types.GpuMesh,
 ortho_matrix: math.Mat4,
-surface_size: [2]u32,
+surface_pixel_size: [2]u32,
+surface_scale: f32,
 
-pub fn init(device: *gpu.GpuDevice, shader: gpu.GpuDevice.GpuShader, surface_size: [2]u32) !UiPass {
+pub fn init(device: *gpu.GpuDevice, shader: gpu.GpuDevice.GpuShader, surface_pixel_size: [2]u32, surface_scale: f32) !UiPass {
     const pipeline = try device.createPipeline(.{
         .name = "Ui pipeline",
         .shader = shader.handle,
@@ -52,7 +54,8 @@ pub fn init(device: *gpu.GpuDevice, shader: gpu.GpuDevice.GpuShader, surface_siz
         .pipeline = pipeline,
         .shader = shader,
         .sampler = try device.createSampler(.{}),
-        .surface_size = surface_size,
+        .surface_pixel_size = surface_pixel_size,
+        .surface_scale = surface_scale,
         .vs_ubuf = try device.createBuffer(.{ 
             .name = "Vs ubuf", 
             .type = .uniform, 
@@ -81,7 +84,7 @@ pub fn init(device: *gpu.GpuDevice, shader: gpu.GpuDevice.GpuShader, surface_siz
             .vertex_count = 4,
             .index_count = 6
         },
-        .ortho_matrix = .ortho(0, @floatFromInt(surface_size[0]), @floatFromInt(surface_size[1]), 0.0, -1.0, 1.0)
+        .ortho_matrix = .ortho(0, @floatFromInt(surface_pixel_size[0]), @floatFromInt(surface_pixel_size[1]), 0.0, -1.0, 1.0)
     };
 }
 
@@ -102,14 +105,15 @@ fn execute(self: *UiPass, ctx: pass.PassContext) void {
     const default_image_handle = ctx.resources.get(resource.default_image, .image) orelse @panic("default_image resource missing!");
     const default_sampler_handle = ctx.resources.get(resource.default_sampler, .sampler) orelse @panic("default_sampler resource missing!");
 
-    for (ctx.scene.ui_objects.items) |ui_obj| {
+    for (ctx.scene.ui_objects) |ui_obj| {
         const vs_params: GpuUiParams = .{
             .ortho = self.ortho_matrix.m,
-            .pos = ui_obj.pos,
-            .size = ui_obj.size,
+            .pos = .{ ui_obj.pos[0] * self.surface_scale, ui_obj.pos[1] * self.surface_scale },
+            .size = .{ ui_obj.size[0] * self.surface_scale, ui_obj.size[1] * self.surface_scale },
             .color = ui_obj.color.data,
             .uv_pos = ui_obj.uv_pos,
-            .uv_size = ui_obj.uv_size
+            .uv_size = ui_obj.uv_size,
+            .is_text = @intCast(@intFromBool(ui_obj.is_text))
         };
 
         self.vs_ubuf.update(std.mem.asBytes(&vs_params));
@@ -137,7 +141,7 @@ pub fn node(self: *UiPass) pass.PassNode {
         .name = "UiPass",
         .reads = &.{ resource.default_sampler, resource.default_image },
         .writes = &.{},
-        .after = &.{ "ForwardPass" },
+        .after = &.{ },
         .ptr = self,
         .execute_fn = struct {
             fn c(ptr: *anyopaque, ctx: pass.PassContext) void {

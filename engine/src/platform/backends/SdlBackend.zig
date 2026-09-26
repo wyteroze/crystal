@@ -18,7 +18,6 @@ pub fn init(_: SdlBackend) void {
 }
 
 pub fn deinit(_: SdlBackend) void {
-
     sdl3.quit(flags);
 }
 
@@ -29,7 +28,8 @@ pub fn createSurface(_: SdlBackend, d: desc.SurfaceDesc) !types.SurfaceHandle {
         @intCast(d.height), 
         .{
             .metal = true, 
-            .resizable = true 
+            .resizable = true,
+            .high_pixel_density = true
         }
     );
 
@@ -46,11 +46,25 @@ pub fn createSurface(_: SdlBackend, d: desc.SurfaceDesc) !types.SurfaceHandle {
     return .{ .id = try w.getId(), .handle = handle };
 }
 
-pub fn getSurfacePixelSize(_: SdlBackend, h: types.SurfaceHandle) [2]u32 {
-    const w = sdl3.video.Window.fromId(@intCast(h.id)) catch unreachable;
-    const size = w.getSizeInPixels() catch unreachable;
+pub fn getSurfacePixelSize(_: SdlBackend, h: types.SurfaceHandle) ![2]u32 {
+    const w = try sdl3.video.Window.fromId(@intCast(h.id));
+    const size = try w.getSizeInPixels();
 
     return .{ @intCast(size[0]), @intCast(size[1]) };
+}
+
+pub fn getSurfaceLogicalSize(_: SdlBackend, h: types.SurfaceHandle) ![2]u32 {
+    const w = try sdl3.video.Window.fromId(@intCast(h.id));
+    const size = try w.getSize();
+
+    return .{ @intCast(size[0]), @intCast(size[1]) };
+}
+
+pub fn getSurfaceScale(_: SdlBackend, h: types.SurfaceHandle) !f32 {
+    const w = try sdl3.video.Window.fromId(@intCast(h.id));
+    const scale = try w.getDisplayScale();
+
+    return scale;
 }
 
 pub fn destroySurface(_: SdlBackend, h: types.SurfaceHandle) void {

@@ -7,6 +7,7 @@ cbuffer vsParams : register(b0) {
     float4 color;
     float2 uvPos;
     float2 uvSize;
+    uint isText;
 };
 
 Texture2D atlasTexture : register(t0);
@@ -34,6 +35,11 @@ void vertexMain(in VSInput vsIn, out VaryingsOut vsOut) {
 
 [shader("fragment")]
 float4 fragmentMain(in VaryingsOut psIn) : SV_TARGET {
-    float alpha = atlasTexture.Sample(atlasSampler, psIn.uv).r;
-    return float4(psIn.color.rgb, psIn.color.a * alpha);
+    if (isText != 0) {
+        float alpha = atlasTexture.Sample(atlasSampler, psIn.uv).r;
+        return float4(psIn.color.rgb, psIn.color.a * alpha);
+    } else {
+        float4 sampled = atlasTexture.Sample(atlasSampler, psIn.uv);
+        return sampled * psIn.color;
+    }
 }

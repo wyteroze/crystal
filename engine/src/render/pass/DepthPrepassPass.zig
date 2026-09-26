@@ -10,8 +10,9 @@ const resource = @import("../resource.zig");
 const DepthPrepassPass = @This();
 pipeline: gpu.GpuDevice.GpuPipeline,
 vs_ubuf: gpu.GpuDevice.GpuBuffer,
+clear_color: core.Color,
 
-pub fn init(gpu_device: *gpu.GpuDevice, shader: gpu.GpuDevice.GpuShader) !DepthPrepassPass {
+pub fn init(gpu_device: *gpu.GpuDevice, shader: gpu.GpuDevice.GpuShader, clear_color: core.Color) !DepthPrepassPass {
     return .{
         .pipeline = try gpu_device.createPipeline(.{
             .name = "Depth prepass pipeline",
@@ -34,21 +35,25 @@ pub fn init(gpu_device: *gpu.GpuDevice, shader: gpu.GpuDevice.GpuShader) !DepthP
             .type = .uniform,
             .usage = .dynamic,
             .size = @sizeOf([3]math.Mat4)
-        })
+        }),
+        .clear_color = clear_color
     };
 }
 
 pub fn execute(self: *DepthPrepassPass, ctx: pass.PassContext) void {
     const depth_handle = ctx.resources.get(resource.depth_buffer, .image) orelse @panic("depth_buffer resource is missing!");
+    const color_handle = ctx.resources.get(resource.color_target, .image);
     ctx.device.beginPass(.{
         .clear_depth = 1.0,
+        .clear_color = self.clear_color,
         .width = ctx.view.viewport_size[0],
         .height = ctx.view.viewport_size[1],
-        .depth_target = depth_handle
+        .depth_target = depth_handle,
+        .color_target = color_handle,
     });
     self.pipeline.apply();
 
-    for (ctx.scene.objects.items) |obj| {
+    for (ctx.scene.objects) |obj| {
         const vs_params: [3][4][4]f32 = .{
             @bitCast(obj.model),
             @bitCast(ctx.view.view_matrix),
@@ -79,7 +84,7 @@ pub fn deinit(self: *DepthPrepassPass, allocator: std.mem.Allocator) void {
 pub fn node(self: *DepthPrepassPass) pass.PassNode {
     return .{
         .name = "DepthPrepassPass",
-        .reads = &.{},
+        .reads = &.{ resource.color_target },
         .writes = &.{ resource.depth_buffer },
         .ptr = self,
         .execute_fn = struct {

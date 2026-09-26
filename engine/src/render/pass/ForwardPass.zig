@@ -55,10 +55,12 @@ pub fn init(gpu_device: *gpu.GpuDevice, shader: gpu.GpuDevice.GpuShader, clear_c
 
 pub fn execute(self: *ForwardPass, ctx: pass.PassContext) void {
     const depth_handle = ctx.resources.get(resource.depth_buffer, .image) orelse @panic("depth_buffer resource missing!");
+    const color_handle = ctx.resources.get(resource.color_target, .image);
     ctx.device.beginPass(.{
         .width = ctx.view.viewport_size[0],
         .height = ctx.view.viewport_size[1],
-        .depth_target = depth_handle
+        .depth_target = depth_handle,
+        .color_target = color_handle
     });
     self.pipeline.apply();
 
@@ -77,7 +79,7 @@ pub fn execute(self: *ForwardPass, ctx: pass.PassContext) void {
     };
     self.light_ubuf.update(std.mem.asBytes(&light_params));
 
-    for (ctx.scene.objects.items) |obj| {
+    for (ctx.scene.objects) |obj| {
         const vs_params: [3][4][4]f32 = .{
             @bitCast(obj.model),
             @bitCast(ctx.view.view_matrix),
@@ -115,8 +117,8 @@ pub fn deinit(self: *ForwardPass, allocator: std.mem.Allocator) void {
 pub fn node(self: *ForwardPass) pass.PassNode {
     return .{
         .name = "ForwardPass",
-        .reads = &.{ resource.depth_buffer, resource.lights_buffer, resource.light_grid, resource.light_index_list },
-        .writes = &.{ resource.color_target },
+        .reads = &.{ resource.depth_buffer, resource.lights_buffer, resource.light_grid, resource.light_index_list, resource.color_target },
+        .writes = &.{ },
         .ptr = self,
         .execute_fn = struct {
             fn c(ptr: *anyopaque, ctx: pass.PassContext) void {

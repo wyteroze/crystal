@@ -81,15 +81,15 @@ pub fn deinit(self: *World) void {
 
 // Components
 
-pub fn registerComponentNative(self: *World, comptime T: type, name: []const u8) !ComponentId {
-    const id = try self.components.registerNative(T, name);
+pub fn registerComponentNative(self: *World, comptime T: type, name: []const u8, dtor: ?ComponentRegistry.DtorFn) !ComponentId {
+    const id = try self.components.registerNative(T, name, dtor);
     try self.ensureStorageFor(id);
 
     return id;
 }
 
-pub fn registerComponentNativeShaped(self: *World, comptime T: type, name: []const u8) !ComponentId {
-    const id = try self.components.registerNativeShaped(T, name);
+pub fn registerComponentNativeShaped(self: *World, comptime T: type, name: []const u8, dtor: ?ComponentRegistry.DtorFn) !ComponentId {
+    const id = try self.components.registerNativeShaped(T, name, dtor);
     try self.ensureStorageFor(id);
 
     return id;

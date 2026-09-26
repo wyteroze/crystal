@@ -75,7 +75,7 @@ pub fn execute(self: *LightCullPass, ctx: pass.PassContext) void {
         .view = @bitCast(ctx.view.view_matrix),
         .screen_size = ctx.view.viewport_size,
         .tile_count = self.tile_count,
-        .light_count = @intCast(ctx.scene.lights.items.len)
+        .light_count = @intCast(ctx.scene.lights.len)
     };
     self.cull_ubuf.update(std.mem.asBytes(&cull_params));
 

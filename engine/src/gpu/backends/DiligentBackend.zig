@@ -84,7 +84,8 @@ pub fn createImage(self: DiligentBackend, d: desc.ImageDesc) types.ImageHandle {
         .height = d.height,
         .format = @intFromEnum(d.format),
         .data = if (d.data) |data| data.ptr else @ptrFromInt(0),
-        .is_cubemap = d.is_cubemap
+        .is_cubemap = d.is_cubemap,
+        .is_render_target = d.is_render_target
     });
 
     return .{ .ptr = img_h.ptr }; 
@@ -115,7 +116,8 @@ pub fn createPipeline(self: DiligentBackend, d: desc.PipelineDesc) types.Pipelin
             .blue = d.color_write_mask.blue,
             .alpha = d.color_write_mask.alpha
         },
-        .alpha_blend_enabled = d.alpha_blend_enabled
+        .alpha_blend_enabled = d.alpha_blend_enabled,
+        .color_format = @intFromEnum(d.color_format)
     });
 
     return .{ .ptr = pipe_h.ptr }; 
@@ -192,7 +194,10 @@ pub fn beginPass(self: DiligentBackend, d: desc.PassDesc) void {
         .clear_depth = d.clear_depth orelse undefined,
         .has_clear_depth = d.clear_depth != null,
         .depth_target = if (d.depth_target) |dt| .{ .ptr = dt.ptr } else undefined,
-        .has_depth_target = d.depth_target != null
+        .has_depth_target = d.depth_target != null,
+
+        .color_target = if (d.color_target) |ct| .{ .ptr = ct.ptr } else undefined,
+        .has_color_target = d.color_target != null
     });
 }
 

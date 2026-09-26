@@ -29,6 +29,14 @@ pub fn getSurfacePixelSize(self: *Platform, h: types.SurfaceHandle) ![2]u32 {
     return switch (self.backend) { inline else => |*b| b.getSurfacePixelSize(h) };
 }
 
+pub fn getSurfaceLogicalSize(self: *Platform, h: types.SurfaceHandle) ![2]u32 {
+    return switch (self.backend) { inline else => |*b| b.getSurfaceLogicalSize(h) };
+}
+
+pub fn getSurfaceScale(self: *Platform, h: types.SurfaceHandle) !f32 {
+    return switch (self.backend) { inline else => |*b| b.getSurfaceScale(h) };
+}
+
 pub fn destroySurface(self: *Platform, h: types.SurfaceHandle) void {
     switch (self.backend) { inline else => |*b| b.destroySurface(h) }
 }

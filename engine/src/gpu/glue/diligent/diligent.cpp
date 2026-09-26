@@ -108,6 +108,23 @@ static SHADER_TYPE crystalVisibilityToDiligent(CrystalShaderVisibility visibilit
     }
 }
 
+static TEXTURE_FORMAT crystalPixelFormatToDiligent(CrystalPixelFormat format) {
+    switch (format) {
+        case CRYSTAL_PIXEL_FORMAT_RGBA8:
+            return TEX_FORMAT_RGBA8_UNORM_SRGB;
+        case CRYSTAL_PIXEL_FORMAT_RGBA16F:
+            return TEX_FORMAT_RGBA16_FLOAT;
+        case CRYSTAL_PIXEL_FORMAT_D24_S8:
+            return TEX_FORMAT_D24_UNORM_S8_UINT;
+        case CRYSTAL_PIXEL_FORMAT_D32:
+            return TEX_FORMAT_D32_FLOAT;
+        case CRYSTAL_PIXEL_FORMAT_R8_UNORM:
+            return TEX_FORMAT_R8_UNORM;
+        case CRYSTAL_PIXEL_FORMAT_BGRA8:
+            return TEX_FORMAT_BGRA8_UNORM_SRGB;
+    }
+}
+
 static std::vector<ShaderResourceVariableDesc> buildResourceVars(const CrystalResourceDesc* resources, size_t count) {
     std::vector<ShaderResourceVariableDesc> vars;
     vars.reserve(count);
@@ -294,46 +311,45 @@ CrystalImageHandle diligent_create_image(CrystalDiligentDeviceHandle handle, Cry
     TexDesc.Width = desc.width;
     TexDesc.Height = desc.height;
     TexDesc.MipLevels = 1;
+    TexDesc.Format = crystalPixelFormatToDiligent(desc.format);
     
     std::cerr << "is_cubemap=" << desc.is_cubemap << " width=" << desc.width << "\n";
 
     size_t stride = 0;
     bool isDepth = false;
     switch (desc.format) {
+        case CRYSTAL_PIXEL_FORMAT_BGRA8:
         case CRYSTAL_PIXEL_FORMAT_RGBA8:
-            TexDesc.Format = TEX_FORMAT_RGBA8_UNORM_SRGB;
             TexDesc.BindFlags = BIND_SHADER_RESOURCE;
             stride = 4;
             
             break;
         case CRYSTAL_PIXEL_FORMAT_RGBA16F:
-            TexDesc.Format = TEX_FORMAT_RGBA16_FLOAT;
             TexDesc.BindFlags = BIND_SHADER_RESOURCE;
             stride = 8;
 
             break;
         case CRYSTAL_PIXEL_FORMAT_D24_S8:
-            TexDesc.Format = TEX_FORMAT_D24_UNORM_S8_UINT;
             TexDesc.BindFlags = BIND_DEPTH_STENCIL | BIND_SHADER_RESOURCE;
             stride = 4;
             isDepth = true;
 
             break;
         case CRYSTAL_PIXEL_FORMAT_D32:
-            TexDesc.Format = TEX_FORMAT_D32_FLOAT;
             TexDesc.BindFlags = BIND_DEPTH_STENCIL | BIND_SHADER_RESOURCE;
             stride = 4;
             isDepth = true;
             break;
         case CRYSTAL_PIXEL_FORMAT_R8_UNORM:
-            TexDesc.Format = TEX_FORMAT_R8_UNORM;
             TexDesc.BindFlags = BIND_SHADER_RESOURCE;
             stride = 1;
             break;
     }
 
+    if (desc.is_render_target) TexDesc.BindFlags |= BIND_RENDER_TARGET;
+
     ITexture* tex = nullptr;
-    if (isDepth) {
+    if (isDepth || desc.is_render_target) {
         TexDesc.Usage = USAGE_DEFAULT;
         handle->device->CreateTexture(TexDesc, nullptr, &tex);
     } else if (desc.is_cubemap) {
@@ -389,7 +405,7 @@ CrystalPipelineHandle diligent_create_pipeline(CrystalDiligentDeviceHandle handl
     psoDesc.PipelineType = PIPELINE_TYPE_GRAPHICS;
 
     graphicsPipeline.NumRenderTargets = 1;
-    graphicsPipeline.RTVFormats[0] = handle->swapchain->GetDesc().ColorBufferFormat;
+    graphicsPipeline.RTVFormats[0] = crystalPixelFormatToDiligent(desc.color_format);
     graphicsPipeline.DSVFormat = TEX_FORMAT_D32_FLOAT;
 
     switch (desc.cull_mode) {
@@ -708,7 +724,17 @@ void diligent_dispatch_compute(CrystalDiligentDeviceHandle handle, CrystalComput
 }
 
 void diligent_begin_pass(CrystalDiligentDeviceHandle handle, CrystalPassDesc desc) {
-    auto pRTV = handle->swapchain->GetCurrentBackBufferRTV();
+    ITextureView* pRTV = nullptr;
+    if (desc.has_color_target) {
+        auto* tex = reinterpret_cast<ITexture*>(desc.color_target.ptr);
+        pRTV = tex->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET);
+        if (!pRTV) {
+            std::cerr << "Crystal C++ [FATAL]: color_target has no RENDER_TARGET view\n";
+            exit(EXIT_FAILURE);
+        }
+    } else {
+        pRTV = handle->swapchain->GetCurrentBackBufferRTV();
+    }
 
     ITextureView* pDSV = nullptr;
     if (desc.has_depth_target) {

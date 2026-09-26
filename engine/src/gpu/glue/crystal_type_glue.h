@@ -66,7 +66,8 @@ typedef enum {
     CRYSTAL_PIXEL_FORMAT_RGBA16F, 
     CRYSTAL_PIXEL_FORMAT_D24_S8,
     CRYSTAL_PIXEL_FORMAT_D32,
-    CRYSTAL_PIXEL_FORMAT_R8_UNORM
+    CRYSTAL_PIXEL_FORMAT_R8_UNORM,
+    CRYSTAL_PIXEL_FORMAT_BGRA8
 } CrystalPixelFormat;
 
 typedef enum { 
@@ -121,6 +122,7 @@ typedef struct {
     /// DEFAULT: NULL 
     const char* data;
     bool is_cubemap;
+    bool is_render_target;
 } CrystalImageDesc;
 
 typedef enum {
@@ -163,6 +165,8 @@ typedef struct {
     bool depth_write;
     CrystalColorWriteMask color_write_mask;
     bool alpha_blend_enabled;
+
+    CrystalPixelFormat color_format;
 } CrystalPipelineDesc;
 
 typedef struct {
@@ -183,6 +187,9 @@ typedef struct {
 
     CrystalImageHandle depth_target;
     bool has_depth_target;
+
+    CrystalImageHandle color_target;
+    bool has_color_target;
 } CrystalPassDesc;
 
 typedef struct {
