@@ -33,7 +33,8 @@ pub fn build(b: *std.Build) !void {
 
     cmake_configure.addArgs(&.{
         b.fmt("-DCMAKE_BUILD_TYPE={s}", .{ cmake_build_type }),
-        "-DSLANG_LIB_TYPE=SHARED",
+        "-DSLANG_LIB_TYPE=STATIC",
+        "-DCMAKE_CXX_FLAGS_RELEASE=-O3 -DNDEBUG -g0",
         boolFlag(b, "SLANG_ENABLE_TESTS", true),
         boolFlag(b, "SLANG_ENABLE_EXAMPLES", true),
         boolFlag(b, "SLANG_ENABLE_GFX", true),
@@ -45,6 +46,7 @@ pub fn build(b: *std.Build) !void {
         boolFlag(b, "SLANG_ENABLE_SLANGRT", true),
         boolFlag(b, "SLANG_ENABLE_SLANG_GLSLANG", false),
         boolFlag(b, "SLANG_ENABLE_SLANG_PROXY", true),
+        boolFlag(b, "SLANG_ENABLE_RELEASE_DEBUG_INFO", true),
         "-DSLANG_SLANG_LLVM_FLAVOR=DISABLE",
         "-DSLANG_EXCLUDE_DAWN=TRUE",
         "-DSLANG_EXCLUDE_TINT=TRUE"
