@@ -150,6 +150,17 @@ typedef struct {
     bool alpha;
 } CrystalColorWriteMask;
 
+typedef enum {
+    CRYSTAL_COMPARISON_FUNC_LESS,
+    CRYSTAL_COMPARISON_FUNC_LESS_EQUAL,
+    CRYSTAL_COMPARISON_FUNC_GREATER,
+    CRYSTAL_COMPARISON_FUNC_GREATER_EQUAL,
+    CRYSTAL_COMPARISON_FUNC_ALWAYS,
+    CRYSTAL_COMPARISON_FUNC_NEVER,
+    CRYSTAL_COMPARISON_FUNC_EQUAL,
+    CRYSTAL_COMPARISON_FUNC_NOT_EQUAL,
+} CrystalCompareFunc;
+
 typedef struct {
     const char* name;
     CrystalShaderHandle shader;
@@ -167,6 +178,7 @@ typedef struct {
     bool alpha_blend_enabled;
 
     CrystalPixelFormat color_format;
+    CrystalCompareFunc comparison_func;
 } CrystalPipelineDesc;
 
 typedef struct {

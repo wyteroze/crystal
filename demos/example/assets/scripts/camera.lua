@@ -96,11 +96,11 @@ function Camera:_step(dt)
     -- 5 m/s
     local moveX = (btn(kb:IsKeyPressed("D"))-btn(kb:IsKeyPressed("A")))*dt*self.Speed
     local moveY = (btn(kb:IsKeyPressed("Space"))-btn(kb:IsKeyPressed("LeftShift")))*dt*self.Speed
-    local moveZ = (btn(kb:IsKeyPressed("S"))-btn(kb:IsKeyPressed("W")))*dt*self.Speed
+    local moveZ = (btn(kb:IsKeyPressed("W"))-btn(kb:IsKeyPressed("S")))*dt*self.Speed
     
     local msDelta = input.CursorLocked and ms:GetDelta() or cmath.Vec2.new(0, 0)
     local rot = self._entity.Components.Rotation
-        + cmath.Vec3.new(-msDelta.Y, -msDelta.X, 0)
+        + cmath.Vec3.new(msDelta.Y, msDelta.X, 0)
 
     local pos = self._entity.Components.Position
         + rotToRightVector(rot) * cmath.Vec3.new(moveX, moveX, moveX)

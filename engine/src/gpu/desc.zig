@@ -93,7 +93,8 @@ pub const PipelineDesc = struct {
     depth_write: bool = false,
     color_write_mask: ColorWriteMask = .all(),
     alpha_blend_enabled: bool = false,
-    color_format: types.PixelFormat = .bgra8
+    color_format: types.PixelFormat = .bgra8,
+    comparison_func: types.ComparisonFunc = .greater_equal
 };
 
 pub const ComputePipelineDesc = struct {

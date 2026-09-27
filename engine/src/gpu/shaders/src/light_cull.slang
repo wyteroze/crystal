@@ -51,13 +51,13 @@ void computeMain(
     GroupMemoryBarrierWithGroupSync();
 
     uint2 pixelCoord = dispatchId.xy;
-    float depth = 1.0;
+    float depth = 0.0;
     if (pixelCoord.x < screenSize.x && pixelCoord.y < screenSize.y) {
         depth = depthTexture.Load(int3(pixelCoord, 0)).r;
     }
 
     uint depthUint = asuint(depth);
-    if (depth < 1.0) {
+    if (depth > 0.0) {
         InterlockedMin(groupMinDepthUint, depthUint);
         InterlockedMax(groupMaxDepthUint, depthUint);
     }
@@ -67,8 +67,8 @@ void computeMain(
     float maxDepth = asfloat(groupMaxDepthUint);
     if (groupMinDepthUint > groupMaxDepthUint) {
         // Nothing rendered into this tile
-        minDepth = 0.0;
-        maxDepth = 1.0;
+        minDepth = 1.0;
+        maxDepth = 0.0;
     }
 
     // If we're the first thread, we build the frustrum planes and view depth bounds

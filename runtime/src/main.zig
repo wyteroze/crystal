@@ -61,14 +61,12 @@ fn submitToRenderer(w: *ecs.World, ui_world: *ecs.World, renderer: *render.Rende
     };
 
     const view = math.Mat4.fromTRS(cam_pos, .fromEuler(cam_rot.toRadians()), .one).invertRT();
-    const proj: math.Mat4 = .perspective(
+    const proj: math.Mat4 = .perspectiveReversedZInf(
         90.0 * (std.math.pi / 180.0), 
         // It doesn't matter whether we use logical/pixel size here, we just need the aspect ratio
         @as(f32, @floatFromInt(renderer.surface_logical_size[0])) / @as(f32, @floatFromInt(renderer.surface_logical_size[1])), 
-        // 50cm
-        0.5,
-        // 1km
-        1000.0
+        // 10cm
+        0.1
     );
 
     const light_query = w.query(&.{ light_id });

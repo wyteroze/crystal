@@ -71,7 +71,7 @@ pub fn execute(self: *LightCullPass, ctx: pass.PassContext) void {
     const lights_handle = ctx.resources.get(resource.lights_buffer, .storage_buffer) orelse @panic("lights_buffer resource is missing!");
 
     const cull_params: CullParams = .{
-        .inv_proj = @bitCast(ctx.view.proj_matrix.invertPerspective()),
+        .inv_proj = @bitCast(ctx.view.proj_matrix.invertPerspectiveReversedZInf()),
         .view = @bitCast(ctx.view.view_matrix),
         .screen_size = ctx.view.viewport_size,
         .tile_count = self.tile_count,

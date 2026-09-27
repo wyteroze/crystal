@@ -56,7 +56,7 @@ fn execute(self: *SkyboxPass, ctx: pass.PassContext) void {
     const color_handle = ctx.resources.get(resource.color_target, .image);
     ctx.device.beginPass(.{
         .clear_color = .fromRgbFloat(0.1, 0.1, 0.1, 1.0),
-        .clear_depth = 1.0,
+        .clear_depth = 0,
         .width = ctx.view.viewport_size[0],
         .height = ctx.view.viewport_size[1],
         .depth_target = depth_handle,
@@ -69,7 +69,7 @@ fn execute(self: *SkyboxPass, ctx: pass.PassContext) void {
     rotation_only_view.m[2][3] = 0;
 
     const inv_view = rotation_only_view.invertRT();
-    const inv_proj = ctx.view.proj_matrix.invertPerspective();
+    const inv_proj = ctx.view.proj_matrix.invertPerspectiveReversedZInf();
     const inv_view_proj = inv_view.mul(inv_proj);
     self.view_ubo.update(std.mem.asBytes(&inv_view_proj));
 

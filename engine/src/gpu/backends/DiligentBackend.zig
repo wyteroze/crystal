@@ -117,7 +117,8 @@ pub fn createPipeline(self: DiligentBackend, d: desc.PipelineDesc) types.Pipelin
             .alpha = d.color_write_mask.alpha
         },
         .alpha_blend_enabled = d.alpha_blend_enabled,
-        .color_format = @intFromEnum(d.color_format)
+        .color_format = @intFromEnum(d.color_format),
+        .comparison_func = @intFromEnum(d.comparison_func)
     });
 
     return .{ .ptr = pipe_h.ptr }; 

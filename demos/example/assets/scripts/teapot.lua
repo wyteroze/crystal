@@ -18,7 +18,7 @@ function Teapot.new(entity)
         _ogParent = entity.Parent
     }, Teapot)
 
-    entity:AddComponent("Position", cmath.Vec3.new(0, 0, -5))
+    entity:AddComponent("Position", cmath.Vec3.new(0, 0, 5))
     entity:AddComponent("Rotation", cmath.Vec3.new(0, 0, 0))
     entity:AddComponent("Mesh", assets.load("assets://models/cube.fbx"))
     entity:AddComponent("Image", assets.load("assets://images/chicken.jpg"))

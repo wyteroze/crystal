@@ -17,10 +17,10 @@ void vertexMain(in uint vertexId : SV_VertexID, out VaryingsOut vsOut) {
     float2 uv = float2((vertexId << 1) & 2, vertexId & 2);
     float2 clipPos = uv * 2.0 - 1.0;
 
-    vsOut.pos = float4(clipPos, 1.0, 1.0);
+    vsOut.pos = float4(clipPos, 0.0, 1.0);
 
-    float4 worldPos = mul(invViewProj, float4(clipPos, 1.0, 1.0));
-    vsOut.viewDir = worldPos.xyz / worldPos.w;
+    float4 worldPos = mul(invViewProj, float4(clipPos, 0.0, 1.0));
+    vsOut.viewDir = worldPos.xyz;
 }
 
 [shader("fragment")]

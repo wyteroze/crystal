@@ -82,29 +82,6 @@ pub const Mat4 = extern struct {
         return .{ .m = .{ .{ f / aspect, 0, 0, 0 }, .{ 0, f, 0, 0 }, .{ 0, 0, (far + near) / (near - far), (2 * far * near) / (near - far) }, .{ 0, 0, -1, 0 } } };
     }
 
-    pub fn lookAt(eye: Vec3, target: Vec3, up: Vec3) Mat4 {
-        const f = target.sub(eye).normalize();
-        const s = f.cross(up).normalize();
-        const u = s.cross(f);
-
-        return .{ .m = .{ .{ s.x, s.y, s.z, -s.dot(eye) }, .{ u.x, u.y, u.z, -u.dot(eye) }, .{ -f.x, -f.y, -f.z, f.dot(eye) }, .{ 0, 0, 0, 1 } } };
-    }
-
-    /// Inverse of rotation+translation matrix, no scale
-    pub fn invertRT(self: Mat4) Mat4 {
-        const tx = self.m[0][3];
-        const ty = self.m[1][3];
-        const tz = self.m[2][3];
-
-        var result: Mat4 = .{ .m = .{ .{ self.m[0][0], self.m[1][0], self.m[2][0], 0 }, .{ self.m[0][1], self.m[1][1], self.m[2][1], 0 }, .{ self.m[0][2], self.m[1][2], self.m[2][2], 0 }, .{ 0, 0, 0, 1 } } };
-
-        result.m[0][3] = -(self.m[0][0] * tx + self.m[1][0] * ty + self.m[2][0] * tz);
-        result.m[1][3] = -(self.m[0][1] * tx + self.m[1][1] * ty + self.m[2][1] * tz);
-        result.m[2][3] = -(self.m[0][2] * tx + self.m[1][2] * ty + self.m[2][2] * tz);
-
-        return result;
-    }
-
     /// Inverse of matrix created by `perspective()`, and only valid for that.
     pub fn invertPerspective(self: Mat4) Mat4 {
         const a_over_f = 1.0 / self.m[0][0];
@@ -119,6 +96,61 @@ pub const Mat4 = extern struct {
         result.m[2][3] = -1;
         result.m[3][2] = 1.0 / c;
         result.m[3][3] = d / c;
+
+        return result;
+    }
+
+    pub fn perspectiveReversedZInf(fov_y_radians: f32, aspect: f32, near: f32) Mat4 {
+        const f = 1.0 / @tan(fov_y_radians * 0.5);
+
+        return .{ .m = .{
+            .{ f / aspect, 0, 0, 0 },
+            .{ 0, f, 0, 0 },
+            .{ 0, 0, 0, near },
+            .{ 0, 0, 1, 0 }
+        } };
+    }
+
+    pub fn invertPerspectiveReversedZInf(self: Mat4) Mat4 {
+        const a_over_f = 1.0 / self.m[0][0];
+        const one_over_f = 1.0 / self.m[1][1];
+        const near = self.m[2][3];
+
+        var result = Mat4.identity;
+        result.m[0][0] = a_over_f;
+        result.m[1][1] = one_over_f;
+        result.m[2][2] = 0;
+        result.m[2][3] = 1;
+        result.m[3][2] = 1.0 / near;
+        result.m[3][3] = 0;
+
+        return result;
+    }
+
+    pub fn lookAt(eye: Vec3, target: Vec3, up: Vec3) Mat4 {
+        const f = target.sub(eye).normalize();
+        const s = up.cross(f).normalize();
+        const u = f.cross(s);
+
+        return .{ .m = .{
+            .{ s.x, s.y, s.z, -s.dot(eye) },
+            .{ u.x, u.y, u.z, -u.dot(eye) },
+            .{ f.x, f.y, f.z, -f.dot(eye) },
+            .{ 0, 0, 0, 1 }
+        } };
+    }
+
+    /// Inverse of rotation+translation matrix, no scale
+    pub fn invertRT(self: Mat4) Mat4 {
+        const tx = self.m[0][3];
+        const ty = self.m[1][3];
+        const tz = self.m[2][3];
+
+        var result: Mat4 = .{ .m = .{ .{ self.m[0][0], self.m[1][0], self.m[2][0], 0 }, .{ self.m[0][1], self.m[1][1], self.m[2][1], 0 }, .{ self.m[0][2], self.m[1][2], self.m[2][2], 0 }, .{ 0, 0, 0, 1 } } };
+
+        result.m[0][3] = -(self.m[0][0] * tx + self.m[1][0] * ty + self.m[2][0] * tz);
+        result.m[1][3] = -(self.m[0][1] * tx + self.m[1][1] * ty + self.m[2][1] * tz);
+        result.m[2][3] = -(self.m[0][2] * tx + self.m[1][2] * ty + self.m[2][2] * tz);
 
         return result;
     }

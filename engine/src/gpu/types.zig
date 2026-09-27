@@ -9,6 +9,7 @@ pub const SamplerHandle = struct { ptr: ?*anyopaque };
 
 pub const BufferUsage = enum { default, immutable, dynamic, stream };
 pub const BufferType = enum { vertex, index, uniform, storage };
+pub const ComparisonFunc = enum { less, less_equal, greater, greater_equal, always, never, equal, not_equal };
 
 pub const PixelFormat = enum {
     /// 4 channels, 8 bits each, 32 total.

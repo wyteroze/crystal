@@ -44,7 +44,7 @@ pub fn execute(self: *DepthPrepassPass, ctx: pass.PassContext) void {
     const depth_handle = ctx.resources.get(resource.depth_buffer, .image) orelse @panic("depth_buffer resource is missing!");
     const color_handle = ctx.resources.get(resource.color_target, .image);
     ctx.device.beginPass(.{
-        .clear_depth = 1.0,
+        .clear_depth = 0.0,
         .clear_color = self.clear_color,
         .width = ctx.view.viewport_size[0],
         .height = ctx.view.viewport_size[1],

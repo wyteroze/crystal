@@ -125,6 +125,27 @@ static TEXTURE_FORMAT crystalPixelFormatToDiligent(CrystalPixelFormat format) {
     }
 }
 
+static COMPARISON_FUNCTION crystalComparisonFuncToDiligent(CrystalCompareFunc func) {
+    switch (func) {
+        case CRYSTAL_COMPARISON_FUNC_LESS:
+            return COMPARISON_FUNC_LESS;
+        case CRYSTAL_COMPARISON_FUNC_LESS_EQUAL:
+            return COMPARISON_FUNC_LESS_EQUAL;
+        case CRYSTAL_COMPARISON_FUNC_GREATER:
+            return COMPARISON_FUNC_GREATER;
+        case CRYSTAL_COMPARISON_FUNC_GREATER_EQUAL:
+            return COMPARISON_FUNC_GREATER_EQUAL;
+        case CRYSTAL_COMPARISON_FUNC_ALWAYS:
+            return COMPARISON_FUNC_ALWAYS;
+        case CRYSTAL_COMPARISON_FUNC_NEVER:
+            return COMPARISON_FUNC_NEVER;
+        case CRYSTAL_COMPARISON_FUNC_EQUAL:
+            return COMPARISON_FUNC_EQUAL;
+        case CRYSTAL_COMPARISON_FUNC_NOT_EQUAL:
+            return COMPARISON_FUNC_NOT_EQUAL;
+    }
+}
+
 static std::vector<ShaderResourceVariableDesc> buildResourceVars(const CrystalResourceDesc* resources, size_t count) {
     std::vector<ShaderResourceVariableDesc> vars;
     vars.reserve(count);
@@ -428,7 +449,7 @@ CrystalPipelineHandle diligent_create_pipeline(CrystalDiligentDeviceHandle handl
     graphicsPipeline.BlendDesc.RenderTargets[0].RenderTargetWriteMask = writeMask;
     graphicsPipeline.DepthStencilDesc.DepthEnable = desc.depth_write;
     graphicsPipeline.DepthStencilDesc.DepthWriteEnable = desc.depth_write;
-    graphicsPipeline.DepthStencilDesc.DepthFunc = COMPARISON_FUNC_LESS_EQUAL;
+    graphicsPipeline.DepthStencilDesc.DepthFunc = crystalComparisonFuncToDiligent(desc.comparison_func);
 
     if (desc.alpha_blend_enabled) {
         auto& rt0 = psoCreateInfo.GraphicsPipeline.BlendDesc.RenderTargets[0];
