@@ -12,12 +12,16 @@ pub const GlyphInfo = struct {
     advance: f32
 };
 
+// This is also in font_freetype.zig, so change it there too if needed.
+const sdf_raster_size: u32 = 128;
+
 const FontAtlas = @This();
 texture: gpu.GpuDevice.GpuImage,
 sampler: gpu.GpuDevice.GpuSampler,
 glyphs: std.AutoHashMap(u32, GlyphInfo),
 atlas_size: [2]u32,
 white_uv: [2]f32,
+raster_size: u32,
 
 pub fn deinit(self: FontAtlas) void {
     self.texture.deinit();
@@ -27,11 +31,18 @@ pub fn deinit(self: FontAtlas) void {
 }
 
 pub fn bake(allocator: std.mem.Allocator, name: [:0]const u8, device: *gpu.GpuDevice, font: Assets.types.Font) !FontAtlas {
-    const cell: u32 = font.pixel_size + 2;
+    var max_w: u32 = 0;
+    var max_h: u32 = 0;
+    for (font.glyphs) |g| {
+        max_w = @max(max_w, g.size[0]);
+        max_h = @max(max_h, g.size[1]);
+    }
+    const cell_w = max_w + 2;
+    const cell_h = max_h + 2;
     const cols: u32 = 16;
     const rows: u32 = (@as(u32, @intCast(font.glyphs.len)) + cols - 1) / cols;
-    const atlas_w = cols * cell;
-    const atlas_h = rows * cell + cell; // Extra cell for white pixel used in the fragment shader
+    const atlas_w = cols * cell_w;
+    const atlas_h = rows * cell_h + cell_h; // Extra cell for white pixel used in the fragment shader
 
     var pixels = try allocator.alloc(u8, atlas_w * atlas_h);
     defer allocator.free(pixels);
@@ -39,7 +50,7 @@ pub fn bake(allocator: std.mem.Allocator, name: [:0]const u8, device: *gpu.GpuDe
 
     // aforementioned white pixel cell
     const white_x = 0;
-    const white_y = rows * cell;
+    const white_y = rows * cell_h;
     pixels[white_y * atlas_w + white_x] = 255;
 
     var glyphs: std.AutoHashMap(u32, GlyphInfo) = .init(allocator);
@@ -47,8 +58,8 @@ pub fn bake(allocator: std.mem.Allocator, name: [:0]const u8, device: *gpu.GpuDe
         const col = i % cols;
         const row = i / cols;
         // mooo
-        const ox = col * cell;
-        const oy = row * cell;
+        const ox = col * cell_w;
+        const oy = row * cell_h;
 
         for (0..g.size[1]) |y| {
             const src_row = g.pixels[(y * g.size[0])..][0..g.size[0]];
@@ -71,8 +82,8 @@ pub fn bake(allocator: std.mem.Allocator, name: [:0]const u8, device: *gpu.GpuDe
         .name = name,
         .width = atlas_w,
         .height = atlas_h,
-        .format = .r8_unorm, // YO
-        .data = pixels
+        .format = .r8_unorm,
+        .data = pixels,
     });
 
     return .{
@@ -80,6 +91,7 @@ pub fn bake(allocator: std.mem.Allocator, name: [:0]const u8, device: *gpu.GpuDe
         .sampler = try device.createSampler(.{}),
         .glyphs = glyphs,
         .atlas_size = .{ atlas_w, atlas_h },
-        .white_uv = white_uv_pos
+        .white_uv = white_uv_pos,
+        .raster_size = sdf_raster_size
     };
 }

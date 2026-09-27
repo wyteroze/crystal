@@ -17,6 +17,7 @@ const assimp_headers =
 const freetype_headers =
     \\#include "ft2build.h"
     \\#include FT_FREETYPE_H
+    \\#include FT_MODULE_H
     \\
 ;
 

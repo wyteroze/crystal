@@ -53,7 +53,6 @@ pub const Glyph = struct {
 
 pub const Font = struct {
     glyphs: []Glyph,
-    pixel_size: u32,
 
     pub fn deinit(self: *const Font, allocator: std.mem.Allocator) void {
         for (self.glyphs) |g| allocator.free(g.pixels);

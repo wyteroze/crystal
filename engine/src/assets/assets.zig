@@ -10,11 +10,6 @@ pub const AssetData = @import("AssetData.zig");
 pub const AssetUri = @import("AssetUri.zig");
 pub const types = @import("types.zig");
 
-pub const LoadContext = struct {
-    // For fonts only
-    pixel_size: u32 = 0
-};
-
 pub const UploadContext = struct {
     /// For images only
     is_cubemap: bool = false
@@ -162,7 +157,7 @@ pub fn deinit(self: *Assets) void {
     self.sources.deinit();
 }
 
-pub fn load(self: *Assets, path: []const u8, load_ctx: LoadContext) !AssetHandle {
+pub fn load(self: *Assets, path: []const u8) !AssetHandle {
     const uri: AssetUri = try .parse(self.allocator, path);
     defer uri.deinit(self.allocator);
 
@@ -177,7 +172,7 @@ pub fn load(self: *Assets, path: []const u8, load_ctx: LoadContext) !AssetHandle
     };
 
     const bytes = try source.source().read(uri.path);
-    const data: AssetData.CpuAssetData = try .parse(self.allocator, self.io, path, bytes, load_ctx);
+    const data: AssetData.CpuAssetData = try .parse(self.allocator, self.io, path, bytes);
     try self.slots.put(id, .{ .cpu_data = data, .cpu_data_refcount = 1, .path = try self.allocator.dupe(u8, path) });
 
     return .{ .id = id, .assets = self };
@@ -261,14 +256,7 @@ pub const registerLua = struct {
     fn luaLoadAsset(l: *zlua.Lua) !i32 {
         const r: *Runtime = .fromState(l);
         const uri = l.toString(1) catch |e| linker.util.luaErr(l, e, .{ []const u8, 1 });
-        // Quick bandaid patch, because right now loading fonts requires you to pass a size
-        // for FreeType to actually render the font. In the future when we render with SDFs
-        // instead of using bitmaps, providing a size won't be needed and Lua will be able
-        // to load fonts like any other asset.
-        if (std.mem.find(u8, uri, ".ttf") != null) {
-            return error.LoadingFontsNotAllowedFromLua;
-        }
-        const handle = try r.assets.load(uri, .{});
+        const handle = try r.assets.load(uri);
 
         HandleBind.push(l, handle);
         return 1;

@@ -6,7 +6,6 @@ const types = @import("../types.zig");
 const freetype = @import("freetype");
 
 pub const ImportOptions = struct {
-    pixel_size: u32,
     char_range: []const u32 = &default_char_range
 };
 
@@ -17,6 +16,11 @@ const default_char_range = blk: {
 
     break :blk range;
 };
+
+// This is also in FontAtlas.zig, so change it there too if needed.
+const sdf_raster_size: u32 = 128;
+// Not this one though.
+const sdf_spread: c_int = 8;
 
 pub fn importFont(allocator: std.mem.Allocator, location: ImportLocation, options: ImportOptions) !types.Font {
     var lib = std.mem.zeroes(freetype.FT_Library);
@@ -37,7 +41,9 @@ pub fn importFont(allocator: std.mem.Allocator, location: ImportLocation, option
     }
     defer _ = freetype.FT_Done_Face(face);
 
-    if (freetype.FT_Set_Pixel_Sizes(face, 0, options.pixel_size) != 0) return error.SetPixelSizeFailed;
+    if (freetype.FT_Set_Pixel_Sizes(face, 0, sdf_raster_size) != 0) return error.SetPixelSizeFailed;
+
+    _ = freetype.FT_Property_Set(lib, "sdf", "spread", &sdf_spread);
 
     var glyphs = try allocator.alloc(types.Glyph, options.char_range.len);
     errdefer allocator.free(glyphs);
@@ -50,7 +56,7 @@ pub fn importFont(allocator: std.mem.Allocator, location: ImportLocation, option
         if (glyph_index == 0) continue;
 
         if (freetype.FT_Load_Glyph(face, glyph_index, freetype.FT_LOAD_DEFAULT) != 0) return error.GlyphLoadFailed;
-        if (freetype.FT_Render_Glyph(face.*.glyph, freetype.FT_RENDER_MODE_NORMAL) != 0) return error.GlyphRenderFailed;
+        if (freetype.FT_Render_Glyph(face.*.glyph, freetype.FT_RENDER_MODE_SDF) != 0) return error.GlyphRenderFailed;
 
         const slot = face.*.glyph;
         const bitmap = slot.*.bitmap;
@@ -78,5 +84,5 @@ pub fn importFont(allocator: std.mem.Allocator, location: ImportLocation, option
     }
 
     glyphs = try allocator.realloc(glyphs, glyph_count);
-    return .{ .glyphs = glyphs, .pixel_size = options.pixel_size };
+    return .{ .glyphs = glyphs };
 }

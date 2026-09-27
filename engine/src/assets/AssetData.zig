@@ -39,7 +39,7 @@ pub const CpuAssetData = union(AssetType) {
         }
     }
 
-    pub fn parse(allocator: std.mem.Allocator, io: std.Io, path: []const u8, bytes: []u8, load_ctx: Assets.LoadContext) !CpuAssetData {
+    pub fn parse(allocator: std.mem.Allocator, io: std.Io, path: []const u8, bytes: []u8) !CpuAssetData {
         const ext = std.Io.Dir.path.extension(path);
 
         if (std.mem.eql(u8, ext, ".obj") 
@@ -71,7 +71,7 @@ pub const CpuAssetData = union(AssetType) {
 
         if (std.mem.eql(u8, ext, ".ttf")) {
             defer allocator.free(bytes);
-            return .{ .font = try importers.font_freetype.importFont(allocator, .{ .bytes = bytes }, .{ .pixel_size = load_ctx.pixel_size }) };
+            return .{ .font = try importers.font_freetype.importFont(allocator, .{ .bytes = bytes }, .{ }) };
         }
 
         std.log.err("unknown file type '{s}'", .{ ext });

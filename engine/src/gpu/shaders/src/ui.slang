@@ -36,7 +36,9 @@ void vertexMain(in VSInput vsIn, out VaryingsOut vsOut) {
 [shader("fragment")]
 float4 fragmentMain(in VaryingsOut psIn) : SV_TARGET {
     if (isText != 0) {
-        float alpha = atlasTexture.Sample(atlasSampler, psIn.uv).r;
+        float dist = atlasTexture.Sample(atlasSampler, psIn.uv).r;
+        float w = fwidth(dist) * 0.5;
+        float alpha = smoothstep(0.5 - w, 0.5 + w, dist);
         return float4(psIn.color.rgb, psIn.color.a * alpha);
     } else {
         float4 sampled = atlasTexture.Sample(atlasSampler, psIn.uv);

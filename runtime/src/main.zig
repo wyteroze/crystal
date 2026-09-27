@@ -192,14 +192,15 @@ fn submitToRenderer(w: *ecs.World, ui_world: *ecs.World, renderer: *render.Rende
                 if (!txt.font.hasGpuData()) txt.font.upload(.{}) catch @panic("Failed to upload font to GPU");
                 // This should really be an error instead of just silently continuing
                 const atlas = txt.font.gpuGet(.font) catch continue;
+                const scale = @as(f32, @floatFromInt(txt.size)) / @as(f32, @floatFromInt(atlas.raster_size));
 
                 var pen = pos;
                 for (txt.content) |ch| {
                     const glyph = atlas.glyphs.get(ch) orelse continue;
 
                     ui_objects.append(allocator, .{
-                        .pos = .{ pen.x + glyph.bearing[0], pen.y - glyph.bearing[1] + @as(f32, @floatFromInt(txt.size)) },
-                        .size = glyph.size,
+                        .pos = .{ pen.x + glyph.bearing[0] * scale, pen.y - glyph.bearing[1] * scale + @as(f32, @floatFromInt(txt.size)) },
+                        .size = .{ glyph.size[0] * scale, glyph.size[1] * scale },
                         .color = txt.color,
                         .uv_pos = glyph.uv_pos,
                         .uv_size = glyph.uv_size,
@@ -209,7 +210,7 @@ fn submitToRenderer(w: *ecs.World, ui_world: *ecs.World, renderer: *render.Rende
                         
                     }) catch @panic("Out of memory");
 
-                    pen = pen.add(.new(glyph.advance, 0));
+                    pen = pen.add(.new(glyph.advance * scale, 0));
                 }
             }
         }
@@ -285,7 +286,7 @@ pub fn main(init: std.process.Init) !void {
     defer assets.deinit();
     
     // Skybox
-    const skybox_cubemap = try assets.load("assets://images/skybox_island.png", .{});
+    const skybox_cubemap = try assets.load("assets://images/skybox_island.png");
     try skybox_cubemap.upload(.{ .is_cubemap = true });
 
     var renderer_allocator: core.TrackedAllocator = .init(allocator, "Renderer");
@@ -332,7 +333,7 @@ pub fn main(init: std.process.Init) !void {
 
     // Camera script
     {
-        const source = try assets.load("assets://scripts/camera.lua", .{});
+        const source = try assets.load("assets://scripts/camera.lua");
         defer source.cpuRelease();
         const script = try runtime.loadScript(try source.cpuGet(.script_source));
 
@@ -359,7 +360,7 @@ pub fn main(init: std.process.Init) !void {
     try entity.setParent(scene);
 
     // Add a script to the component
-    const source = try assets.load("assets://scripts/teapot.lua", .{});
+    const source = try assets.load("assets://scripts/teapot.lua");
     defer source.cpuRelease();
     const script = try runtime.loadScript(try source.cpuGet(.script_source));
 
@@ -385,14 +386,12 @@ pub fn main(init: std.process.Init) !void {
     try ui_world.addComponent(ui_entity, size_2d_component, math.Vec2, .new(640.0, 360.0));
     try ui_world.addComponent(ui_entity, color_component, core.Color, .fromRgbFloat(0.0, 0.0, 0.0, 0.5));
 
-    // Soon, we will render text using SDFs so we don't have to do all of the pre-baking stuff, and also
-    // have it be crisp at higher resolutions.
-    const font = try assets.load("assets://fonts/JetBrains-Mono.ttf", .{ .pixel_size = 24 });
+    const font = try assets.load("assets://fonts/JetBrains-Mono.ttf");
     try ui_world.addComponent(ui_entity, text_component, render.types.Text, .{
         .font = font,
-        .color = .fromRgbFloat(0, 1, 1, 1),
+        .color = .fromRgbFloat(1, 1, 1, 1),
         .content = try allocator.dupe(u8, "In new york I milly rock"),
-        .size = 24
+        .size = 128
     });
 
     var running = true;
