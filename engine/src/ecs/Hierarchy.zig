@@ -7,12 +7,19 @@ const Hierarchy = @This();
 allocator: std.mem.Allocator,
 parents: std.ArrayList(Entity),
 children: std.ArrayList(std.ArrayList(Entity)),
+/// This gets added to whenever the parents of entities are changed.
+/// This is used mainly in the UI system by reading it every frame,
+/// reflowing the hierarchy, then clearing it so it can be read the next frame.
+/// If you don't need to use it, it's a good idea to clear it every frame regardless
+/// so it doesn't infinitely grow during the program's lifetime.
+changed: std.ArrayList(Entity),
 
 pub fn init(allocator: std.mem.Allocator) Hierarchy {
     return .{
         .allocator = allocator,
         .parents = .empty,
-        .children = .empty
+        .children = .empty,
+        .changed = .empty
     };
 }
 
@@ -20,6 +27,7 @@ pub fn deinit(self: *Hierarchy) void {
     for (self.children.items) |*i| i.deinit(self.allocator);
     self.children.deinit(self.allocator);
     self.parents.deinit(self.allocator);
+    self.changed.deinit(self.allocator);
 }
 
 pub fn setParent(self: *Hierarchy, entity: Entity, parent: ?Entity) !void {
@@ -34,13 +42,17 @@ pub fn setParent(self: *Hierarchy, entity: Entity, parent: ?Entity) !void {
     const previous_parent = self.parents.items[entity.index];
     if (!previous_parent.eql(Entity.invalid)) {
         self.removeChild(previous_parent, entity);
+        try self.changed.append(self.allocator, previous_parent);
     }
 
     self.parents.items[entity.index] = parent orelse Entity.invalid;
 
     if (parent) |p| {
         try self.children.items[p.index].append(self.allocator, entity);
+        try self.changed.append(self.allocator, p);
     }
+
+    try self.changed.append(self.allocator, entity);
 }
 
 fn removeChild(self: *Hierarchy, parent: Entity, child: Entity) void {

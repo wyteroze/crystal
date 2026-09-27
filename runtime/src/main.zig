@@ -14,6 +14,7 @@ const toml = engine.toml;
 const Scheduler = engine.Scheduler;
 const render = engine.render;
 const Input = engine.Input;
+const Ui = engine.Ui;
 
 const target_fps = 120;
 const fps_seconds: f32 = 1.0 / @as(f32, @floatCast(target_fps));
@@ -21,10 +22,6 @@ const asset_purge_rate_seconds: std.Io.Duration = .fromMilliseconds(250);
 const clear_color: core.Color = .fromRgbFloat(0.1, 0.1, 0.1, 1.0);
 
 const Scene = struct { cam: ?ecs.Entity };
-const RenderViewOptions = struct {
-    camera: ecs.Entity,
-    size: [2]u32
-};
 
 fn submitToRenderer(w: *ecs.World, ui_world: *ecs.World, renderer: *render.Renderer) void {
     const allocator = renderer.frame_allocator.allocator();
@@ -134,18 +131,18 @@ fn submitToRenderer(w: *ecs.World, ui_world: *ecs.World, renderer: *render.Rende
 
     // Collect RenderViews
     {
-        const pos_2d_id = ui_world.components.id("Position").?;
-        const size_2d_id = ui_world.components.id("Size").?;
+        const absolute_pos_id = ui_world.components.id("AbsolutePosition").?;
+        const absolute_size_id = ui_world.components.id("AbsoluteSize").?;
         const rview_id = ui_world.components.id("RenderView").?;
 
         const q =  ui_world.query(&.{ rview_id });
         var it = q.iterator();
         while (it.next()) |entity| {
-            const rv = ui_world.getComponent(entity, rview_id, RenderViewOptions).?;
+            const rv = ui_world.getComponent(entity, rview_id, Ui.types.RenderViewOptions).?;
             if (!rv.camera.isAlive()) continue;
 
-            const position = ui_world.getComponent(entity, pos_2d_id, math.Vec2) orelse continue;
-            const size = ui_world.getComponent(entity, size_2d_id, math.Vec2) orelse continue;
+            const position = ui_world.getComponent(entity, absolute_pos_id, math.Vec2) orelse continue;
+            const size = ui_world.getComponent(entity, absolute_size_id, math.Vec2) orelse continue;
             const target = if (renderer.getView(entity.toU64())) |v| v.target else blk: {
                 const v = renderer.createView(entity.toU64(), .{ @max(rv.size[0], 1), @max(rv.size[1], 1) }, rv.camera) catch @panic("Failed to create RenderView");
                 break :blk v.target;
@@ -169,18 +166,17 @@ fn submitToRenderer(w: *ecs.World, ui_world: *ecs.World, renderer: *render.Rende
 
     // 2D world (for UI)
     {
-        const pos_2d_id = ui_world.components.id("Position").?;
-        const size_2d_id = ui_world.components.id("Size").?;
+        const absolute_pos_id = ui_world.components.id("AbsolutePosition").?;
+        const absolute_size_id = ui_world.components.id("AbsoluteSize").?;
         const color_id = ui_world.components.id("Color").?;
         const text_id = ui_world.components.id("Text").?;
 
-        const q = ui_world.query(&.{ pos_2d_id, size_2d_id, text_id });
+        const q = ui_world.query(&.{ absolute_pos_id, absolute_size_id, color_id });
         var it = q.iterator();
         while (it.next()) |entity| {
-            const pos: math.Vec2 = if (ui_world.getComponent(entity, pos_2d_id, math.Vec2)) |p| p.* else .zero;
-            const size: math.Vec2 = if (ui_world.getComponent(entity, size_2d_id, math.Vec2)) |p| p.* else .zero;
+            const pos: math.Vec2 = if (ui_world.getComponent(entity, absolute_pos_id, math.Vec2)) |p| p.* else .zero;
+            const size: math.Vec2 = if (ui_world.getComponent(entity, absolute_size_id, math.Vec2)) |p| p.* else .zero;
             const color: core.Color = if (ui_world.getComponent(entity, color_id, core.Color)) |c| c.* else .fromRgbFloat(0.0, 0.0, 0.0, 1.0);
-            const text: ?render.types.Text = if (ui_world.getComponent(entity, text_id, render.types.Text)) |t| t.* else null;
 
             ui_objects.append(allocator, .{
                 .pos = pos.arr(),
@@ -188,6 +184,7 @@ fn submitToRenderer(w: *ecs.World, ui_world: *ecs.World, renderer: *render.Rende
                 .color = color
             }) catch @panic("Out of memory");
 
+            const text: ?render.types.Text = if (ui_world.getComponent(entity, text_id, render.types.Text)) |t| t.* else null;
             if (text) |txt| {
                 if (!txt.font.hasGpuData()) txt.font.upload(.{}) catch @panic("Failed to upload font to GPU");
                 // This should really be an error instead of just silently continuing
@@ -293,15 +290,14 @@ pub fn main(init: std.process.Init) !void {
     var renderer: render.Renderer = try .init(renderer_allocator.allocator(), surface_pixel_size, surface_logical_size, surface_scale, &gpu_device, try skybox_cubemap.gpuGet(.image));
     defer renderer.deinit();
 
+    var ui_allocator: core.TrackedAllocator = .init(allocator, "Ui");
+    var ui: Ui = try .init(ui_allocator.allocator());
+    defer ui.deinit();
+
     // Create the world
     var ecs_allocator: core.TrackedAllocator = .init(allocator, "ECSWorld");
     var world: ecs.World = .init(ecs_allocator.allocator());
     defer world.deinit();
-
-    // Create the UI world
-    var ecs_ui_allocator: core.TrackedAllocator = .init(allocator, "ECSWorld (UI)");
-    var ui_world: ecs.World = .init(ecs_ui_allocator.allocator());
-    defer ui_world.deinit();
 
     var lua_allocator: core.TrackedAllocator = .init(allocator, "LuaRuntime");
     var runtime: scripting.Runtime = try .init(lua_allocator.allocator(), &world, &assets, &input);
@@ -368,30 +364,44 @@ pub fn main(init: std.process.Init) !void {
     const stored_script = world.getComponent(entity, script_component, scripting.Script).?;
     try stored_script.instantiate(entity);
 
-    // 2D world + components for UI
-    const pos_2d_component = try ui_world.registerComponentNativeShaped(math.Vec2, "Position", null);
-    const size_2d_component = try ui_world.registerComponentNativeShaped(math.Vec2, "Size", null);
-    const color_component = try ui_world.registerComponentNativeShaped(core.Color, "Color", null);
-    const text_component = try ui_world.registerComponentNativeShaped(render.types.Text, "Text", null);
-    const render_view_component = try ui_world.registerComponentNativeShaped(RenderViewOptions, "RenderView", null);
-
     // Render at logical size for 3D, while UI renders at pixel size to stay crisp.
-    const view_entity = try ui_world.spawnEntity();
-    try ui_world.addComponent(view_entity, render_view_component, RenderViewOptions, .{ .camera = camera, .size = surface_logical_size });
-    try ui_world.addComponent(view_entity, pos_2d_component, math.Vec2, .new(0, 0));
-    try ui_world.addComponent(view_entity, size_2d_component, math.Vec2, .new(@floatFromInt(surface_logical_size[0]), @floatFromInt(surface_logical_size[1])));
+    const view_entity = try ui.world.spawnEntity();
+    try ui.world.addComponent(view_entity, ui.component_ids.render_view, Ui.types.RenderViewOptions, .{ .camera = camera, .size = surface_logical_size });
+    try ui.world.addComponent(view_entity, ui.component_ids.position, math.Vec2, .new(0, 0));
+    try ui.world.addComponent(view_entity, ui.component_ids.size, Ui.types.SizeMode, .fixed(@floatFromInt(surface_logical_size[0]), @floatFromInt(surface_logical_size[1])));
 
-    const ui_entity = try ui_world.spawnEntity();
-    try ui_world.addComponent(ui_entity, pos_2d_component, math.Vec2, .zero);
-    try ui_world.addComponent(ui_entity, size_2d_component, math.Vec2, .new(640.0, 360.0));
-    try ui_world.addComponent(ui_entity, color_component, core.Color, .fromRgbFloat(0.0, 0.0, 0.0, 0.5));
-
+    const ui_entity = try ui.world.spawnEntity();
+    try ui.world.addComponent(ui_entity, ui.component_ids.position, math.Vec2, .zero);
+    try ui.world.addComponent(ui_entity, ui.component_ids.size, Ui.types.SizeMode, .fixed(640.0, 360.0));
+    try ui.world.addComponent(ui_entity, ui.component_ids.color, core.Color, .fromRgbFloat(0.0, 0.0, 0.0, 0.5));
+    try ui.world.addComponent(ui_entity, ui.component_ids.layout, Ui.types.Layout, .{
+        .direction = .horizontal,
+        .align_items = .start,
+        .justify = .space_between,
+        .padding = .{ .top = 10, .bottom = 10, .left = 32, .right = 32 },
+        .gap = 10,
+    });
+    
     const font = try assets.load("assets://fonts/JetBrains-Mono.ttf");
-    try ui_world.addComponent(ui_entity, text_component, render.types.Text, .{
+    for (0..10) |i| {
+        const ui_entity_child = try ui.world.spawnEntity();
+        try ui.world.addComponent(ui_entity_child, ui.component_ids.size, Ui.types.SizeMode, .fixed(64.0, 64.0));
+        try ui.world.addComponent(ui_entity_child, ui.component_ids.color, core.Color, .fromRgbFloat(0, 0, 1, 1));
+        try ui.world.addComponent(ui_entity_child, ui.component_ids.text, render.types.Text, .{
+            .font = font,
+            .color = .fromRgbFloat(1, 1, 1, 1),
+            .content = try std.fmt.allocPrint(allocator, "Boi {d}", .{ i+1 }),
+            .size = 13
+        });
+
+        try ui_entity_child.setParent(ui_entity);
+    }
+
+    try ui.world.addComponent(ui_entity, ui.component_ids.text, render.types.Text, .{
         .font = font,
         .color = .fromRgbFloat(1, 1, 1, 1),
         .content = try allocator.dupe(u8, "In new york I milly rock"),
-        .size = 128
+        .size = 24
     });
 
     var running = true;
@@ -422,7 +432,8 @@ pub fn main(init: std.process.Init) !void {
         input.tick();
         platform.poll();
         world.update(dt_seconds);
-        submitToRenderer(&world, &ui_world, &renderer);
+        ui.update();
+        submitToRenderer(&world, &ui.world, &renderer);
 
         const end = std.Io.Clock.awake.now(io);
 
@@ -446,7 +457,7 @@ pub fn main(init: std.process.Init) !void {
             std.log.info("[Lua GC]: {f}", .{ core.SizeFormatter.fmtSize( @intCast( runtime.gcCount() * 1024 ) ) });
 
             const txt = try std.fmt.allocPrint(allocator, "{d:.2} FPS", .{ 1.0/dt_seconds });
-            try ui_entity.getComponent(text_component, render.types.Text).?.setText(allocator, txt);
+            try ui_entity.getComponent(ui.component_ids.text, render.types.Text).?.setText(allocator, txt);
             allocator.free(txt);
         }
 

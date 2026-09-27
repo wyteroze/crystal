@@ -149,11 +149,14 @@ pub fn spawnEntity(self: *World) !Entity {
         self.update_signals.items[idx] = .init(self.allocator);
         self.destroy_signals.items[idx] = .init(self.allocator);
 
-        return .{
+        const e: Entity = .{
             .index = idx,
             .generation = self.generations.items[idx],
             .world = self
         };
+
+        try self.hierarchy.changed.append(self.allocator, e);
+        return e;
     }
 
     const idx: u32 = @intCast(self.generations.items.len);
@@ -168,11 +171,14 @@ pub fn spawnEntity(self: *World) !Entity {
         self.destroy_signals.items[idx] = .init(self.allocator);
     }
 
-    return .{ 
-        .index = idx, 
-        .generation = 0, 
+    const e: Entity = .{
+        .index = idx,
+        .generation = 0,
         .world = self
     };
+    
+    try self.hierarchy.changed.append(self.allocator, e);
+    return e;
 }
 
 pub fn isEntityAlive(self: *World, entity: Entity) bool {

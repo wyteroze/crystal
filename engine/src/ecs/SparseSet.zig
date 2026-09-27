@@ -52,7 +52,9 @@ fn ensureCapacity(self: *SparseSet, idx: u32) !void {
 
 pub fn has(self: *SparseSet, entity: Entity) bool {
     if (entity.index >= self.sparse.items.len) return false;
-    return self.sparse.items[entity.index] != null_idx;
+    const dense_idx = self.sparse.items[entity.index];
+    if (dense_idx == null_idx) return false;
+    return self.dense.items[dense_idx].eql(entity);
 }
 
 pub fn insert(self: *SparseSet, entity: Entity, bytes: []const u8) !void {
@@ -81,6 +83,7 @@ pub fn remove(self: *SparseSet, entity: Entity) void {
     if (entity.index >= self.sparse.items.len) return;
     const dense_idx = self.sparse.items[entity.index];
     if (dense_idx == null_idx) return;
+    if (!self.dense.items[dense_idx].eql(entity)) return;
 
     const bytes = self.dense_data.items[dense_idx * self.elem_size ..][0..self.elem_size];
 
@@ -116,6 +119,7 @@ pub fn get(self: *SparseSet, entity: Entity) ?[]u8 {
 
     const dense_idx = self.sparse.items[entity.index];
     if (dense_idx == null_idx) return null;
+    if (!self.dense.items[dense_idx].eql(entity)) return null;
 
     return self.dense_data.items[dense_idx * self.elem_size ..][0..self.elem_size];
 }

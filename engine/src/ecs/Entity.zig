@@ -33,6 +33,10 @@ pub fn isAlive(self: Entity) bool {
     return self.world.isEntityAlive(self);
 }
 
+pub fn setComponent(self: Entity, id: ComponentId, comptime T: type, val: T) !void {
+    if (self.world.getComponent(self, id, T)) |c| c.* = val else return error.UnknownComponent;
+}
+
 pub fn hasComponent(self: Entity, name: []const u8) bool {
     const comp_id = self.world.components.id(name) orelse return false;
     return self.world.hasComponent(self, comp_id);
