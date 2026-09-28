@@ -170,6 +170,25 @@ pub const SizeMode = struct {
     }
 };
 
+pub const Borders = struct {
+    color: core.Color = .fromRgbFloat(0, 0, 0, 1),
+    top: f32 = 0,
+    bottom: f32 = 0,
+    left: f32 = 0,
+    right: f32 = 0,
+
+    pub const __lua = .val;
+    pub fn format(
+        self: @This(),
+        writer: *std.Io.Writer,
+    ) std.Io.Writer.Error!void {
+        try writer.print(
+            "Borders{{ Top = {d}, Bottom = {d}, Left = {d}, Right = {d} }}", 
+            .{ self.top, self.bottom, self.left, self.right }
+        );
+    }
+};
+
 pub const Text = struct {
     font: Assets.AssetHandle,
     content: []const u8 = "",

@@ -41,6 +41,7 @@ function Teapot.new(entity)
     local mainElement = ui:CreateElement({
         Size = ui.SizeMode({ Width = ui.SizeAxis.Fixed(640), Height = ui.SizeAxis.Fixed(360) }),
         Color = core.Color.new(1, 0, 1, 0.5),
+        Borders = ui.Borders({ Top = 4, Bottom = 4, Left = 4, Right = 4 }),
         Text = ui.Text({
             Font = jbMono,
             Content = "Yo",
@@ -84,10 +85,12 @@ function Teapot.new(entity)
     ui:CreateElement({
         Parent = mainElement,
         Size = ui.SizeMode({ Width = ui.SizeAxis.Fixed(64), Height = ui.SizeAxis.Fixed(64) }),
+        CornerRadii = ui.CornerRadii({ TopLeft = 6, TopRight = 6, BottomLeft = 6, BottomRight = 6 }),
+        Borders = ui.Borders({ Top = 2, Bottom = 2, Left = 2, Right = 2 }),
         Image = ui.Image({
             Source = chickenPng,
             Crop = ui.Crop({ Min = core.Vec2.new(0, 0), Max = core.Vec2.new(1, 1) })
-        })
+        }),
     })
 
     return self

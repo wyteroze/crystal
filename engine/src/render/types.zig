@@ -25,6 +25,11 @@ pub const UiObject = struct {
     // A UV size of 0 means that there is no texture, and this is
     // just a plain colored object.
     uv_size: [2]f32 = @splat(0),
+    // TopLeft, TopRight, BottomLeft, BottomRight
+    corners: [4]f32 = @splat(0),
+    // Top, Bottom, Left, Right
+    borders: [4]f32 = @splat(0),
+    border_color: core.Color = .fromRgbFloat(0, 0, 0, 0),
     // These must both be defined at once,
     // one can't be null while the other isn't.
     sampler: ?gpu.types.SamplerHandle = null,

@@ -39,7 +39,7 @@ pub const GpuLight = extern struct {
 
 pub const GpuLightParams = extern struct {
     ambient: [3]f32,
-    _pad0: f32 = undefined,
+    _pad: f32 = undefined,
     screen_size: [2]u32,
     tile_count: [2]u32
 };

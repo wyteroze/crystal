@@ -18,6 +18,11 @@ const GpuUiParams = extern struct {
     uv_pos: [2]f32,
     uv_size: [2]f32,
     is_text: u32,
+    is_rounded: u32,
+    _pad: [2]f32 = undefined,
+    corner_radii: [4]f32,
+    border_widths: [4]f32,
+    border_color: [4]f32
 };
 
 const UiPass = @This();
@@ -106,6 +111,13 @@ fn execute(self: *UiPass, ctx: pass.PassContext) void {
     const default_sampler_handle = ctx.resources.get(resource.default_sampler, .sampler) orelse @panic("default_sampler resource missing!");
 
     for (ctx.scene.ui_objects) |ui_obj| {
+        const is_rounded = blk: {
+            for (ui_obj.corners) |c| {
+                if (c > 0) break :blk true;
+            }
+
+            break :blk false;
+        };
         const vs_params: GpuUiParams = .{
             .ortho = self.ortho_matrix.m,
             .pos = .{ ui_obj.pos[0] * self.surface_scale, ui_obj.pos[1] * self.surface_scale },
@@ -113,7 +125,17 @@ fn execute(self: *UiPass, ctx: pass.PassContext) void {
             .color = ui_obj.color.toArr(),
             .uv_pos = ui_obj.uv_pos,
             .uv_size = ui_obj.uv_size,
-            .is_text = @intCast(@intFromBool(ui_obj.is_text))
+            .is_text = @intCast(@intFromBool(ui_obj.is_text)),
+            .is_rounded = @intCast(@intFromBool(is_rounded)),
+            .corner_radii = blk: {
+                const vec: @Vector(4, f32) = ui_obj.corners;
+                break :blk vec * @as(@Vector(4, f32), @splat(self.surface_scale));
+            },
+            .border_widths = blk: {
+                const vec: @Vector(4, f32) = ui_obj.borders;
+                break :blk vec * @as(@Vector(4, f32), @splat(self.surface_scale));
+            },
+            .border_color = ui_obj.border_color.toArr()
         };
 
         self.vs_ubuf.update(std.mem.asBytes(&vs_params));

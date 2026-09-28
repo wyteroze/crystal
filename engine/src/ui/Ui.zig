@@ -15,14 +15,15 @@ pub const ComponentIds = struct {
     size: ecs.ComponentId,
     layout: ecs.ComponentId,
     color: ecs.ComponentId,
-    corner_radius: ecs.ComponentId,
     opacity: ecs.ComponentId,
     text: ecs.ComponentId,
     render_view: ecs.ComponentId,
     computed_size: ecs.ComponentId,
     computed_position: ecs.ComponentId,
     computed_text_layout: ecs.ComponentId,
-    image: ecs.ComponentId
+    image: ecs.ComponentId,
+    corner_radii: ecs.ComponentId,
+    borders: ecs.ComponentId
 };
 
 const Ui = @This();
@@ -39,7 +40,6 @@ pub fn init(allocator: std.mem.Allocator) !Ui {
     const size = try world.registerComponentNativeShaped(types.SizeMode, "Size", null);
     const layout = try world.registerComponentNativeShaped(types.Layout, "Layout", null);
     const color = try world.registerComponentNativeShaped(core.Color, "Color", null);
-    const corner_radius = try world.registerComponentNativeShaped(f32, "CornerRadius", null);
     const opacity = try world.registerComponentNativeShaped(f32, "Opacity", null);
     const text = try world.registerComponentNativeShaped(Ui.types.Text, "Text", null);
     const render_view = try world.registerComponentNativeShaped(types.RenderViewOptions, "RenderView", null);
@@ -47,6 +47,8 @@ pub fn init(allocator: std.mem.Allocator) !Ui {
     const computed_position = try world.registerComponentNativeShaped(math.Vec2, "ComputedPosition", null);
     const computed_text_layout = try world.registerComponentNativeShaped(types.ComputedTextLayout, "ComputedTextLayout", null);
     const image = try world.registerComponentNativeShaped(types.Image, "Image", null);
+    const corner_radii = try world.registerComponentNativeShaped(Ui.types.CornerRadii, "CornerRadii", null);
+    const borders = try world.registerComponentNativeShaped(Ui.types.Borders, "Borders", null);
 
     return .{
         .allocator = allocator,
@@ -58,14 +60,15 @@ pub fn init(allocator: std.mem.Allocator) !Ui {
             .size = size,
             .layout = layout,
             .color = color,
-            .corner_radius = corner_radius,
+            .corner_radii = corner_radii,
             .opacity = opacity,
             .text = text,
             .render_view = render_view,
             .computed_size = computed_size,
             .computed_position = computed_position,
             .computed_text_layout = computed_text_layout,
-            .image = image
+            .image = image,
+            .borders = borders
         },
     };
 }
@@ -96,6 +99,7 @@ pub const registerLua = struct {
     const TextBind = linker.Binding(types.Text, false);
     const CropBind = linker.Binding(types.Crop, false);
     const ImageBind = linker.Binding(types.Image, false);
+    const BordersBind = linker.Binding(types.Borders, false);
 
     fn sizeAxisFixed(lua: *zlua.Lua) i32 {
         SizeAxisBind.push(lua, .{ .fixed = @floatCast(lua.checkNumber(1)) });
@@ -236,6 +240,11 @@ pub const registerLua = struct {
             .scope = .{ .module = "ui.types" },
             .fields = &.{ "min", "max" }
         });
+        linker.value(l, types.Borders, .{
+            .name = .{ .named = "Borders" },
+            .scope = .{ .module = "ui.types" },
+            .fields = &.{ "top", "bottom", "left", "right" }
+        });
         
         linker.module(l, .{
             .name = "ui",
@@ -293,6 +302,14 @@ pub const registerLua = struct {
                         if (str.source.id == u64_max) lua.raiseErrorStr("'Source' must be defined when creating 'Image'", .{});
 
                         ImageBind.push(lua, str);
+                        return 1;
+                    }
+                }.c),
+                .custom("Borders", struct {
+                    fn c(lua: *zlua.Lua) i32 {
+                        const str = luaTableToStruct(lua, 1, types.Borders, .{ });
+
+                        BordersBind.push(lua, str);
                         return 1;
                     }
                 }.c)

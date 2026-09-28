@@ -156,7 +156,7 @@ fn submitToRenderer(w: *ecs.World, ui_world: *ecs.World, renderer: *render.Rende
                 .texture = target.handle,
                 .sampler = renderer.default_sampler.handle,
                 .uv_size = @splat(1),
-                .color = .fromRgbFloat(1, 1, 1, 1),
+                .color = .fromRgbFloat(1, 1, 1, 1)
             }) catch @panic("Out of memory");
         }
     }
@@ -170,6 +170,8 @@ fn submitToRenderer(w: *ecs.World, ui_world: *ecs.World, renderer: *render.Rende
         const text_id = ui_world.components.id("Text").?;
         const rview_id = ui_world.components.id("RenderView").?;
         const ui_image_id = ui_world.components.id("Image").?;
+        const corners_id = ui_world.components.id("CornerRadii").?;
+        const borders_id = ui_world.components.id("Borders").?;
 
         const q = ui_world.query(&.{ computed_pos_id, computed_size_id });
         var it = q.iterator();
@@ -177,19 +179,20 @@ fn submitToRenderer(w: *ecs.World, ui_world: *ecs.World, renderer: *render.Rende
             if (ui_world.hasComponent(entity, rview_id)) continue;
             const pos: math.Vec2 = if (ui_world.getComponent(entity, computed_pos_id, math.Vec2)) |p| p.* else .zero;
             const size: math.Vec2 = if (ui_world.getComponent(entity, computed_size_id, math.Vec2)) |p| p.* else .zero;
+            const corners = if (ui_world.getComponent(entity, corners_id, Ui.types.CornerRadii)) |c| c.* else null;
+            const borders = if (ui_world.getComponent(entity, borders_id, Ui.types.Borders)) |b| b.* else null;
             const image = if (ui_world.getComponent(entity, ui_image_id, Ui.types.Image)) |i| i.* else null;
             // When no color is defined but an image exists, we want it be fully opaque white instead of
             // fully transparent so the image can actually be seen.
             const color: core.Color = if (ui_world.getComponent(entity, color_id, core.Color)) |c| c.* 
                 else if (image != null) .fromRgbFloat(1.0, 1.0, 1.0, 1.0)
-                else .fromRgbFloat(0.0, 0.0, 0.0, 0.0);
+                else .fromRgbFloat(1.0, 1.0, 1.0, 0.0);
 
             // If image is given, get the handle of its gpu data. If getting handle fails,
             // or if no image is given, return null.
             const texture = if (image) |i| blk: { break :blk (i.source.ensureGpuGet(.image, .{}) catch break :blk null).handle; } else null;
             const uv_pos: math.Vec2 = if (image) |i| i.crop.min else .zero;
             const uv_size: math.Vec2 = if (image) |i| i.crop.max.sub(i.crop.min) else .one;
-            if (texture != null) std.log.debug("pos: {f}, size: {f}, uv_pos: {f}, uv_size: {f}", .{ pos, size, uv_pos, uv_size });
 
             ui_objects.append(allocator, .{
                 .pos = pos.arr(),
@@ -197,7 +200,28 @@ fn submitToRenderer(w: *ecs.World, ui_world: *ecs.World, renderer: *render.Rende
                 .color = color,
                 .texture = texture,
                 .uv_pos = uv_pos.arr(),
-                .uv_size = uv_size.arr()
+                .uv_size = uv_size.arr(),
+                .corners = if (corners) |c| blk: {
+                    const m = @min(size.x/2, size.y/2);
+                    break :blk .{
+                        @min(c.top_left, m),
+                        @min(c.top_right, m),
+                        @min(c.bottom_left, m),
+                        @min(c.bottom_right, m)
+                    };
+                } else @splat(0),
+                .borders = if (borders) |b| blk: {
+                    // Max, should probably be in a better place.
+                    const m = 100;
+                    break :blk .{ 
+                        @min(b.top, m), 
+                        @min(b.bottom, m), 
+                        @min(b.left, m), 
+                        @min(b.right, m)
+                    };
+                } else @splat(0),
+                .border_color = if (borders) |b| b.color else .fromRgbFloat(0, 0, 0, 0)
+                
             }) catch @panic("Out of memory");
 
             if (ui_world.getComponent(entity, text_id, Ui.types.Text)) |txt| {
