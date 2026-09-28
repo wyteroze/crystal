@@ -11,6 +11,7 @@ const Hierarchy = @import("Hierarchy.zig");
 const Signal = @import("../core/signal.zig").Signal;
 
 const field_types: std.StaticStringMap(ComponentId.FieldType) = blk: {
+    const core = @import("../core/core.zig");
     const math = @import("../core/math/math.zig");
     const assets = @import("../assets/Assets.zig");
     const render = @import("../render/render.zig");
@@ -27,7 +28,9 @@ const field_types: std.StaticStringMap(ComponentId.FieldType) = blk: {
         .{ "Asset", ComponentId.FieldType.ofType(assets.AssetHandle) },
         .{ "Light", ComponentId.FieldType.ofType(render.types.Light) },
         .{ "Text", ComponentId.FieldType.ofType(Ui.types.Text) },
-        .{ "ComputedTextLayout", ComponentId.FieldType.ofType(Ui.types.ComputedTextLayout) } 
+        .{ "ComputedTextLayout", ComponentId.FieldType.ofType(Ui.types.ComputedTextLayout) },
+        .{ "Color", ComponentId.FieldType.ofType(core.Color) },
+        .{ "Image", ComponentId.FieldType.ofType(Ui.types.Image) }
     });
 };
 

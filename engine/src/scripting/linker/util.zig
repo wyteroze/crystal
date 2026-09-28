@@ -110,6 +110,8 @@ pub fn luaErr(l: *Lua, err: anyerror, ctx: anytype) noreturn {
     if (ctx.len >= 2 and std.mem.find(u8, errname, "Expected") != null) {
         l.raiseErrorStr("expected %s, got %s (%s)", .{ luaTypeName(ctx[0]).ptr, l.typeNameIndex(ctx[1]).ptr, errname.ptr });
     } else {
+        // If you're getting a `LuaValueNotATable` or similar error here,
+        // it may mean that you forgot to define the `pub const __lua = .val/.ref` in your data types 
         l.raiseErrorStr("%s", .{ errname.ptr });
     }
 }

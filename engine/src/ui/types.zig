@@ -4,6 +4,7 @@ const std = @import("std");
 const ecs = @import("../ecs/ecs.zig");
 const Assets = @import("../assets/Assets.zig");
 const core = @import("../core/core.zig");
+const math = @import("../core/math/math.zig");
 const text = @import("text.zig");
 
 pub const RenderViewOptions = struct {
@@ -187,6 +188,26 @@ pub const Text = struct {
         allocator.free(self.content);
         self.content = try allocator.dupe(u8, txt);
     }
+
+    pub const __lua = .val;
+};
+
+pub const Crop = struct {
+    min: math.Vec2 = .zero,
+    max: math.Vec2 = .one,
+
+    pub const __lua = .val;
+    pub fn format(
+        self: @This(),
+        writer: *std.Io.Writer,
+    ) std.Io.Writer.Error!void {
+        try writer.print("Crop{{ Min = {f}, Max = {f} }}", .{ self.min, self.max });
+    }
+};
+
+pub const Image = struct {
+    source: Assets.AssetHandle,
+    crop: Crop = .{},
 
     pub const __lua = .val;
 };

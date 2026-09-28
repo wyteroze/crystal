@@ -168,6 +168,8 @@ pub const luaBinding = struct {
 
             const id = world.components.id(key) orelse lua.raiseErrorStr("unknown component '%s'", .{key.ptr});
             const info = world.components.info(id);
+            // If you're getting this error, you may be forgetting to add your newly-added type to `World.field_types`,
+            // or didn't register the type using `registerComponentNativeShaped`.
             if (info.fields.len != 1) lua.raiseErrorStr("multi-field components not yet supported", .{});
 
             const field = info.fields[0];

@@ -8,6 +8,8 @@ const render = @import("../render/render.zig");
 const reflow = @import("reflow.zig");
 pub const types = @import("types.zig");
 
+const u64_max = std.math.maxInt(u64);
+
 pub const ComponentIds = struct {
     position: ecs.ComponentId,
     size: ecs.ComponentId,
@@ -20,6 +22,7 @@ pub const ComponentIds = struct {
     computed_size: ecs.ComponentId,
     computed_position: ecs.ComponentId,
     computed_text_layout: ecs.ComponentId,
+    image: ecs.ComponentId
 };
 
 const Ui = @This();
@@ -43,6 +46,7 @@ pub fn init(allocator: std.mem.Allocator) !Ui {
     const computed_size = try world.registerComponentNativeShaped(math.Vec2, "ComputedSize", null);
     const computed_position = try world.registerComponentNativeShaped(math.Vec2, "ComputedPosition", null);
     const computed_text_layout = try world.registerComponentNativeShaped(types.ComputedTextLayout, "ComputedTextLayout", null);
+    const image = try world.registerComponentNativeShaped(types.Image, "Image", null);
 
     return .{
         .allocator = allocator,
@@ -60,7 +64,8 @@ pub fn init(allocator: std.mem.Allocator) !Ui {
             .render_view = render_view,
             .computed_size = computed_size,
             .computed_position = computed_position,
-            .computed_text_layout = computed_text_layout
+            .computed_text_layout = computed_text_layout,
+            .image = image
         },
     };
 }
@@ -89,6 +94,8 @@ pub const registerLua = struct {
     const SizeModeBind = linker.Binding(types.SizeMode, false);
     const SizeAxisBind = linker.Binding(types.SizeAxis, false);
     const TextBind = linker.Binding(types.Text, false);
+    const CropBind = linker.Binding(types.Crop, false);
+    const ImageBind = linker.Binding(types.Image, false);
 
     fn sizeAxisFixed(lua: *zlua.Lua) i32 {
         SizeAxisBind.push(lua, .{ .fixed = @floatCast(lua.checkNumber(1)) });
@@ -177,7 +184,8 @@ pub const registerLua = struct {
             var matched = false;
             inline for (@typeInfo(T).@"struct".fields) |sf| {
                 if (std.mem.eql(u8, key, &linker.util.pascalCase(sf.name))) {
-                    @field(str, sf.name) = linker.util.parseVal(l, sf.type, -1) catch |e| linker.util.luaErr(l, e, .{});
+                    const val = linker.util.parseVal(l, sf.type, -1) catch |e| linker.util.luaErr(l, e, .{});
+                    @field(str, sf.name) = val;
                     matched = true;
                 }
             }
@@ -218,6 +226,16 @@ pub const registerLua = struct {
             .name = .{ .named = "Text" },
             .scope = .{ .module = "ui.types" }
         });
+        linker.value(l, types.Image, .{
+            .name = .{ .named = "Image" },
+            .scope = .{ .module = "ui.types" },
+            .fields = &.{ "source", "crop" }
+        });
+        linker.value(l, types.Crop, .{
+            .name = .{ .named = "Crop" },
+            .scope = .{ .module = "ui.types" },
+            .fields = &.{ "min", "max" }
+        });
         
         linker.module(l, .{
             .name = "ui",
@@ -254,10 +272,27 @@ pub const registerLua = struct {
                     fn c(lua: *zlua.Lua) i32 {
                         // This asset ID isn't actually used for the text, rather we use it below to make sure that a font was given
                         // without being too intrusive to the luaTableToStruct function.
-                        const str = luaTableToStruct(lua, 1, types.Text, .{ .font = .{ .id = std.math.maxInt(usize), .assets = undefined } });
-                        if (str.font.id == std.math.maxInt(usize)) lua.raiseErrorStr("'Font' must be defined when creating 'Text'", .{});
+                        const str = luaTableToStruct(lua, 1, types.Text, .{ .font = .{ .id = u64_max, .assets = undefined } });
+                        if (str.font.id == u64_max) lua.raiseErrorStr("'Font' must be defined when creating 'Text'", .{});
 
                         TextBind.push(lua, str);
+                        return 1;
+                    }
+                }.c),
+                .custom("Crop", struct {
+                    fn c(lua: *zlua.Lua) i32 {
+                        const str = luaTableToStruct(lua, 1, types.Crop, .{});
+
+                        CropBind.push(lua, str);
+                        return 1;
+                    }
+                }.c),
+                .custom("Image", struct {
+                    fn c(lua: *zlua.Lua) i32 {
+                        const str = luaTableToStruct(lua, 1, types.Image, .{ .source = .{ .id = u64_max, .assets = undefined } });
+                        if (str.source.id == u64_max) lua.raiseErrorStr("'Source' must be defined when creating 'Image'", .{});
+
+                        ImageBind.push(lua, str);
                         return 1;
                     }
                 }.c)

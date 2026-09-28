@@ -169,6 +169,7 @@ fn submitToRenderer(w: *ecs.World, ui_world: *ecs.World, renderer: *render.Rende
         const color_id = ui_world.components.id("Color").?;
         const text_id = ui_world.components.id("Text").?;
         const rview_id = ui_world.components.id("RenderView").?;
+        const ui_image_id = ui_world.components.id("Image").?;
 
         const q = ui_world.query(&.{ computed_pos_id, computed_size_id });
         var it = q.iterator();
@@ -176,12 +177,27 @@ fn submitToRenderer(w: *ecs.World, ui_world: *ecs.World, renderer: *render.Rende
             if (ui_world.hasComponent(entity, rview_id)) continue;
             const pos: math.Vec2 = if (ui_world.getComponent(entity, computed_pos_id, math.Vec2)) |p| p.* else .zero;
             const size: math.Vec2 = if (ui_world.getComponent(entity, computed_size_id, math.Vec2)) |p| p.* else .zero;
-            const color: core.Color = if (ui_world.getComponent(entity, color_id, core.Color)) |c| c.* else .fromRgbFloat(0.0, 0.0, 0.0, 0.0);
+            const image = if (ui_world.getComponent(entity, ui_image_id, Ui.types.Image)) |i| i.* else null;
+            // When no color is defined but an image exists, we want it be fully opaque white instead of
+            // fully transparent so the image can actually be seen.
+            const color: core.Color = if (ui_world.getComponent(entity, color_id, core.Color)) |c| c.* 
+                else if (image != null) .fromRgbFloat(1.0, 1.0, 1.0, 1.0)
+                else .fromRgbFloat(0.0, 0.0, 0.0, 0.0);
+
+            // If image is given, get the handle of its gpu data. If getting handle fails,
+            // or if no image is given, return null.
+            const texture = if (image) |i| blk: { break :blk (i.source.ensureGpuGet(.image, .{}) catch break :blk null).handle; } else null;
+            const uv_pos: math.Vec2 = if (image) |i| i.crop.min else .zero;
+            const uv_size: math.Vec2 = if (image) |i| i.crop.max.sub(i.crop.min) else .one;
+            if (texture != null) std.log.debug("pos: {f}, size: {f}, uv_pos: {f}, uv_size: {f}", .{ pos, size, uv_pos, uv_size });
 
             ui_objects.append(allocator, .{
                 .pos = pos.arr(),
                 .size = size.arr(),
-                .color = color
+                .color = color,
+                .texture = texture,
+                .uv_pos = uv_pos.arr(),
+                .uv_size = uv_size.arr()
             }) catch @panic("Out of memory");
 
             if (ui_world.getComponent(entity, text_id, Ui.types.Text)) |txt| {

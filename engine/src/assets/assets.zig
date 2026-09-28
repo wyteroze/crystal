@@ -99,6 +99,10 @@ pub const AssetHandle = struct {
         self.cpuRelease();
     }
 
+    pub fn eql(self: AssetHandle, other: AssetHandle) bool {
+        return self.id == other.id;
+    }
+
     pub const __lua = .val;
     pub const __opaque = true;
 
@@ -253,11 +257,11 @@ pub fn gpuDeref(self: *Assets, id: u64) !void {
 }
 
 pub fn getCpuData(self: *Assets, id: u64) !AssetData.CpuAssetData {
-    return self.slots.get(id).?.cpu_data orelse return error.NoCpuData;
+    return (self.slots.get(id) orelse return error.NoAsset).cpu_data orelse return error.NoCpuData;
 }
 
 pub fn getGpuData(self: *Assets, id: u64) !AssetData.GpuAssetData {
-    return self.slots.get(id).?.gpu_data orelse return error.NoGpuData;
+    return (self.slots.get(id) orelse return error.NoAsset).gpu_data orelse return error.NoGpuData;
 }
 
 pub const registerLua = struct {
@@ -271,14 +275,20 @@ pub const registerLua = struct {
         const uri = l.toString(1) catch |e| linker.util.luaErr(l, e, .{ []const u8, 1 });
         const handle = try r.assets.load(uri);
 
-        HandleBind.push(l, handle);
+        // Clone since lua has a reference to it.
+        HandleBind.push(l, handle.cpuClone());
         return 1;
     }
 
     pub fn registerLua(l: *zlua.Lua) void {
         linker.reference(l, AssetHandle, .{
             .name = .auto,
-            .scope = .{ .module = "assets.types" }
+            .scope = .{ .module = "assets.types" },
+            .gc = .nonNamed(struct {
+                fn c(self: AssetHandle) void {
+                    self.cpuRelease();
+                }
+            }.c)
         });
 
         linker.module(l, .{

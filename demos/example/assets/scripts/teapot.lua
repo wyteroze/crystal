@@ -19,10 +19,11 @@ function Teapot.new(entity)
         _ogParent = entity.Parent
     }, Teapot)
 
+    local chickenPng = assets.load("assets://images/chicken.jpg")
     entity:AddComponent("Position", core.Vec3.new(0, 0, 5))
     entity:AddComponent("Rotation", core.Vec3.new(0, 0, 0))
     entity:AddComponent("Mesh", assets.load("assets://models/cube.fbx"))
-    entity:AddComponent("Image", assets.load("assets://images/chicken.jpg"))
+    entity:AddComponent("Image", chickenPng)
 
     entity.Events.Updated:Connect(function(dt)
         self._timer = self._timer + dt
@@ -77,6 +78,17 @@ function Teapot.new(entity)
             })
         })
     end
+
+    -- The image is tinted by the element's Color, 
+    -- which is Color(1, 1, 1, 1) by default for images.
+    ui:CreateElement({
+        Parent = mainElement,
+        Size = ui.SizeMode({ Width = ui.SizeAxis.Fixed(64), Height = ui.SizeAxis.Fixed(64) }),
+        Image = ui.Image({
+            Source = chickenPng,
+            Crop = ui.Crop({ Min = core.Vec2.new(0, 0), Max = core.Vec2.new(1, 1) })
+        })
+    })
 
     return self
 end
