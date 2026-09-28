@@ -2,6 +2,8 @@
 
 const std = @import("std");
 const gpu = @import("../gpu/gpu.zig");
+const math = @import("../core/math/math.zig");
+const text = @import("../render/text/text.zig");
 
 pub const Vertex = extern struct {
     position: [3]f32,
@@ -53,6 +55,9 @@ pub const Glyph = struct {
 
 pub const Font = struct {
     glyphs: []Glyph,
+    ascent: f32,
+    descent: f32,
+    line_gap: f32,
 
     pub fn deinit(self: *const Font, allocator: std.mem.Allocator) void {
         for (self.glyphs) |g| allocator.free(g.pixels);

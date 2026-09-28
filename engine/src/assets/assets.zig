@@ -82,6 +82,16 @@ pub const AssetHandle = struct {
         return @field(data, @tagName(asset_type));
     }
 
+    pub fn ensureGpuGet(self: AssetHandle, comptime asset_type: AssetData.AssetType, upload_ctx: UploadContext) !switch (asset_type) {
+        .mesh => types.GpuMesh,
+        .image => types.GpuImage,
+        .font => render.text.FontAtlas,
+        .script_source => unreachable
+    } {
+        if (!self.hasGpuData()) try self.upload(upload_ctx);
+        return self.gpuGet(asset_type);
+    }
+
     /// THIS DECREMENTS REFCOUNT OF CPU DATA
     /// Make sure to ref your cpu data if needed
     pub fn upload(self: AssetHandle, upload_ctx: UploadContext) !void {
@@ -91,9 +101,12 @@ pub const AssetHandle = struct {
 
     pub const __lua = .val;
     pub const __opaque = true;
-    pub fn format(self: AssetHandle, buf: []u8) []const u8 {
-        return std.fmt.bufPrint(buf, "Asset {f}", .{ self.id })
-            catch "Asset ?";
+
+    pub fn format(
+        self: @This(),
+        writer: *std.Io.Writer,
+    ) std.Io.Writer.Error!void {
+        try writer.print("Asset {d}", .{ self.id });
     }
 };
 

@@ -6,22 +6,6 @@ const math = core.math;
 const gpu = @import("../gpu/gpu.zig");
 const assets = @import("../assets/Assets.zig");
 
-// TODO: Put this in a better place
-pub const Text = struct {
-    font: assets.AssetHandle,
-    size: u32,
-    content: []const u8,
-    color: core.Color,
-
-    /// Since all components' strings must be heap-allocated, this frees the last
-    /// string and dupes the given string. You should use the same allocator
-    /// for every setText call.
-    pub fn setText(self: *Text, allocator: std.mem.Allocator, text: []const u8) !void {
-        allocator.free(self.content);
-        self.content = try allocator.dupe(u8, text);
-    }
-};
-
 pub const Material = struct {
     image: assets.types.GpuImage,
     sampler: gpu.GpuDevice.GpuSampler,

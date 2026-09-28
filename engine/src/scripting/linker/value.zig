@@ -33,7 +33,8 @@ pub fn value(l: *Lua, comptime T: type, comptime recipe: recipes.LuaValueRecipe)
                     const upper = comptime util.pascalCase(name);
 
                     if (std.mem.eql(u8, key, &upper)) {
-                        lua.pushAny(@field(self.*, name)) catch unreachable;
+                        const val = @field(self.*, name);
+                        util.pushVal(lua, @TypeOf(val), val);
                         return 1;
                     }
                 }
@@ -59,7 +60,7 @@ pub fn value(l: *Lua, comptime T: type, comptime recipe: recipes.LuaValueRecipe)
                     if (std.mem.eql(u8, key, &upper)) {
                         const FieldType = @TypeOf(@field(self.*, name));
 
-                        @field(self.*, name) = (lua.toAny(FieldType, 3) catch |e| lua.raiseErrorStr(@errorName(e), .{}));
+                        @field(self.*, name) = util.parseVal(lua, FieldType, 3) catch |e| lua.raiseErrorStr(@errorName(e), .{});
                         return 0;
                     }
                 }
@@ -86,7 +87,7 @@ pub fn value(l: *Lua, comptime T: type, comptime recipe: recipes.LuaValueRecipe)
                     if (std.mem.eql(u8, key, &upper)) {
                         const FieldType = @TypeOf(@field(self.*, name));
 
-                        @field(self.*, name) = (lua.toAny(FieldType, 3) catch |e| lua.raiseErrorStr(@errorName(e), .{}));
+                        @field(self.*, name) = (util.parseVal(lua, FieldType, 3) catch |e| lua.raiseErrorStr(@errorName(e), .{}));
                         return 0;
                     }
                 }
@@ -124,16 +125,11 @@ pub fn value(l: *Lua, comptime T: type, comptime recipe: recipes.LuaValueRecipe)
             l.setField(-2, "__eq");
         }
     };
-    if (recipe.ops.tostring) |tostr| switch (tostr) {
-        .identity => {
-            l.pushFunction(zlua.wrap(util.identityToString(bind)));
-            l.setField(-2, "__tostring");
-        },
-        .custom_fn => |func| {
-            func(l);
-            l.setField(-2, "__tostring");
-        }
-    };
+
+    if (@hasDecl(T, "format")) {
+        l.pushFunction(zlua.wrap(util.wrapFormatFunc(T.format)));
+        l.setField(-2, "__tostring");
+    }
 
     l.pop(1);
 

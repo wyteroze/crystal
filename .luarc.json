@@ -4,13 +4,6 @@
   "format.enable": true,
   "workspace": {
     "checkThirdParty": false,
-    "library": [
-      "demos/example/asets/scripts"
-    ],
-    "ignoreDir": [
-      "**/*",
-      "*"
-    ],
     "maxPreload": 1,
     "preloadFileSize": 1
   },

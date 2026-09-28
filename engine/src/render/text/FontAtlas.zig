@@ -2,6 +2,8 @@
 
 const std = @import("std");
 const gpu = @import("../../gpu/gpu.zig");
+const text = @import("text.zig");
+const math = @import("../../core/math/math.zig");
 const Assets = @import("../../assets/Assets.zig");
 
 pub const GlyphInfo = struct {
@@ -12,9 +14,6 @@ pub const GlyphInfo = struct {
     advance: f32
 };
 
-// This is also in font_freetype.zig, so change it there too if needed.
-const sdf_raster_size: u32 = 128;
-
 const FontAtlas = @This();
 texture: gpu.GpuDevice.GpuImage,
 sampler: gpu.GpuDevice.GpuSampler,
@@ -22,6 +21,9 @@ glyphs: std.AutoHashMap(u32, GlyphInfo),
 atlas_size: [2]u32,
 white_uv: [2]f32,
 raster_size: u32,
+ascent: f32, // Distance above baseline
+descent: f32, // Distance below baseline, positive.
+line_gap: f32, // Extra line spacing
 
 pub fn deinit(self: FontAtlas) void {
     self.texture.deinit();
@@ -37,6 +39,7 @@ pub fn bake(allocator: std.mem.Allocator, name: [:0]const u8, device: *gpu.GpuDe
         max_w = @max(max_w, g.size[0]);
         max_h = @max(max_h, g.size[1]);
     }
+    
     const cell_w = max_w + 2;
     const cell_h = max_h + 2;
     const cols: u32 = 16;
@@ -91,7 +94,14 @@ pub fn bake(allocator: std.mem.Allocator, name: [:0]const u8, device: *gpu.GpuDe
         .sampler = try device.createSampler(.{}),
         .glyphs = glyphs,
         .atlas_size = .{ atlas_w, atlas_h },
+        .ascent = font.ascent,
+        .descent = font.descent,
+        .line_gap = font.line_gap,
         .white_uv = white_uv_pos,
-        .raster_size = sdf_raster_size
+        .raster_size = text.sdf_raster_size
     };
+}
+
+pub fn calculateScale(self: *const FontAtlas, size: u32) f32 {
+    return @as(f32, @floatFromInt(size)) / @as(f32, @floatFromInt(self.raster_size));
 }

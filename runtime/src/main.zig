@@ -84,7 +84,7 @@ fn submitToRenderer(w: *ecs.World, ui_world: *ecs.World, renderer: *render.Rende
         lights.append(allocator, .{
             .position_or_dir = pos_or_dir.arr(),
             .kind = @intFromEnum(l.kind),
-            .color = .{ l.color.r(), l.color.g(), l.color.b() },
+            .color = .{ l.color.r, l.color.g, l.color.b },
             .intensity = l.intensity,
             .radius = switch (l.kind) { .point => |pp| pp.radius, .directional => 0 },
         }) catch @panic("Out of memory");
@@ -101,15 +101,11 @@ fn submitToRenderer(w: *ecs.World, ui_world: *ecs.World, renderer: *render.Rende
         // No visual appearance
         if (mesh == null and image == null) continue;
 
-        // Upload to GPU if not already on it
-        if (mesh != null and !mesh.?.hasGpuData()) mesh.?.upload(.{}) catch @panic("Failed to upload mesh to GPU");
-        if (image != null and !image.?.hasGpuData()) image.?.upload(.{}) catch @panic("Failed to upload image to GPU");
-
         // This is so that if you have an image with no mesh, it's like a 2d plane in 3d space.
         // Could probably be convenient for 2D games, idk
-        const mesh_data = if (mesh) |m| m.gpuGet(.mesh) catch continue else renderer.default_quad;
+        const mesh_data = if (mesh) |m| m.ensureGpuGet(.mesh, .{}) catch continue else renderer.default_quad;
         // Mesh with no image = plain white
-        const image_data = if (image) |i| i.gpuGet(.image) catch continue else renderer.default_image;
+        const image_data = if (image) |i| i.ensureGpuGet(.image, .{}) catch continue else renderer.default_image;
         
         const rot: math.Vec3 = if (w.getComponent(entity, rot_id, math.Vec3)) |r| r.* else .zero;
         const pos: math.Vec3 = if (w.getComponent(entity, pos_id, math.Vec3)) |p| p.* else .zero;
@@ -131,8 +127,8 @@ fn submitToRenderer(w: *ecs.World, ui_world: *ecs.World, renderer: *render.Rende
 
     // Collect RenderViews
     {
-        const absolute_pos_id = ui_world.components.id("AbsolutePosition").?;
-        const absolute_size_id = ui_world.components.id("AbsoluteSize").?;
+        const computed_pos_id = ui_world.components.id("ComputedPosition").?;
+        const computed_size_id = ui_world.components.id("ComputedSize").?;
         const rview_id = ui_world.components.id("RenderView").?;
 
         const q =  ui_world.query(&.{ rview_id });
@@ -141,8 +137,8 @@ fn submitToRenderer(w: *ecs.World, ui_world: *ecs.World, renderer: *render.Rende
             const rv = ui_world.getComponent(entity, rview_id, Ui.types.RenderViewOptions).?;
             if (!rv.camera.isAlive()) continue;
 
-            const position = ui_world.getComponent(entity, absolute_pos_id, math.Vec2) orelse continue;
-            const size = ui_world.getComponent(entity, absolute_size_id, math.Vec2) orelse continue;
+            const position = ui_world.getComponent(entity, computed_pos_id, math.Vec2) orelse continue;
+            const size = ui_world.getComponent(entity, computed_size_id, math.Vec2) orelse continue;
             const target = if (renderer.getView(entity.toU64())) |v| v.target else blk: {
                 const v = renderer.createView(entity.toU64(), .{ @max(rv.size[0], 1), @max(rv.size[1], 1) }, rv.camera) catch @panic("Failed to create RenderView");
                 break :blk v.target;
@@ -158,6 +154,7 @@ fn submitToRenderer(w: *ecs.World, ui_world: *ecs.World, renderer: *render.Rende
                 .pos = position.arr(),
                 .size = size.arr(),
                 .texture = target.handle,
+                .sampler = renderer.default_sampler.handle,
                 .uv_size = @splat(1),
                 .color = .fromRgbFloat(1, 1, 1, 1),
             }) catch @panic("Out of memory");
@@ -166,17 +163,20 @@ fn submitToRenderer(w: *ecs.World, ui_world: *ecs.World, renderer: *render.Rende
 
     // 2D world (for UI)
     {
-        const absolute_pos_id = ui_world.components.id("AbsolutePosition").?;
-        const absolute_size_id = ui_world.components.id("AbsoluteSize").?;
+        const computed_pos_id = ui_world.components.id("ComputedPosition").?;
+        const computed_size_id = ui_world.components.id("ComputedSize").?;
+        const computed_text_id = ui_world.components.id("ComputedTextLayout").?;
         const color_id = ui_world.components.id("Color").?;
         const text_id = ui_world.components.id("Text").?;
+        const rview_id = ui_world.components.id("RenderView").?;
 
-        const q = ui_world.query(&.{ absolute_pos_id, absolute_size_id, color_id });
+        const q = ui_world.query(&.{ computed_pos_id, computed_size_id });
         var it = q.iterator();
         while (it.next()) |entity| {
-            const pos: math.Vec2 = if (ui_world.getComponent(entity, absolute_pos_id, math.Vec2)) |p| p.* else .zero;
-            const size: math.Vec2 = if (ui_world.getComponent(entity, absolute_size_id, math.Vec2)) |p| p.* else .zero;
-            const color: core.Color = if (ui_world.getComponent(entity, color_id, core.Color)) |c| c.* else .fromRgbFloat(0.0, 0.0, 0.0, 1.0);
+            if (ui_world.hasComponent(entity, rview_id)) continue;
+            const pos: math.Vec2 = if (ui_world.getComponent(entity, computed_pos_id, math.Vec2)) |p| p.* else .zero;
+            const size: math.Vec2 = if (ui_world.getComponent(entity, computed_size_id, math.Vec2)) |p| p.* else .zero;
+            const color: core.Color = if (ui_world.getComponent(entity, color_id, core.Color)) |c| c.* else .fromRgbFloat(0.0, 0.0, 0.0, 0.0);
 
             ui_objects.append(allocator, .{
                 .pos = pos.arr(),
@@ -184,30 +184,21 @@ fn submitToRenderer(w: *ecs.World, ui_world: *ecs.World, renderer: *render.Rende
                 .color = color
             }) catch @panic("Out of memory");
 
-            const text: ?render.types.Text = if (ui_world.getComponent(entity, text_id, render.types.Text)) |t| t.* else null;
-            if (text) |txt| {
-                if (!txt.font.hasGpuData()) txt.font.upload(.{}) catch @panic("Failed to upload font to GPU");
-                // This should really be an error instead of just silently continuing
-                const atlas = txt.font.gpuGet(.font) catch continue;
-                const scale = @as(f32, @floatFromInt(txt.size)) / @as(f32, @floatFromInt(atlas.raster_size));
+            if (ui_world.getComponent(entity, text_id, Ui.types.Text)) |txt| {
+                const ct = ui_world.getComponent(entity, computed_text_id, Ui.types.ComputedTextLayout) orelse continue;
+                const atlas = txt.font.ensureGpuGet(.font, .{}) catch continue;
 
-                var pen = pos;
-                for (txt.content) |ch| {
-                    const glyph = atlas.glyphs.get(ch) orelse continue;
-
+                for (ct.quads) |quad| {
                     ui_objects.append(allocator, .{
-                        .pos = .{ pen.x + glyph.bearing[0] * scale, pen.y - glyph.bearing[1] * scale + @as(f32, @floatFromInt(txt.size)) },
-                        .size = .{ glyph.size[0] * scale, glyph.size[1] * scale },
+                        .pos = quad.pos,
+                        .size = quad.size,
                         .color = txt.color,
-                        .uv_pos = glyph.uv_pos,
-                        .uv_size = glyph.uv_size,
+                        .uv_pos = quad.uv_pos,
+                        .uv_size = quad.uv_size,
                         .sampler = atlas.sampler.handle,
                         .texture = atlas.texture.handle,
-                        .is_text = true
-                        
+                        .is_text = true,
                     }) catch @panic("Out of memory");
-
-                    pen = pen.add(.new(glyph.advance * scale, 0));
                 }
             }
         }
@@ -300,7 +291,7 @@ pub fn main(init: std.process.Init) !void {
     defer world.deinit();
 
     var lua_allocator: core.TrackedAllocator = .init(allocator, "LuaRuntime");
-    var runtime: scripting.Runtime = try .init(lua_allocator.allocator(), &world, &assets, &input);
+    var runtime: scripting.Runtime = try .init(lua_allocator.allocator(), &world, &assets, &input, &ui);
     defer runtime.deinit();
     runtime.setGenerational();
     runtime.linkState();
@@ -369,41 +360,7 @@ pub fn main(init: std.process.Init) !void {
     try ui.world.addComponent(view_entity, ui.component_ids.render_view, Ui.types.RenderViewOptions, .{ .camera = camera, .size = surface_logical_size });
     try ui.world.addComponent(view_entity, ui.component_ids.position, math.Vec2, .new(0, 0));
     try ui.world.addComponent(view_entity, ui.component_ids.size, Ui.types.SizeMode, .fixed(@floatFromInt(surface_logical_size[0]), @floatFromInt(surface_logical_size[1])));
-
-    const ui_entity = try ui.world.spawnEntity();
-    try ui.world.addComponent(ui_entity, ui.component_ids.position, math.Vec2, .zero);
-    try ui.world.addComponent(ui_entity, ui.component_ids.size, Ui.types.SizeMode, .fixed(640.0, 360.0));
-    try ui.world.addComponent(ui_entity, ui.component_ids.color, core.Color, .fromRgbFloat(0.0, 0.0, 0.0, 0.5));
-    try ui.world.addComponent(ui_entity, ui.component_ids.layout, Ui.types.Layout, .{
-        .direction = .horizontal,
-        .align_items = .start,
-        .justify = .space_between,
-        .padding = .{ .top = 10, .bottom = 10, .left = 32, .right = 32 },
-        .gap = 10,
-    });
     
-    const font = try assets.load("assets://fonts/JetBrains-Mono.ttf");
-    for (0..10) |i| {
-        const ui_entity_child = try ui.world.spawnEntity();
-        try ui.world.addComponent(ui_entity_child, ui.component_ids.size, Ui.types.SizeMode, .fixed(64.0, 64.0));
-        try ui.world.addComponent(ui_entity_child, ui.component_ids.color, core.Color, .fromRgbFloat(0, 0, 1, 1));
-        try ui.world.addComponent(ui_entity_child, ui.component_ids.text, render.types.Text, .{
-            .font = font,
-            .color = .fromRgbFloat(1, 1, 1, 1),
-            .content = try std.fmt.allocPrint(allocator, "Boi {d}", .{ i+1 }),
-            .size = 13
-        });
-
-        try ui_entity_child.setParent(ui_entity);
-    }
-
-    try ui.world.addComponent(ui_entity, ui.component_ids.text, render.types.Text, .{
-        .font = font,
-        .color = .fromRgbFloat(1, 1, 1, 1),
-        .content = try allocator.dupe(u8, "In new york I milly rock"),
-        .size = 24
-    });
-
     var running = true;
 
     const event_con = try platform.platform_event.connect(struct {
@@ -455,10 +412,6 @@ pub fn main(init: std.process.Init) !void {
             std.log.info("{f}", .{ gpu_allocator });
 
             std.log.info("[Lua GC]: {f}", .{ core.SizeFormatter.fmtSize( @intCast( runtime.gcCount() * 1024 ) ) });
-
-            const txt = try std.fmt.allocPrint(allocator, "{d:.2} FPS", .{ 1.0/dt_seconds });
-            try ui_entity.getComponent(ui.component_ids.text, render.types.Text).?.setText(allocator, txt);
-            allocator.free(txt);
         }
 
         const frame_time = start.durationTo(end);

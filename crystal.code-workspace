@@ -21,8 +21,11 @@
             "-I./engine/src/gpu/glue/slang"
         ],
         "Lua.workspace.ignoreDir": [
-            "**/*",
-            "*"
+            "**/vendor",
+            "**/.clangd-db",
+            "**/.zig-cache",
+            "**/zig-pkg",
+            "**/*.code-search"
         ],
         "Lua.workspace.library": [
             "demos/example/asets/scripts"

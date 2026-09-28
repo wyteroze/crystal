@@ -11,6 +11,7 @@ pub const Vec3 = extern struct {
 
     pub fn new(x: f32, y: f32, z: f32) Vec3 { return .{ .x = x, .y = y, .z = z }; }
     pub fn fromSimd(vec: Simd3) Vec3 { return .{ .x = vec[0], .y = vec[1], .z = vec[2] }; }
+    pub fn fromArr(array: [3]f32) Vec3 { return .{ .x = array[0], .y = array[1], .z = array[2] };  }
     pub fn simd(self: Vec3) Simd3 { return Simd3{ self.x, self.y, self.z }; }
     pub fn arr(self: Vec3) [3]f32 { return .{ self.x, self.y, self.z }; }
 
@@ -45,9 +46,11 @@ pub const Vec3 = extern struct {
         return self.scale(1.0 / len);
     }
 
-    pub fn format(self: Vec3, buf: []u8) []const u8 {
-        return std.fmt.bufPrint(buf, "Vec3({d:.2}, {d:.2}, {d:.2})", .{ self.x, self.y, self.z })
-            catch "Vec3(?, ?, ?)";
+    pub fn format(
+        self: @This(),
+        writer: *std.Io.Writer,
+    ) std.Io.Writer.Error!void {
+        try writer.print("Vec3({d:.2}, {d:.2}, {d:.2})", .{ self.x, self.y, self.z });
     }
 
     pub const __lua = .val;
@@ -112,7 +115,7 @@ pub const registerLua = struct {
     pub fn registerLua(l: *zlua.Lua) void {
         linker.value(l, Vec3, .{
             .name = .auto,
-            .scope = .{ .module = "core.math" },
+            .scope = .{ .module = "core" },
             .constructors = &.{ .named("new", Vec3.new) },
             .methods = &.{
                 .named("Length", Vec3.length),
@@ -133,7 +136,6 @@ pub const registerLua = struct {
                 .mul = .custom(Vec3.mul),
                 .div = .custom(Vec3.div),
                 .eq = .identity,
-                .tostring = .format(Vec3.format)
             }
         });
     }

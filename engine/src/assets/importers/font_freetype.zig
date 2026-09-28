@@ -3,6 +3,7 @@
 const std = @import("std");
 const ImportLocation = @import("importers.zig").ImportLocation;
 const types = @import("../types.zig");
+const text = @import("../../render/text/text.zig");
 const freetype = @import("freetype");
 
 pub const ImportOptions = struct {
@@ -17,8 +18,6 @@ const default_char_range = blk: {
     break :blk range;
 };
 
-// This is also in FontAtlas.zig, so change it there too if needed.
-const sdf_raster_size: u32 = 128;
 // Not this one though.
 const sdf_spread: c_int = 8;
 
@@ -41,9 +40,15 @@ pub fn importFont(allocator: std.mem.Allocator, location: ImportLocation, option
     }
     defer _ = freetype.FT_Done_Face(face);
 
-    if (freetype.FT_Set_Pixel_Sizes(face, 0, sdf_raster_size) != 0) return error.SetPixelSizeFailed;
-
+    if (freetype.FT_Set_Pixel_Sizes(face, 0, text.sdf_raster_size) != 0) return error.SetPixelSizeFailed;
     _ = freetype.FT_Property_Set(lib, "sdf", "spread", &sdf_spread);
+
+    const upm: f32 = @floatFromInt(face.*.units_per_EM);
+    const px: f32 = @floatFromInt(text.sdf_raster_size);
+    const ascent: f32 = @as(f32, @floatFromInt(face.*.ascender)) * px / upm;
+    const descent: f32 = -@as(f32, @floatFromInt(face.*.descender)) * px / upm;
+    const height: f32 = @as(f32, @floatFromInt(face.*.height)) * px / upm;
+    const line_gap: f32 = @max(0, height - (ascent + descent));
 
     var glyphs = try allocator.alloc(types.Glyph, options.char_range.len);
     errdefer allocator.free(glyphs);
@@ -84,5 +89,5 @@ pub fn importFont(allocator: std.mem.Allocator, location: ImportLocation, option
     }
 
     glyphs = try allocator.realloc(glyphs, glyph_count);
-    return .{ .glyphs = glyphs };
+    return .{ .glyphs = glyphs, .ascent = ascent, .descent = descent, .line_gap = line_gap };
 }

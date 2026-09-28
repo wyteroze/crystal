@@ -22,30 +22,64 @@ pub fn identityEq(comptime bind: anytype) fn (*Lua) i32 {
     }.c;
 }
 
-pub fn identityToString(comptime bind: anytype) fn (*Lua) i32 {
-    return struct {
-        fn c(l: *Lua) i32 {
-            const self = bind.check(l, 1);
-            var buf: [512]u8 = undefined;
+pub fn pascalCase(comptime name: []const u8) [countPascalLen(name)]u8 {
+    var buf: [countPascalLen(name)]u8 = undefined;
+    var i: usize = 0;
+    var upper_next = true;
 
-            const s = (if (bind.ref)
-                std.fmt.bufPrint(&buf, "{s}(0x{x})", .{ bind.type_name, @intFromPtr(self) })
-            else
-                std.fmt.bufPrint(&buf, "{s}({any})", .{ bind.type_name, self }))
-            catch bind.type_name;
-
-            _ = l.pushString(s);
-            return 1;
+    for (name) |c| {
+        if (c == '_') {
+            upper_next = true;
+            continue;
         }
-    }.c;
+        buf[i] = if (upper_next) std.ascii.toUpper(c) else c;
+        upper_next = false;
+        i += 1;
+    }
+
+    return buf;
 }
 
-pub fn pascalCase(comptime name: []const u8) [name.len]u8 {
-    var buf: [name.len]u8 = undefined;
-    buf[0] = std.ascii.toUpper(name[0]);
+pub fn snakeCaseFromPascal(comptime E: type, pascal: []const u8) ?E {
+    @setEvalBranchQuota(100_000);
 
-    if (name.len > 1) @memcpy(buf[1..], name[1..]);
-    return buf;
+    inline for (std.meta.fields(E)) |field| {
+        const pascal_name = comptime &pascalCase(field.name);
+        if (std.mem.eql(u8, pascal, pascal_name)) {
+            return @enumFromInt(field.value);
+        }
+    }
+
+    return null;
+}
+
+fn countPascalLen(comptime name: []const u8) usize {
+    var len: usize = 0;
+    for (name) |c| {
+        if (c != '_') len += 1;
+    }
+    return len;
+}
+
+pub fn parseEnumTag(comptime E: type, name: []const u8) ?E {
+    @setEvalBranchQuota(100_000);
+
+    inline for (@typeInfo(E).@"enum".fields) |field| {
+        const pascal = comptime pascalCase(field.name);
+        if (std.mem.eql(u8, name, &pascal)) {
+            return @field(E, field.name);
+        }
+    }
+
+    return null;
+}
+
+pub fn pascalCaseTag(comptime E: type, val: E) []const u8 {
+    @setEvalBranchQuota(100_000);
+
+    return switch (val) {
+        inline else => |tag| comptime &pascalCase(@tagName(tag)),
+    };
 }
 
 pub fn shortTypeName(comptime T: type) [:0]const u8 {
@@ -70,7 +104,7 @@ pub fn luaTypeName(comptime T: type) [:0]const u8 {
     };
 }
 
-pub fn luaErr(l: *Lua, err: anyerror, comptime ctx: anytype) noreturn {
+pub fn luaErr(l: *Lua, err: anyerror, ctx: anytype) noreturn {
     const errname = @errorName(err);
 
     if (ctx.len >= 2 and std.mem.find(u8, errname, "Expected") != null) {
@@ -79,6 +113,27 @@ pub fn luaErr(l: *Lua, err: anyerror, comptime ctx: anytype) noreturn {
         l.raiseErrorStr("%s", .{ errname.ptr });
     }
 }
+
+pub fn wrapFormatFunc(comptime func: anytype) fn (*Lua) i32 {
+    return struct {
+        fn c(l: *Lua) i32 {
+            const FuncInfo = @typeInfo(@TypeOf(func)).@"fn";
+            const Self = FuncInfo.params[0].type.?;
+            const self = parseVal(l, Self, 1) catch |e| std.debug.panic("{s}, {s}", .{ @errorName(e), @typeName(Self) });
+
+            var allocating_writer: std.Io.Writer.Allocating = .init(l.allocator());
+            defer allocating_writer.deinit();
+            
+            func(self, &allocating_writer.writer) catch |e| l.raiseErrorStr("writer failed: %s", .{ @errorName(e).ptr });
+
+            const result = allocating_writer.toOwnedSlice() catch @panic("Out of memory");
+            defer l.allocator().free(result);
+
+            _ = l.pushString(result);
+            return 1;
+        }
+    }.c;
+} 
 
 pub fn moduleRegister(l: *Lua, mod_path: [:0]const u8, field_name: [:0]const u8) void {
     const v_idx = l.getTop();
@@ -149,12 +204,12 @@ pub fn autoPush(l: *Lua, comptime func: anytype) void {
                 if (comptime isBoundType(Inner)) {
                     args[i] = parseVal(lua, ParamType, i + 1) catch |e| luaErr(lua, e, .{ ParamType, i+1 });
                 } else if (comptime param_info == .pointer and param_info.pointer.size != .one) {
-                    const parsed = lua.toAnyAlloc(ParamType, i + 1) catch |e| luaErr(lua, e, .{ ParamType, i+1 });
+                    const parsed = parseValAlloc(lua, ParamType, i+1) catch |e| luaErr(lua, e, .{ ParamType, i+1 });
                     defer parsed.deinit();
 
                     args[i] = parsed.value;
                 } else {
-                    const parsed = lua.toAny(ParamType, i + 1) catch |e| luaErr(lua, e, .{ ParamType, i+1 });
+                    const parsed = parseVal(lua, ParamType, i+1) catch |e| luaErr(lua, e, .{ ParamType, i+1 });
                     args[i] = parsed;
                 }
             }

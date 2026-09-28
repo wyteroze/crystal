@@ -6,6 +6,7 @@ const linker = @import("../linker/linker.zig");
 const ecs = @import("../../ecs/ecs.zig");
 const Assets = @import("../../assets/Assets.zig");
 const Input = @import("../../input/Input.zig");
+const Ui = @import("../../ui/Ui.zig");
 const c = zlua.c;
 const Lua = zlua.Lua;
 const Script = @import("Script.zig");
@@ -15,14 +16,15 @@ state: *Lua,
 world: *ecs.World,
 assets: *Assets,
 input: *Input,
+ui: *Ui,
 
 /// `linkState` must be called immediately after this.
-pub fn init(allocator: std.mem.Allocator, world: *ecs.World, assets: *Assets, input: *Input) !Runtime {
+pub fn init(allocator: std.mem.Allocator, world: *ecs.World, assets: *Assets, input: *Input, ui: *Ui) !Runtime {
     const l: *Lua = try .init(allocator);
     l.openLibs();
 
     linker.registry.registerAll(l);
-    return .{ .state = l, .world = world, .assets = assets, .input = input };
+    return .{ .state = l, .world = world, .assets = assets, .input = input, .ui = ui };
 }
 
 pub fn deinit(self: Runtime) void {

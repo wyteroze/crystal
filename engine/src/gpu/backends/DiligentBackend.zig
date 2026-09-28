@@ -189,7 +189,7 @@ pub fn beginPass(self: DiligentBackend, d: desc.PassDesc) void {
     c.diligent_begin_pass(self.handle, .{
         .width = d.width,
         .height = d.height,
-        .clear_color = if (d.clear_color) |cc| cc.data else undefined,
+        .clear_color = if (d.clear_color) |cc| cc.toArr() else undefined,
         .has_clear_color = d.clear_color != null,
 
         .clear_depth = d.clear_depth orelse undefined,

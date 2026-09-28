@@ -125,18 +125,65 @@ pub fn destroyed(self: Entity) *signal.Signal(.{}) {
     return &self.world.destroy_signals.items[self.index];
 }
 
-pub fn format(self: Entity, buf: []u8) []const u8 {
-    return std.fmt.bufPrint(buf, "Entity{{ index: {d}, generation: {d} }}", .{ self.index, self.generation }) 
-        catch "Entity{ index: ?, generation: ? }";
+pub fn format(
+    self: @This(),
+    writer: *std.Io.Writer,
+) std.Io.Writer.Error!void {
+    try writer.print("Entity{{ index: {d}, generation: {d} }}", .{ self.index, self.generation });
 }
 
 pub const __lua = .val;
-pub const registerLua = struct {
+
+pub const luaBinding = struct {
     const linker = @import("../scripting/linker/linker.zig");
     const zlua = @import("zlua");
     const EntityBind = linker.Binding(Entity, false);
     const ChildrenSlidingWindowBind = linker.Binding(ChildrenSlidingWindow, true);
     const ComponentsSlidingWindowBind = linker.Binding(ComponentsSlidingWindow, true);
+
+    pub fn applyComponentTable(
+        lua: *zlua.Lua,
+        entity: Entity,
+        table_idx: i32,
+        comptime skip: []const []const u8,
+        ensure: bool
+    ) void {
+        const abs_idx = lua.absIndex(table_idx);
+        const world = entity.world;
+
+        lua.pushNil();
+        next: while (lua.next(abs_idx)) {
+            if (lua.typeOf(-2) != .string) {
+                lua.raiseErrorStr("component names must be strings", .{});
+                unreachable;
+            }
+            const key = lua.toString(-2) catch |e| linker.util.luaErr(lua, e, .{ []const u8, -2 });
+
+            inline for (skip) |s| {
+                if (std.mem.eql(u8, key, s)) {
+                    lua.pop(1);
+                    continue :next;
+                }
+            }
+
+            const id = world.components.id(key) orelse lua.raiseErrorStr("unknown component '%s'", .{key.ptr});
+            const info = world.components.info(id);
+            if (info.fields.len != 1) lua.raiseErrorStr("multi-field components not yet supported", .{});
+
+            const field = info.fields[0];
+            var bytes: [64]u8 align(16) = undefined;
+            std.debug.assert(field.type.alignment <= 16);
+            std.debug.assert(field.type.size <= bytes.len);
+
+            field.type.read(world.allocator, lua, -1, bytes[0..field.type.size]) catch |e| raiseForComponentErr(lua, e, key);
+            if (ensure and !entity.hasComponent(info.name)) {
+                entity.addComponentField(info.name, bytes[0..field.type.size]) catch |e| raiseForComponentErr(lua, e, key);
+            } else {
+                entity.setComponentField(key, bytes[0..field.type.size]) catch |e| raiseForComponentErr(lua, e, key);
+            }
+            lua.pop(1);
+        }
+    }
 
     // When indexing (`Children.xyz`): If key is string, get name of entity. If number, get ID
     // When setting (`Children.xyz = blah`): Error, this isn't valid
@@ -148,14 +195,15 @@ pub const registerLua = struct {
         entity: Entity,
 
         pub fn deinit(self: *ChildrenSlidingWindow) void {
-            std.log.debug("collected", .{});
             self.allocator.destroy(self);
         }
 
         pub const __lua = .ref;
-        pub fn format(self: *ChildrenSlidingWindow, buf: []u8) []const u8 {
-            return std.fmt.bufPrint(buf, "ChildrenSlidingWindow {x}", .{ @intFromPtr(&self) })
-                catch "ChildrenSlidingWindow ?";
+        pub fn format(
+            self: *const @This(),
+            writer: *std.Io.Writer,
+        ) std.Io.Writer.Error!void {
+            try writer.print("ChildrenSlidingWindow {x}", .{ @intFromPtr(&self) });
         }
 
         pub fn set(l: *zlua.Lua) noreturn {
@@ -209,9 +257,11 @@ pub const registerLua = struct {
         }
 
         pub const __lua = .ref;
-        pub fn format(self: *ComponentsSlidingWindow, buf: []u8) []const u8 {
-            return std.fmt.bufPrint(buf, "ComponentsSlidingWindow {x}", .{ @intFromPtr(&self) })
-                catch "ComponentsSlidingWindow ?";
+        pub fn format(
+            self: *const @This(),
+            writer: *std.Io.Writer,
+        ) std.Io.Writer.Error!void {
+            try writer.print("ComponentsSlidingWindow {x}", .{ @intFromPtr(&self) });
         }
 
         // These `set` and `get` metamethods are identical to luaSetComponent and luaGetComponent,
@@ -294,25 +344,7 @@ pub const registerLua = struct {
         const self = EntityBind.check(lua, 1);
         lua.checkType(2, .table);
 
-        lua.pushNil();
-        while (lua.next(2)) {
-            if (lua.typeOf(-2) != .string) { lua.raiseErrorStr("invalid component name passed to SetComponents", .{}); unreachable; }
-            const key = lua.toString(-2) catch |e| linker.util.luaErr(lua, e, .{ []const u8, -2 });
-
-            const id = self.world.components.id(key) orelse lua.raiseErrorStr("unknown component '%s'", .{key.ptr});
-            const info = self.world.components.info(id);
-            if (info.fields.len != 1) lua.raiseErrorStr("multi-field components not yet supported", .{});
-
-            const field = info.fields[0];
-            var bytes: [64]u8 align(16) = undefined;
-            std.debug.assert(field.type.alignment <= 16);
-            std.debug.assert(field.type.size <= bytes.len);
-
-            field.type.read(self.world.allocator, lua, -1, bytes[0..field.type.size]) catch |e| raiseForComponentErr(lua, e, key);
-            self.setComponentField(key, bytes[0..field.type.size]) catch |e| raiseForComponentErr(lua, e, key);
-            lua.pop(1);
-        }
-
+        applyComponentTable(lua, self, 2, &.{}, false);
         return 0;
     }
 
@@ -428,7 +460,6 @@ pub const registerLua = struct {
             .name = .auto,
             .scope = .{ .module = "ecs.entity" },
             .properties = .luaCustom(ChildrenSlidingWindow.get, ChildrenSlidingWindow.set),
-            .tostring = .format(ChildrenSlidingWindow.format),
             .gc = .nonNamed(ChildrenSlidingWindow.deinit)
         });
 
@@ -436,7 +467,6 @@ pub const registerLua = struct {
             .name = .auto,
             .scope = .{ .module = "ecs.entity" },
             .properties = .luaCustom(ComponentsSlidingWindow.get, ComponentsSlidingWindow.set),
-            .tostring = .format(ComponentsSlidingWindow.format),
             .gc = .nonNamed(ComponentsSlidingWindow.deinit)
         });
 
@@ -454,7 +484,8 @@ pub const registerLua = struct {
                 .custom("SetComponents", luaSetComponents)
             },
             .properties = .luaCustom(entityGet, entitySet),
-            .tostring = .format(Entity.format) 
         });
     }
-}.registerLua;
+};
+
+pub const registerLua = luaBinding.registerLua;

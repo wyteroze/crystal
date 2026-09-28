@@ -167,11 +167,12 @@ pub const Mat4 = extern struct {
         return @bitCast(self.m);
     }
 
-    pub const __format_len = 2048;
-    pub fn format(self: Mat4, buf: []u8) []const u8 {
+    pub fn format(
+        self: @This(),
+        writer: *std.Io.Writer,
+    ) std.Io.Writer.Error!void {
         const m = self.m;
-
-        return std.fmt.bufPrint(buf,
+        return writer.print(
             \\Mat4(
             \\    [{d:6.2}, {d:6.2}, {d:6.2}, {d:6.2}]
             \\    [{d:6.2}, {d:6.2}, {d:6.2}, {d:6.2}]
@@ -183,14 +184,7 @@ pub const Mat4 = extern struct {
             m[1][0], m[1][1], m[1][2], m[1][3],
             m[2][0], m[2][1], m[2][2], m[2][3],
             m[3][0], m[3][1], m[3][2], m[3][3],
-        }) catch
-            \\Mat4(
-            \\    [?, ?, ?, ?]
-            \\    [?, ?, ?, ?]
-            \\    [?, ?, ?, ?]
-            \\    [?, ?, ?, ?]
-            \\)
-        ;
+        });
     }
 
     pub const __lua = .val;
@@ -199,5 +193,26 @@ pub const Mat4 = extern struct {
 pub fn registerLua(l: anytype) void {
     const linker = @import("../../scripting/scripting.zig").linker;
 
-    linker.value(l, Mat4, .{ .name = .auto, .scope = .{ .module = "core.math" }, .constructors = &.{ .named("fromTranslation", Mat4.fromTranslation), .named("fromComponents", Mat4.fromComponents), .named("fromScale", Mat4.fromScale), .named("fromTRS", Mat4.fromTRS), .named("ortho", Mat4.ortho), .named("lookAt", Mat4.lookAt), .named("perspective", Mat4.perspective) }, .methods = &.{.named("Components", Mat4.components)}, .constants = &.{.named("identity", Mat4.identity)}, .ops = .{ .mul = .custom(Mat4.mul), .tostring = .format(Mat4.format) } });
+    linker.value(l, Mat4, .{ 
+        .name = .auto, 
+        .scope = .{ .module = "core" }, 
+        .constructors = &.{ 
+            .named("fromTranslation", Mat4.fromTranslation),
+            .named("fromComponents", Mat4.fromComponents), 
+            .named("fromScale", Mat4.fromScale), 
+            .named("fromTRS", Mat4.fromTRS), 
+            .named("ortho", Mat4.ortho), 
+            .named("lookAt", Mat4.lookAt), 
+            .named("perspective", Mat4.perspective) 
+        }, 
+        .methods = &.{
+            .named("Components", Mat4.components)
+        }, 
+        .constants = &.{
+            .named("identity", Mat4.identity)
+        }, 
+        .ops = .{ 
+            .mul = .custom(Mat4.mul), 
+        } 
+    });
 }

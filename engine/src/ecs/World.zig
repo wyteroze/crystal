@@ -14,6 +14,7 @@ const field_types: std.StaticStringMap(ComponentId.FieldType) = blk: {
     const math = @import("../core/math/math.zig");
     const assets = @import("../assets/Assets.zig");
     const render = @import("../render/render.zig");
+    const Ui = @import("../ui/Ui.zig");
 
     break :blk .initComptime(.{
         .{ "boolean", ComponentId.FieldType.ofType(bool) },
@@ -25,7 +26,8 @@ const field_types: std.StaticStringMap(ComponentId.FieldType) = blk: {
         .{ "Mat4", ComponentId.FieldType.ofType(math.Mat4) },
         .{ "Asset", ComponentId.FieldType.ofType(assets.AssetHandle) },
         .{ "Light", ComponentId.FieldType.ofType(render.types.Light) },
-        .{ "Text", ComponentId.FieldType.ofType(render.types.Text) }
+        .{ "Text", ComponentId.FieldType.ofType(Ui.types.Text) },
+        .{ "ComputedTextLayout", ComponentId.FieldType.ofType(Ui.types.ComputedTextLayout) } 
     });
 };
 
@@ -265,8 +267,11 @@ pub fn update(self: *World, dt: f32) void {
     self.systems.runAll(self, dt);
 }
 
-pub fn format(_: *World, _: []u8) []const u8 {
-    return "World";
+pub fn format(
+    _: *const @This(),
+    writer: *std.Io.Writer,
+) std.Io.Writer.Error!void {
+    try writer.print("World", .{ });
 }
 
 pub const __lua = .ref;
@@ -433,7 +438,6 @@ pub const registerLua = struct {
                 .custom("Query", queryLua)
             },
 
-            .tostring = .format(World.format)
         });
     }
 }.registerLua;

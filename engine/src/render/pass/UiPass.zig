@@ -110,7 +110,7 @@ fn execute(self: *UiPass, ctx: pass.PassContext) void {
             .ortho = self.ortho_matrix.m,
             .pos = .{ ui_obj.pos[0] * self.surface_scale, ui_obj.pos[1] * self.surface_scale },
             .size = .{ ui_obj.size[0] * self.surface_scale, ui_obj.size[1] * self.surface_scale },
-            .color = ui_obj.color.data,
+            .color = ui_obj.color.toArr(),
             .uv_pos = ui_obj.uv_pos,
             .uv_size = ui_obj.uv_size,
             .is_text = @intCast(@intFromBool(ui_obj.is_text))

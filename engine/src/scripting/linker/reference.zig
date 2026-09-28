@@ -120,15 +120,10 @@ pub fn reference(l: *Lua, comptime T: type, comptime recipe: recipes.LuaReferenc
             l.setField(-2, "__eq");
         }
     }
-    switch (recipe.tostring) {
-        .identity => {
-            l.pushFunction(zlua.wrap(util.identityToString(bind)));
-            l.setField(-2, "__tostring");
-        },
-        .custom_fn => |func| {
-            func(l);
-            l.setField(-2, "__tostring");
-        }
+
+    if (@hasDecl(T, "format")) {
+        l.pushFunction(zlua.wrap(util.wrapFormatFunc(T.format)));
+        l.setField(-2, "__tostring");
     }
     
     if (recipe.gc) |gc| {

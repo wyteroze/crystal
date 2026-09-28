@@ -127,31 +127,6 @@ pub const OpMode = union(enum) {
             .custom_fn = struct { fn c(l: *Lua) void { l.pushFunction(zlua.wrap(func)); } }.c
         };
     }
-
-    pub fn format(comptime func: anytype) OpMode {
-        return .{
-            .custom_fn = struct {
-                fn c(l: *Lua) void {
-                    l.pushFunction(zlua.wrap(struct {
-                        fn c(lua: *Lua) i32 {
-                            const FuncInfo = @typeInfo(@TypeOf(func)).@"fn";
-                            const Self = FuncInfo.params[0].type.?;
-                            const SelfInfo = @typeInfo(Self);
-                            const Inner = if (SelfInfo == .pointer) SelfInfo.pointer.child else Self;
-                            const self = util.parseVal(lua, Self, 1) catch |e| util.luaErr(lua, e);
-
-                            const buf_len = if (@hasDecl(Inner, "__format_len")) Inner.__format_len else 128;
-                            var buf: [buf_len]u8 = undefined;
-                            const s = func(self, &buf);
-
-                            _ = lua.pushString(s);
-                            return 1;
-                        }
-                    }.c));
-                }
-            }.c
-        };
-    }
 };
 pub const Ops = struct {
     add: ?OpMode = null,
@@ -159,8 +134,7 @@ pub const Ops = struct {
     mul: ?OpMode = null,
     div: ?OpMode = null,
     neg: ?OpMode = null,
-    eq: ?OpMode = null,
-    tostring: ?OpMode = null,
+    eq: ?OpMode = null
 };
 
 pub const Name = union(enum) {
@@ -185,7 +159,6 @@ pub const LuaReferenceRecipe = struct {
     properties: ?Properties = null,
     methods: []const Method = &.{},
     eq: OpMode = .identity,
-    tostring: OpMode = .identity,
     gc: ?Method = null
 };
 

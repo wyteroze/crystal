@@ -1,6 +1,6 @@
 -- Copyright 2026 wyteroze. Licensed under the Apache-2.0 license.
 
-local cmath = require("core.math")
+local core = require("core")
 local input = require("input")
 
 -- Util --
@@ -18,7 +18,7 @@ local function rotToRightVector(rot)
     local yaw = math.rad(rot.Y)
     local roll = math.rad(rot.Z)
 
-    return cmath.Vec3.new(
+    return core.Vec3.new(
         math.cos(roll) * math.cos(yaw) - math.sin(roll) * math.sin(pitch) * math.sin(yaw),
         math.sin(roll) * math.cos(roll),
         -math.cos(roll) * math.sin(yaw) - math.sin(roll) * math.sin(pitch) * math.cos(yaw)
@@ -30,7 +30,7 @@ local function rotToUpVector(rot)
     local yaw = math.rad(rot.Y)
     local roll = math.rad(rot.Z)
 
-    return cmath.Vec3.new(
+    return core.Vec3.new(
         math.sin(roll) * math.cos(yaw) + math.cos(roll) * math.sin(pitch) * math.sin(yaw),
         math.cos(roll) * math.cos(pitch),
         -math.sin(roll) * math.sin(yaw) + math.cos(roll) * math.sin(pitch) * math.cos(yaw)
@@ -42,7 +42,7 @@ local function rotToForwardVector(rot)
     local yaw = math.rad(rot.Y)
     local roll = math.rad(rot.Z)
 
-    return cmath.Vec3.new(
+    return core.Vec3.new(
         math.cos(pitch) * math.sin(yaw),
         -math.sin(pitch),
         math.cos(pitch) * math.cos(yaw)
@@ -98,14 +98,14 @@ function Camera:_step(dt)
     local moveY = (btn(kb:IsKeyPressed("Space"))-btn(kb:IsKeyPressed("LeftShift")))*dt*self.Speed
     local moveZ = (btn(kb:IsKeyPressed("W"))-btn(kb:IsKeyPressed("S")))*dt*self.Speed
     
-    local msDelta = input.CursorLocked and ms:GetDelta() or cmath.Vec2.new(0, 0)
+    local msDelta = input.CursorLocked and ms:GetDelta() or core.Vec2.new(0, 0)
     local rot = self._entity.Components.Rotation
-        + cmath.Vec3.new(msDelta.Y, msDelta.X, 0)
+        + core.Vec3.new(msDelta.Y, msDelta.X, 0)
 
     local pos = self._entity.Components.Position
-        + rotToRightVector(rot) * cmath.Vec3.new(moveX, moveX, moveX)
-        + rotToUpVector(rot) * cmath.Vec3.new(moveY, moveY, moveY)
-        + rotToForwardVector(rot) * cmath.Vec3.new(moveZ, moveZ, moveZ)
+        + rotToRightVector(rot) * core.Vec3.new(moveX, moveX, moveX)
+        + rotToUpVector(rot) * core.Vec3.new(moveY, moveY, moveY)
+        + rotToForwardVector(rot) * core.Vec3.new(moveZ, moveZ, moveZ)
 
     self._entity.Components.Position = pos
     self._entity.Components.Rotation = rot

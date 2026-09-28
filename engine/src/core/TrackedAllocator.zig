@@ -71,7 +71,7 @@ pub fn currentUsage(self: *const TrackedAllocator) usize {
 }
 
 pub fn format(
-    self: TrackedAllocator,
+    self: *const TrackedAllocator,
     writer: *std.Io.Writer,
 ) std.Io.Writer.Error!void {
     try writer.writeAll("[");

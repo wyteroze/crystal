@@ -32,6 +32,13 @@ pub fn iterator(self: Query) Iterator {
         }
     }
 
+    // Can't think of a better way to do this, sorry
+    if (smallest_idx >= self.required.len) return .{
+        .world = self.world, 
+        .required = self.required, 
+        .driver = null, 
+        .cursor = 0
+    };
     const driver = self.world.storageFor(self.required[smallest_idx]) orelse return .{
         .world = self.world,
         .required = self.required,

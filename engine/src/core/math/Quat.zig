@@ -107,10 +107,14 @@ pub const Quat = extern struct {
         } };
     }
 
-    pub const __format_len = 128;
-    pub fn format(self: Quat, buf: []u8) []const u8 {
-        return std.fmt.bufPrint(buf, "Quat({d:.2}, {d:.2}, {d:.2}, {d:.2})", .{ self.x, self.y, self.z, self.w })
-            catch "Quat(?, ?, ?, ?)";
+    pub fn format(
+        self: @This(),
+        writer: *std.Io.Writer,
+    ) std.Io.Writer.Error!void {
+        try writer.print(
+            "Quat({d:.2}, {d:.2}, {d:.2}, {d:.2})", 
+            .{ self.x, self.y, self.z, self.w }
+        );
     }
 
     pub const __lua = .val;
@@ -121,7 +125,7 @@ pub fn registerLua(l: anytype) void {
 
     linker.value(l, Quat, .{
         .name = .auto,
-        .scope = .{ .module = "core.math" },
+        .scope = .{ .module = "core" },
         .constructors = &.{
             .named("new", Quat.new),
             .named("fromEuler", Quat.fromEuler),
@@ -139,7 +143,6 @@ pub fn registerLua(l: anytype) void {
         .ops = .{
             .mul = .custom(Quat.mul),
             .eq = .identity,
-            .tostring = .format(Quat.format)
         }
     });
 }

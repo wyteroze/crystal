@@ -3,6 +3,7 @@
 const std = @import("std");
 const ecs = @import("../ecs/ecs.zig");
 const math = @import("../core/math/math.zig");
+const text = @import("text.zig");
 const types = @import("types.zig");
 const ComponentIds = @import("Ui.zig").ComponentIds;
 
@@ -12,38 +13,52 @@ pub fn reflowUi(
     world: *ecs.World, 
     ids: ComponentIds, 
     changed: []const ecs.Entity, 
-    allocator: std.mem.Allocator
+    allocator: std.mem.Allocator,
+    frame_allocator: std.mem.Allocator
 ) void {
-    var dirty: std.AutoHashMap(ecs.Entity, void) = .init(allocator);
+    var dirty: std.AutoHashMap(ecs.Entity, void) = .init(frame_allocator);
 
     for (changed) |e| {
         var cur = e;
-        while (cur.getParent()) |p| : (cur = p) {
+        while (cur.getParent()) |p| {
+            cur = p;
             const mode = world.getComponent(cur, ids.size, types.SizeMode) orelse break;
-            if (mode.width != .fill and mode.height != .fill) break;
+            if (mode.width != .hug and mode.height != .hug) break;
         }
+        
         dirty.put(cur, {}) catch @panic("Out of memory");
     }
 
-    var cache: MeasureCache = .init(allocator);
+    var cache: MeasureCache = .init(frame_allocator);
 
     var it = dirty.keyIterator();
     while (it.next()) |r| {
         cache.clearRetainingCapacity();
 
         const measured = measure(r.*, world, ids, &cache);
-        const origin: math.Vec2 = if (world.getComponent(r.*, ids.absolute_position, math.Vec2)) |p| p.* else .zero;
+        const origin: math.Vec2 = if (r.*.getParent() == null)
+            (if (world.getComponent(r.*, ids.position, math.Vec2)) |p| p.* else .zero)
+        else if (world.getComponent(r.*, ids.computed_position, math.Vec2)) |p| p.* else .zero;
 
-        arrange(r.*, measured, origin, world, ids, &cache);
+        // arrange only needs an allocator for `[]GlyphQuad`s,
+        // which outlasts the frame, so it needs the non-frame allocator.
+        arrange(r.*, measured, origin, world, ids, &cache, allocator);
     }
 }
 
 fn measure(entity: ecs.Entity, world: *ecs.World, ids: ComponentIds, cache: *MeasureCache) math.Vec2 {
     const mode: types.SizeMode = if (entity.getComponent(ids.size, types.SizeMode)) |m| m.* else .{};
     const layout = entity.getComponent(ids.layout, types.Layout);
+    const txt = entity.getComponent(ids.text, types.Text);
     const children = entity.getChildren();
 
     var intr: math.Vec2 = .zero;
+
+    if (txt) |t| {
+        const font = t.font.ensureGpuGet(.font, .{}) catch unreachable;
+        intr = text.measureText(&font, t.content, t.size);
+    }
+
     if (layout) |l| {
         var main_sum: f32 = 0;
         var cross_max: f32 = 0;
@@ -66,10 +81,8 @@ fn measure(entity: ecs.Entity, world: *ecs.World, ids: ComponentIds, cache: *Mea
         const hug_main = main_sum + pad_main;
         const hug_cross = cross_max + pad_cross;
 
-        intr = if (l.direction == .horizontal) .new(hug_main, hug_cross) else .new(hug_cross, hug_main);
-    }// else if (entity.getComponent(ids.text, types.TextMeasurable)) |t| {
-    //     intr = t.measure();
-    // }
+        intr = intr.add(if (l.direction == .horizontal) .new(hug_main, hug_cross) else .new(hug_cross, hug_main));
+    }
 
     return .new(
         axis(mode.width, intr.x),
@@ -85,13 +98,31 @@ fn axis(a: types.SizeAxis, hug_val: f32) f32 {
     };
 }
 
-fn arrange(entity: ecs.Entity, final: math.Vec2, origin: math.Vec2, world: *ecs.World, ids: ComponentIds, cache: *MeasureCache) void {
-    if (!world.hasComponent(entity, ids.absolute_position)) world.addComponent(entity, ids.absolute_position, math.Vec2, .zero) catch {};
-    if (!world.hasComponent(entity, ids.absolute_size)) world.addComponent(entity, ids.absolute_size, math.Vec2, .zero) catch {};
-    entity.setComponent(ids.absolute_position, math.Vec2, origin) catch {};
-    entity.setComponent(ids.absolute_size, math.Vec2, final) catch {};
+fn arrange(
+    entity: ecs.Entity, 
+    final: math.Vec2, 
+    origin: math.Vec2, 
+    world: *ecs.World, 
+    ids: ComponentIds, 
+    cache: *MeasureCache, 
+    allocator: std.mem.Allocator
+) void {
+    if (!world.hasComponent(entity, ids.computed_position)) world.addComponent(entity, ids.computed_position, math.Vec2, .zero) catch {};
+    if (!world.hasComponent(entity, ids.computed_size)) world.addComponent(entity, ids.computed_size, math.Vec2, .zero) catch {};
+    entity.setComponent(ids.computed_position, math.Vec2, origin) catch {};
+    entity.setComponent(ids.computed_size, math.Vec2, final) catch {};
 
-    std.log.debug("arranging {d}", .{ entity.toU64() });
+    if (entity.getComponent(ids.text, types.Text)) |t| {
+        const font = t.font.ensureGpuGet(.font, .{}) catch unreachable;
+        const quads = text.layoutGlyphs(allocator, &font, t.*, origin, final) catch @panic("Out of memory");
+
+        if (entity.getComponent(ids.computed_text_layout, types.ComputedTextLayout)) |computed| {
+            allocator.free(computed.quads);
+            computed.quads = quads;
+        } else {
+            world.addComponent(entity, ids.computed_text_layout, types.ComputedTextLayout, .{ .quads = quads }) catch {};
+        }
+    }
 
     const layout = entity.getComponent(ids.layout, types.Layout) orelse return;
     const children = entity.getChildren();
@@ -157,7 +188,7 @@ fn arrange(entity: ecs.Entity, final: math.Vec2, origin: math.Vec2, world: *ecs.
         else
             origin.add(.new(pad.left + cross_offset, pad.top + cursor));
 
-        arrange(c, child_size, child_origin, world, ids, cache);
+        arrange(c, child_size, child_origin, world, ids, cache, allocator);
         
         cursor += main_size + layout.gap + (if (layout.justify == .space_between and i < children.len-1) extra else 0);
     }
