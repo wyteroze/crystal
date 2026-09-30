@@ -100,16 +100,53 @@ pub const registerLua = struct {
     const CropBind = linker.Binding(types.Crop, false);
     const ImageBind = linker.Binding(types.Image, false);
     const BordersBind = linker.Binding(types.Borders, false);
+    const GridLayoutBind = linker.Binding(types.GridLayout, false);
+    const GridAxisBind = linker.Binding(types.GridAxis, false);
 
     fn sizeAxisFixed(lua: *zlua.Lua) i32 {
         SizeAxisBind.push(lua, .{ .fixed = @floatCast(lua.checkNumber(1)) });
         return 1;
     }
 
+    // layoutGeneric and layoutGrid is so that you can do either
+    // `ui.Layout {}` for generic layout, or `ui.Layout.Grid {}` for grid layout
+
+    // 1 = table, 2 = value
+    fn layoutGeneric(lua: *zlua.Lua) i32 {
+        const generic = luaTableToStruct(lua, 2, types.GenericLayout, .{});
+        LayoutBind.push(lua, .{ .generic = generic });
+        return 1;
+    }
+
+    // 1 = table, 2 = key, 3 = value
+    fn layoutGrid(lua: *zlua.Lua) i32 {
+        if (!std.mem.eql(u8, lua.toString(2) catch return 0, "Grid")) return 0;
+        lua.pushFunction(zlua.wrap(struct {
+            fn c(lua_state: *zlua.Lua) i32 {
+                const grid = luaTableToStruct(lua_state, 1, types.GridLayout, .{});
+                if (grid.justify == .space_between) 
+                    lua_state.raiseErrorStr("Justify.SpaceBetween is not usable on GridLayouts", .{});
+                if (grid.flow == .row and grid.rows == .auto or grid.flow == .column and grid.columns == .auto) 
+                    lua_state.raiseErrorStr("GridLayout.Flow can't use an axis that uses GridAxis.Auto.", .{});
+
+                LayoutBind.push(lua_state, .{ .grid = grid });
+                return 1;
+            }
+        }.c));
+        return 1;
+    }
+
+    fn gridAxisFixed(lua: *zlua.Lua) i32 {
+        GridAxisBind.push(lua, .{ .fixed = @intCast(lua.checkInteger(1)) });
+        return 1;
+    }
+
     fn pushEnum(l: *zlua.Lua, comptime T: type) void {
         l.newTable();
+
         inline for (std.meta.fields(T)) |f| {
-            _ = l.pushStringZ(f.name); l.setField(-2, f.name);
+            const pascalName: [:0]const u8 = linker.util.pascalCase(f.name) ++ "";
+            _ = l.pushStringZ(pascalName); l.setField(-2, pascalName);
         }
     }
 
@@ -122,8 +159,22 @@ pub const registerLua = struct {
             SizeAxisBind.push(l, .fill); l.setField(-2, "Fill");
             l.pushFunction(zlua.wrap(sizeAxisFixed)); l.setField(-2, "Fixed");
             return 1;
+        } else if (std.mem.eql(u8, key, "Layout")) {
+            l.newTable();
+            _ = l.getMetatableRegistry("LayoutMt");
+            l.setMetatable(-2);
+            return 1;
         } else if (std.mem.eql(u8, key, "LayoutDirection")) {
             pushEnum(l, types.LayoutDirection);
+            return 1;
+        } else if (std.mem.eql(u8, key, "GridAxis")) {
+            l.newTable();
+            GridAxisBind.push(l, .auto); l.setField(-2, "Auto");
+            l.pushFunction(zlua.wrap(gridAxisFixed)); l.setField(-2, "Fixed");
+
+            return 1;
+        } else if (std.mem.eql(u8, key, "GridFlow")) {
+            pushEnum(l, types.GridFlow);
             return 1;
         } else if (std.mem.eql(u8, key, "Align")) {
             pushEnum(l, types.Align);
@@ -131,8 +182,7 @@ pub const registerLua = struct {
         } else if (std.mem.eql(u8, key, "Justify")) {
             pushEnum(l, types.Justify);
             return 1;
-        }
-        else {
+        } else {
             // fallback to exising methods
             l.getMetatable(1) catch { l.pushNil(); return 1; };
             _ = l.getField(-1, "__methods");
@@ -212,10 +262,9 @@ pub const registerLua = struct {
             .scope = .{ .module = "ui.types" },
             .fields = &.{ "top_left", "top_right", "bottom_left", "bottom_right" }
         });
-        linker.value(l, types.Layout, .{ 
+        linker.value(l, types.Layout, .{
             .name = .{ .named = "Layout" },
             .scope = .{ .module = "ui.types" },
-            .fields = &.{ "direction", "gap", "padding", "align_items", "justify" },
         });
         linker.value(l, types.SizeMode, .{
             .name = .{ .named = "SizeMode" },
@@ -245,6 +294,25 @@ pub const registerLua = struct {
             .scope = .{ .module = "ui.types" },
             .fields = &.{ "top", "bottom", "left", "right" }
         });
+        linker.value(l, types.GridAxis, .{
+            .name = .{ .named = "GridAxis" },
+            .scope = .{ .module = "ui.types" }
+        });
+        linker.value(l, types.GenericLayout, .{ 
+            .name = .{ .named = "GenericLayout" },
+            .scope = .{ .module = "ui.types" },
+            .fields = &.{ "direction", "gap", "padding", "align_items", "justify" },
+        });
+        linker.value(l, types.GridLayout, .{
+            .name = .{ .named = "GridLayout" },
+            .scope = .{ .module = "ui.types" },
+            .fields = &.{ "columns", "rows", "flow", "row_gap", "column_gap" }
+        });
+
+        l.newMetatable("LayoutMt") catch unreachable;
+        l.pushFunction(zlua.wrap(layoutGeneric)); l.setField(-2, "__call");
+        l.pushFunction(zlua.wrap(layoutGrid)); l.setField(-2, "__index");
+        l.pop(1);
         
         linker.module(l, .{
             .name = "ui",
@@ -262,12 +330,6 @@ pub const registerLua = struct {
                 .custom("CornerRadii", struct {
                     fn c(lua: *zlua.Lua) i32 {
                         CornerRadiiBind.push(lua, luaTableToStruct(lua, 1, types.CornerRadii, .{}));
-                        return 1;
-                    }
-                }.c),
-                .custom("Layout", struct {
-                    fn c(lua: *zlua.Lua) i32 {
-                        LayoutBind.push(lua, luaTableToStruct(lua, 1, types.Layout, .{}));
                         return 1;
                     }
                 }.c),

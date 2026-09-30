@@ -23,7 +23,82 @@ const clear_color: core.Color = .fromRgbFloat(0.1, 0.1, 0.1, 1.0);
 
 const Scene = struct { cam: ?ecs.Entity };
 
-fn submitToRenderer(w: *ecs.World, ui_world: *ecs.World, renderer: *render.Renderer) void {
+fn collectUiObjects(
+    ui: *Ui,
+    entity: ecs.Entity,
+    objs: *std.ArrayList(render.types.UiObject),
+    alloc: std.mem.Allocator,
+) void {
+    const cids = ui.component_ids;
+    if (!ui.world.hasComponent(entity, cids.render_view)) {
+        const pos: math.Vec2 = if (ui.world.getComponent(entity, cids.computed_position, math.Vec2)) |p| p.* else .zero;
+        const size: math.Vec2 = if (ui.world.getComponent(entity, cids.computed_size, math.Vec2)) |p| p.* else .zero;
+        const corners = if (ui.world.getComponent(entity, cids.corner_radii, Ui.types.CornerRadii)) |c| c.* else null;
+        const borders = if (ui.world.getComponent(entity, cids.borders, Ui.types.Borders)) |b| b.* else null;
+        const image = if (ui.world.getComponent(entity, cids.image, Ui.types.Image)) |i| i.* else null;
+        const color: core.Color = if (ui.world.getComponent(entity, cids.color, core.Color)) |c| c.*
+            else if (image != null) .fromRgbFloat(1.0, 1.0, 1.0, 1.0)
+            else .fromRgbFloat(1.0, 1.0, 1.0, 0.0);
+
+        const texture = if (image) |i| blk: { break :blk (i.source.ensureGpuGet(.image, .{}) catch break :blk null).handle; } else null;
+        const uv_pos: math.Vec2 = if (image) |i| i.crop.min else .zero;
+        const uv_size: math.Vec2 = if (image) |i| i.crop.max.sub(i.crop.min) else .one;
+
+        objs.append(alloc, .{
+            .pos = pos.arr(),
+            .size = size.arr(),
+            .color = color.srgbDecode(),
+            .texture = texture,
+            .uv_pos = uv_pos.arr(),
+            .uv_size = uv_size.arr(),
+            .corners = if (corners) |c| blk: {
+                const m = @min(size.x/2, size.y/2);
+                break :blk .{
+                    @min(c.top_left, m),
+                    @min(c.top_right, m),
+                    @min(c.bottom_left, m),
+                    @min(c.bottom_right, m)
+                };
+            } else @splat(0),
+            .borders = if (borders) |b| blk: {
+                // Max, should probably be in a better place.
+                const m = 100;
+                break :blk .{
+                    @min(b.top, m),
+                    @min(b.bottom, m),
+                    @min(b.left, m),
+                    @min(b.right, m)
+                };
+            } else @splat(0),
+            .border_color = if (borders) |b| b.color else .fromRgbFloat(0, 0, 0, 0)
+        }) catch @panic("Out of memory");
+
+        if (ui.world.getComponent(entity, cids.text, Ui.types.Text)) |txt| {
+            if (ui.world.getComponent(entity, cids.computed_text_layout, Ui.types.ComputedTextLayout)) |ct| {
+                if (txt.font.ensureGpuGet(.font, .{}) catch null) |atlas| {
+                    for (ct.quads) |quad| {
+                        objs.append(alloc, .{
+                            .pos = quad.pos,
+                            .size = quad.size,
+                            .color = txt.color.srgbDecode(),
+                            .uv_pos = quad.uv_pos,
+                            .uv_size = quad.uv_size,
+                            .sampler = atlas.sampler.handle,
+                            .texture = atlas.texture.handle,
+                            .is_text = true,
+                        }) catch @panic("Out of memory");
+                    }
+                }
+            }
+        }
+    }
+
+    for (entity.getChildren()) |child| {
+        collectUiObjects(ui, child, objs, alloc);
+    }
+}
+
+fn submitToRenderer(w: *ecs.World, ui: *Ui, renderer: *render.Renderer) void {
     const allocator = renderer.frame_allocator.allocator();
 
     const mesh_id = w.components.id("Mesh").?;
@@ -81,10 +156,11 @@ fn submitToRenderer(w: *ecs.World, ui_world: *ecs.World, renderer: *render.Rende
             }
         };
 
+        const rgb = l.color.srgbDecode();
         lights.append(allocator, .{
             .position_or_dir = pos_or_dir.arr(),
             .kind = @intFromEnum(l.kind),
-            .color = .{ l.color.r, l.color.g, l.color.b },
+            .color = .{ rgb.r, rgb.g, rgb.b },
             .intensity = l.intensity,
             .radius = switch (l.kind) { .point => |pp| pp.radius, .directional => 0 },
         }) catch @panic("Out of memory");
@@ -125,20 +201,18 @@ fn submitToRenderer(w: *ecs.World, ui_world: *ecs.World, renderer: *render.Rende
         }) catch @panic("Out of memory");
     }
 
+    const ui_cids = ui.component_ids;
+
     // Collect RenderViews
     {
-        const computed_pos_id = ui_world.components.id("ComputedPosition").?;
-        const computed_size_id = ui_world.components.id("ComputedSize").?;
-        const rview_id = ui_world.components.id("RenderView").?;
-
-        const q =  ui_world.query(&.{ rview_id });
+        const q =  ui.world.query(&.{ ui_cids.render_view });
         var it = q.iterator();
         while (it.next()) |entity| {
-            const rv = ui_world.getComponent(entity, rview_id, Ui.types.RenderViewOptions).?;
+            const rv = ui.world.getComponent(entity, ui_cids.render_view, Ui.types.RenderViewOptions).?;
             if (!rv.camera.isAlive()) continue;
 
-            const position = ui_world.getComponent(entity, computed_pos_id, math.Vec2) orelse continue;
-            const size = ui_world.getComponent(entity, computed_size_id, math.Vec2) orelse continue;
+            const position = ui.world.getComponent(entity, ui_cids.computed_position, math.Vec2) orelse continue;
+            const size = ui.world.getComponent(entity, ui_cids.computed_size, math.Vec2) orelse continue;
             const target = if (renderer.getView(entity.toU64())) |v| v.target else blk: {
                 const v = renderer.createView(entity.toU64(), .{ @max(rv.size[0], 1), @max(rv.size[1], 1) }, rv.camera) catch @panic("Failed to create RenderView");
                 break :blk v.target;
@@ -163,84 +237,11 @@ fn submitToRenderer(w: *ecs.World, ui_world: *ecs.World, renderer: *render.Rende
 
     // 2D world (for UI)
     {
-        const computed_pos_id = ui_world.components.id("ComputedPosition").?;
-        const computed_size_id = ui_world.components.id("ComputedSize").?;
-        const computed_text_id = ui_world.components.id("ComputedTextLayout").?;
-        const color_id = ui_world.components.id("Color").?;
-        const text_id = ui_world.components.id("Text").?;
-        const rview_id = ui_world.components.id("RenderView").?;
-        const ui_image_id = ui_world.components.id("Image").?;
-        const corners_id = ui_world.components.id("CornerRadii").?;
-        const borders_id = ui_world.components.id("Borders").?;
-
-        const q = ui_world.query(&.{ computed_pos_id, computed_size_id });
+        const q = ui.world.query(&.{ ui_cids.computed_position, ui_cids.computed_size });
         var it = q.iterator();
         while (it.next()) |entity| {
-            if (ui_world.hasComponent(entity, rview_id)) continue;
-            const pos: math.Vec2 = if (ui_world.getComponent(entity, computed_pos_id, math.Vec2)) |p| p.* else .zero;
-            const size: math.Vec2 = if (ui_world.getComponent(entity, computed_size_id, math.Vec2)) |p| p.* else .zero;
-            const corners = if (ui_world.getComponent(entity, corners_id, Ui.types.CornerRadii)) |c| c.* else null;
-            const borders = if (ui_world.getComponent(entity, borders_id, Ui.types.Borders)) |b| b.* else null;
-            const image = if (ui_world.getComponent(entity, ui_image_id, Ui.types.Image)) |i| i.* else null;
-            // When no color is defined but an image exists, we want it be fully opaque white instead of
-            // fully transparent so the image can actually be seen.
-            const color: core.Color = if (ui_world.getComponent(entity, color_id, core.Color)) |c| c.* 
-                else if (image != null) .fromRgbFloat(1.0, 1.0, 1.0, 1.0)
-                else .fromRgbFloat(1.0, 1.0, 1.0, 0.0);
-
-            // If image is given, get the handle of its gpu data. If getting handle fails,
-            // or if no image is given, return null.
-            const texture = if (image) |i| blk: { break :blk (i.source.ensureGpuGet(.image, .{}) catch break :blk null).handle; } else null;
-            const uv_pos: math.Vec2 = if (image) |i| i.crop.min else .zero;
-            const uv_size: math.Vec2 = if (image) |i| i.crop.max.sub(i.crop.min) else .one;
-
-            ui_objects.append(allocator, .{
-                .pos = pos.arr(),
-                .size = size.arr(),
-                .color = color,
-                .texture = texture,
-                .uv_pos = uv_pos.arr(),
-                .uv_size = uv_size.arr(),
-                .corners = if (corners) |c| blk: {
-                    const m = @min(size.x/2, size.y/2);
-                    break :blk .{
-                        @min(c.top_left, m),
-                        @min(c.top_right, m),
-                        @min(c.bottom_left, m),
-                        @min(c.bottom_right, m)
-                    };
-                } else @splat(0),
-                .borders = if (borders) |b| blk: {
-                    // Max, should probably be in a better place.
-                    const m = 100;
-                    break :blk .{ 
-                        @min(b.top, m), 
-                        @min(b.bottom, m), 
-                        @min(b.left, m), 
-                        @min(b.right, m)
-                    };
-                } else @splat(0),
-                .border_color = if (borders) |b| b.color else .fromRgbFloat(0, 0, 0, 0)
-                
-            }) catch @panic("Out of memory");
-
-            if (ui_world.getComponent(entity, text_id, Ui.types.Text)) |txt| {
-                const ct = ui_world.getComponent(entity, computed_text_id, Ui.types.ComputedTextLayout) orelse continue;
-                const atlas = txt.font.ensureGpuGet(.font, .{}) catch continue;
-
-                for (ct.quads) |quad| {
-                    ui_objects.append(allocator, .{
-                        .pos = quad.pos,
-                        .size = quad.size,
-                        .color = txt.color,
-                        .uv_pos = quad.uv_pos,
-                        .uv_size = quad.uv_size,
-                        .sampler = atlas.sampler.handle,
-                        .texture = atlas.texture.handle,
-                        .is_text = true,
-                    }) catch @panic("Out of memory");
-                }
-            }
+            if (entity.getParent() != null) continue; // only recurse from roots
+            collectUiObjects(ui, entity, &ui_objects, allocator);
         }
     }
 
@@ -430,7 +431,7 @@ pub fn main(init: std.process.Init) !void {
         platform.poll();
         world.update(dt_seconds);
         ui.update();
-        submitToRenderer(&world, &ui.world, &renderer);
+        submitToRenderer(&world, &ui, &renderer);
 
         const end = std.Io.Clock.awake.now(io);
 

@@ -16,6 +16,59 @@ pub const ComputedTextLayout = struct {
     quads: []const text.GlyphQuad
 };
 
+pub const GridFlow = enum {
+    column, // Fill across columns first
+    row, // Fill across rows first
+
+    pub fn format(
+        self: @This(),
+        writer: *std.Io.Writer,
+    ) std.Io.Writer.Error!void {
+        try writer.print("GridFlow.{s}", .{ switch (self) {
+            .column => "Column",
+            .row => "Row"
+        } });
+    }
+};
+
+pub const GridAxis = union(enum) {
+    fixed: u32,
+    auto,
+
+    pub const __lua = .val;
+    pub fn format(
+        self: @This(),
+        writer: *std.Io.Writer,
+    ) std.Io.Writer.Error!void {
+        switch (self) {
+            .fixed => |c| try writer.print("GridAxis.Fixed({d})", .{ c }),
+            .auto => try writer.print("GridAxis.Auto", .{}),
+        }
+    }
+};
+
+pub const GridLayout = struct {
+    padding: Padding = .{},
+    columns: GridAxis = .auto,
+    rows: GridAxis = .{ .fixed = 2 },
+    row_gap: f32 = 0,
+    column_gap: f32 = 0,
+    flow: GridFlow = .column,
+    align_items: Align = .start,
+    justify: Justify = .start,
+
+    pub const __lua = .val;
+    pub fn format(
+        self: @This(),
+        writer: *std.Io.Writer,
+    ) std.Io.Writer.Error!void {
+        try writer.print(
+            "GridLayout{{ Padding = {f}, Columns = {f}, Rows = {f}, RowGap = {d}, ColumnGap = {d}, Flow = {f}, AlignItems = {f}, Justify = {f} }}",
+            .{ self.padding, self.columns, self.rows, self.row_gap, self.column_gap, self.flow, self.align_items, self.justify }
+        );
+    }
+};
+
 pub const LayoutDirection = enum { 
     horizontal, 
     vertical,
@@ -30,6 +83,7 @@ pub const LayoutDirection = enum {
         } });
     }
 };
+
 pub const Align = enum { 
     start, 
     center, 
@@ -46,6 +100,7 @@ pub const Align = enum {
         } });
     }
 };
+
 pub const Justify = enum { 
     start, 
     center, 
@@ -64,6 +119,7 @@ pub const Justify = enum {
         } });
     }
 };
+
 pub const SizeAxis = union(enum) { 
     fixed: f32, 
     hug, 
@@ -131,7 +187,7 @@ pub const CornerRadii = struct {
     }
 };
 
-pub const Layout = struct {
+pub const GenericLayout = struct {
     direction: LayoutDirection = .horizontal,
     gap: f32 = 0,
     padding: Padding = .{},
@@ -144,9 +200,25 @@ pub const Layout = struct {
         writer: *std.Io.Writer,
     ) std.Io.Writer.Error!void {
         try writer.print(
-            "Layout{{ Direction = {f}, Gap = {d}, Padding = {f}, AlignItems = {f}, Justify = {f} }}", 
+            "GenericLayout{{ Direction = {f}, Gap = {d}, Padding = {f}, AlignItems = {f}, Justify = {f} }}", 
             .{ self.direction, self.gap, self.padding, self.align_items, self.justify }
         );
+    }
+};
+
+pub const Layout = union(enum) {
+    generic: GenericLayout,
+    grid: GridLayout,
+
+    pub const __lua = .val;
+    pub fn format(
+        self: @This(),
+        writer: *std.Io.Writer,
+    ) std.Io.Writer.Error!void {
+        switch (self) {
+            .generic => |l| try writer.print("Layout.Generic({f})", .{ l }),
+            .grid => |l| try writer.print("Layout.Grid({f})", .{ l })
+        }
     }
 };
 

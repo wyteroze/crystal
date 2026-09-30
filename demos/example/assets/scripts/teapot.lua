@@ -38,60 +38,60 @@ function Teapot.new(entity)
     end)
     
     local jbMono = assets.load("assets://fonts/JetBrains-Mono.ttf")
-    local mainElement = ui:CreateElement({
-        Size = ui.SizeMode({ Width = ui.SizeAxis.Fixed(640), Height = ui.SizeAxis.Fixed(360) }),
+    local mainElement = ui:CreateElement {
+        Size = ui.SizeMode { Width = ui.SizeAxis.Fixed(640), Height = ui.SizeAxis.Fixed(360) },
         Color = core.Color.new(1, 0, 1, 0.5),
-        Borders = ui.Borders({ Top = 4, Bottom = 4, Left = 4, Right = 4 }),
-        Text = ui.Text({
+        Borders = ui.Borders { Top = 4, Bottom = 4, Left = 4, Right = 4 },
+        Text = ui.Text {
             Font = jbMono,
             Content = "Yo",
             Color = core.Color.new(1, 1, 1, 1),
             Size = 13
-        }),
-        Layout = ui.Layout({
-            Direction = ui.LayoutDirection.Vertical,
-            AlignItems = ui.Align.Start,
-            Justify = ui.Justify.SpaceBetween,
-            Padding = ui.Padding({ Top = 10, Bottom = 10, Left = 10, Right = 10 }),
-            Gap = 10
-        })
-    })
+        },
+        Layout = ui.Layout.Grid {
+            Padding = ui.Padding { Top = 10, Bottom = 10, Left = 10, Right = 10 },
+            Columns = ui.GridAxis.Fixed(1),
+            Rows = ui.GridAxis.Auto,
+            Flow = ui.GridFlow.Column,
+            RowGap = 2, ColumnGap = 2,
+        }
+    }
 
-    for i = 1, 10 do
-        local child = ui:CreateElement({
+    for i = 1, 5 do
+        local child = ui:CreateElement {
             Parent = mainElement,
-            Size = ui.SizeMode({ Width = ui.SizeAxis.Hug, Height = ui.SizeAxis.Hug }),
-            Color = core.Color.new(0, 0, 1, 1),
-            Layout = ui.Layout({
-                Padding = ui.Padding({ Left = 6, Right = 6, Top = 0, Bottom = 0 })
-            })
-        })
+            Size = ui.SizeMode { Width = ui.SizeAxis.Fill, Height = ui.SizeAxis.Fill },
+            Color = core.Color.new(.1, .1, .1, 1),
+            Layout = ui.Layout {
+                Padding = ui.Padding { Left = 6, Right = 6, Top = 0, Bottom = 0 }
+            }
+        }
 
-        ui:CreateElement({
+        ui:CreateElement {
             Parent = child,
-            Size = ui.SizeMode({ Width = ui.SizeAxis.Hug, Height = ui.SizeAxis.Hug }),
-            Text = ui.Text({
+            Size = ui.SizeMode { Width = ui.SizeAxis.Fill, Height = ui.SizeAxis.Fill },
+            Text = ui.Text {
                 Font = jbMono,
-                Content = ("Boi %d"):format(i),
+                Content = "Friendly faces everywhere humble folks without temptation",
                 Justify = ui.Justify.Center,
                 Color = core.Color.new(1, 1, 1, 1),
                 Size = 13
-            })
-        })
+            }
+        }
     end
 
     -- The image is tinted by the element's Color, 
     -- which is Color(1, 1, 1, 1) by default for images.
-    ui:CreateElement({
+    ui:CreateElement {
         Parent = mainElement,
-        Size = ui.SizeMode({ Width = ui.SizeAxis.Fixed(64), Height = ui.SizeAxis.Fixed(64) }),
-        CornerRadii = ui.CornerRadii({ TopLeft = 6, TopRight = 6, BottomLeft = 6, BottomRight = 6 }),
-        Borders = ui.Borders({ Top = 2, Bottom = 2, Left = 2, Right = 2 }),
-        Image = ui.Image({
+        Size = ui.SizeMode { Width = ui.SizeAxis.Fixed(64), Height = ui.SizeAxis.Fixed(64) },
+        CornerRadii = ui.CornerRadii { TopLeft = 6, TopRight = 6, BottomLeft = 6, BottomRight = 6 },
+        Borders = ui.Borders { Top = 2, Bottom = 2, Left = 2, Right = 2 },
+        Image = ui.Image {
             Source = chickenPng,
-            Crop = ui.Crop({ Min = core.Vec2.new(0, 0), Max = core.Vec2.new(1, 1) })
-        }),
-    })
+            Crop = ui.Crop { Min = core.Vec2.new(0, 0), Max = core.Vec2.new(1, 1) }
+        },
+    }
 
     return self
 end

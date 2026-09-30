@@ -35,19 +35,19 @@ pub fn fromArr(arr: [4]f32) Color { return .{ .r = arr[0], .g = arr[1], .b = arr
 
 pub fn srgbEncode(self: Color) Color {
     return .{
-        .r = srgbEncodeChannel(self.data[0]),
-        .g = srgbEncodeChannel(self.data[1]),
-        .b = srgbEncodeChannel(self.data[2]),
-        .a = self.data[3]
+        .r = srgbEncodeChannel(self.r),
+        .g = srgbEncodeChannel(self.g),
+        .b = srgbEncodeChannel(self.b),
+        .a = self.a
     };
 }
 
 pub fn srgbDecode(self: Color) Color {
     return .{
-        .r = srgbDecodeChannel(self.data[0]),
-        .g = srgbDecodeChannel(self.data[1]),
-        .b = srgbDecodeChannel(self.data[2]),
-        .a = self.data[3]
+        .r = srgbDecodeChannel(self.r),
+        .g = srgbDecodeChannel(self.g),
+        .b = srgbDecodeChannel(self.b),
+        .a = self.a
     };
 }
 
@@ -61,7 +61,7 @@ pub fn lerp(self: Color, other: Color, t: f32) Color {
 }
 
 pub fn withAlpha(self: Color, alpha: f32) Color {
-    return .{ .r = self.data[0], .g = self.data[1], .b = self.data[2], .a = alpha };
+    return .{ .r = self.r, .g = self.g, .b = self.b, .a = alpha };
 }
 
 pub fn eql(self: Color, other: Color) bool {
