@@ -21,6 +21,20 @@ const freetype_headers =
     \\
 ;
 
+const dr_libs_headers =
+    \\#include "dr_mp3.h"
+    \\#include "dr_wav.h"
+    \\
+;
+
+const dr_libs_impl =
+    \\#define DR_MP3_IMPLEMENTATION
+    \\#include "dr_mp3.h"
+    \\#define DR_WAV_IMPLEMENTATION
+    \\#include "dr_wav.h"
+    \\
+;
+
 // These 3 following headers are specifically for
 // implementations of each backend in os/backends/*os name*.
 // Headers for other reasons most likely have a better place
@@ -171,7 +185,8 @@ pub fn build(b: *std.Build) !void {
     const backend = b.option(diligent_vendor.Backend, "backend", "Backend to use\n(default: gl)") orelse .gl;
     const skip_cmake = b.option(bool, "skip_cmake", "Skip CMake builds (for ZLS check)") orelse false;
     
-    const dep_sdl3 = b.dependency("sdl3", .{ .target = target, .optimize = optimize });
+    // Refer to TODO in src/assets/importers/audio_sdl.zig
+    const dep_sdl3 = b.dependency("sdl3", .{ .target = target, .optimize = optimize, .ext_mixer = true });
     const dep_zlua = b.dependency("zlua", .{ .target = target, .optimize = optimize, .lang = .lua55 });
     const dep_toml = b.dependency("toml", .{ .target = target, .optimize = optimize });
     const dep_zigimg = b.dependency("zigimg", .{ .target = target, .optimize = optimize });
@@ -179,6 +194,7 @@ pub fn build(b: *std.Build) !void {
     const dep_diligent = b.dependency("diligent_engine", .{ .optimize = optimize, .backend = backend, .skip_cmake = skip_cmake });
     const dep_slang = b.dependency("slang", .{ .optimize = optimize, .skip_cmake = skip_cmake });
     const dep_freetype = b.dependency("freetype", .{ .optimize = optimize, .skip_cmake = skip_cmake });
+    const dep_dr_libs = b.dependency("dr_libs", .{});
     const dep_assimp = b.dependency("zig_assimp", .{
         .target = target, .optimize = optimize, .formats = "STL,Obj,FBX,glTF,glTF2", .double = false, .zlib = false });
 
@@ -203,6 +219,8 @@ pub fn build(b: *std.Build) !void {
     const assimp_h = c_src.add("assimp.h", assimp_headers);
     const freetype_h = c_src.add("freetype.h", freetype_headers);
     const wrapper_h = c_src.add("wrapper.h", os_headers);
+    const dr_libs_h = c_src.add("dr_libs.h", dr_libs_headers);
+    const dr_libs_c = c_src.add("dr_libs_impl.c", dr_libs_impl);
 
     const translator: Translator =
         .init(dep_translate_c, .{ .name = "Translate system headers", .c_source_file = wrapper_h, .target = target, .optimize = optimize });
@@ -210,6 +228,8 @@ pub fn build(b: *std.Build) !void {
         .init(dep_translate_c, .{ .name = "Translate assimp", .c_source_file = assimp_h, .target = target, .optimize = optimize });
     const freetype_translator: Translator =
         .init(dep_translate_c, .{ .name = "Translate freetype", .c_source_file = freetype_h, .target = target, .optimize = optimize });
+    const dr_libs_translator: Translator = 
+        .init(dep_translate_c, .{ .name = "Translate dr_libs", .c_source_file = dr_libs_h, .target = target, .optimize = optimize });
 
     if (!skip_cmake) {
         freetype_translator.addIncludePath(dep_freetype.namedLazyPath("include"));
@@ -329,7 +349,8 @@ pub fn build(b: *std.Build) !void {
             .{ .name = "assimp", .module = assimp_translator.mod },
             .{ .name = "diligent", .module = diligent_mod },
             .{ .name = "slang", .module = slang_mod },
-            .{ .name = "freetype", .module = freetype_translator.mod }
+            .{ .name = "freetype", .module = freetype_translator.mod },
+            .{ .name = "dr_libs" , .module = dr_libs_translator.mod }
         }
     });
 
@@ -380,6 +401,14 @@ pub fn build(b: *std.Build) !void {
         engine_mod.addObjectFile(dep_slang.namedLazyPath("lib-cmark"));
         engine_mod.addObjectFile(dep_slang.namedLazyPath("lib-lz4"));
     }
+    
+    // dr_libs
+    dr_libs_translator.addIncludePath(dep_dr_libs.path(""));
+    engine_mod.addCSourceFile(.{
+        .file = dr_libs_c,
+        .language = .c
+    });
+    engine_mod.addIncludePath(dep_dr_libs.path(""));
 
     if (target.result.os.tag == .macos and sdk != null) {
         sdk.?.applyToTranslator(translator);

@@ -12,10 +12,6 @@ pub fn build(b: *std.Build) void {
     const backend = b.option(enum { gl, d3d11, d3d12, vulkan }, "backend", "Backend to use\n(default: gl)") orelse .gl;
     const check_only = b.option(bool, "check_only", "Only build the `check` step (skips engine build)") orelse false;
 
-    // this might be a yikes move but SDL3 needs sysroot which is identical to sdk_path
-    // and having to pass it twice would be dumb and have no good use, so we do this instead
-    b.sysroot = sdk_path;
-
     // For ZLS
     const check = b.step("check", "Check if crystal compiles");
 

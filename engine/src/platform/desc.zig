@@ -9,6 +9,13 @@ pub const SurfaceDesc = struct {
     target: enum { primary, secondary }
 };
 
+pub const AudioFormat = enum { f32_le };
+pub const AudioSpec = struct {
+    format: AudioFormat = .f32_le,
+    sample_rate: u32,
+    channels: u8,
+};
+
 // Keyboard input
 pub const KeyboardEvent = struct {
     keyboard_id: u32,

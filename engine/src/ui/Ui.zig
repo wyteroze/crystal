@@ -113,7 +113,7 @@ pub const registerLua = struct {
 
     // 1 = table, 2 = value
     fn layoutGeneric(lua: *zlua.Lua) i32 {
-        const generic = luaTableToStruct(lua, 2, types.GenericLayout, .{});
+        const generic = linker.util.luaTableToStruct(lua, 2, types.GenericLayout, .{});
         LayoutBind.push(lua, .{ .generic = generic });
         return 1;
     }
@@ -123,7 +123,7 @@ pub const registerLua = struct {
         if (!std.mem.eql(u8, lua.toString(2) catch return 0, "Grid")) return 0;
         lua.pushFunction(zlua.wrap(struct {
             fn c(lua_state: *zlua.Lua) i32 {
-                const grid = luaTableToStruct(lua_state, 1, types.GridLayout, .{});
+                const grid = linker.util.luaTableToStruct(lua_state, 1, types.GridLayout, .{});
                 if (grid.justify == .space_between) 
                     lua_state.raiseErrorStr("Justify.SpaceBetween is not usable on GridLayouts", .{});
                 if (grid.flow == .row and grid.rows == .auto or grid.flow == .column and grid.columns == .auto) 
@@ -141,15 +141,6 @@ pub const registerLua = struct {
         return 1;
     }
 
-    fn pushEnum(l: *zlua.Lua, comptime T: type) void {
-        l.newTable();
-
-        inline for (std.meta.fields(T)) |f| {
-            const pascalName: [:0]const u8 = linker.util.pascalCase(f.name) ++ "";
-            _ = l.pushStringZ(pascalName); l.setField(-2, pascalName);
-        }
-    }
-
     fn uiGet(l: *zlua.Lua) i32 {
         const key = l.toString(2) catch |e| linker.util.luaErr(l, e, .{ []const u8, 2 });
 
@@ -165,7 +156,7 @@ pub const registerLua = struct {
             l.setMetatable(-2);
             return 1;
         } else if (std.mem.eql(u8, key, "LayoutDirection")) {
-            pushEnum(l, types.LayoutDirection);
+            linker.util.pushEnum(l, types.LayoutDirection);
             return 1;
         } else if (std.mem.eql(u8, key, "GridAxis")) {
             l.newTable();
@@ -174,13 +165,13 @@ pub const registerLua = struct {
 
             return 1;
         } else if (std.mem.eql(u8, key, "GridFlow")) {
-            pushEnum(l, types.GridFlow);
+            linker.util.pushEnum(l, types.GridFlow);
             return 1;
         } else if (std.mem.eql(u8, key, "Align")) {
-            pushEnum(l, types.Align);
+            linker.util.pushEnum(l, types.Align);
             return 1;
         } else if (std.mem.eql(u8, key, "Justify")) {
-            pushEnum(l, types.Justify);
+            linker.util.pushEnum(l, types.Justify);
             return 1;
         } else {
             // fallback to exising methods
@@ -197,7 +188,8 @@ pub const registerLua = struct {
     }
 
     fn uiSet(l: *zlua.Lua) i32 {
-        _ = l;
+        l.raiseErrorStr("'ui' is read-only", .{});
+        
         return 0;
     }
 
@@ -224,31 +216,6 @@ pub const registerLua = struct {
     fn luaMeasureText(l: *zlua.Lua) i32 {
         _ = l;
         return 0;
-    }
-
-    fn luaTableToStruct(l: *zlua.Lua, idx: i32, comptime T: type, default: T) T {
-        var str: T = default;
-
-        l.checkType(idx, .table);
-        l.pushNil();
-        while (l.next(idx)) {
-            l.checkType(-2, .string);
-            const key = l.toString(-2) catch |e| linker.util.luaErr(l, e, .{ []const u8, -2 });
-
-            var matched = false;
-            inline for (@typeInfo(T).@"struct".fields) |sf| {
-                if (std.mem.eql(u8, key, &linker.util.pascalCase(sf.name))) {
-                    const val = linker.util.parseVal(l, sf.type, -1) catch |e| linker.util.luaErr(l, e, .{});
-                    @field(str, sf.name) = val;
-                    matched = true;
-                }
-            }
-            if (!matched) l.raiseErrorStr("unknown field '%s'", .{ key.ptr });
-
-            l.pop(1);
-        }
-
-        return str;
     }
 
     pub fn registerLua(l: *zlua.Lua) void {
@@ -323,27 +290,27 @@ pub const registerLua = struct {
                 // Types
                 .custom("Padding", struct {
                     fn c(lua: *zlua.Lua) i32 {
-                        PaddingBind.push(lua, luaTableToStruct(lua, 1, types.Padding, .{}));
+                        PaddingBind.push(lua, linker.util.luaTableToStruct(lua, 1, types.Padding, .{}));
                         return 1;
                     }
                 }.c),
                 .custom("CornerRadii", struct {
                     fn c(lua: *zlua.Lua) i32 {
-                        CornerRadiiBind.push(lua, luaTableToStruct(lua, 1, types.CornerRadii, .{}));
+                        CornerRadiiBind.push(lua, linker.util.luaTableToStruct(lua, 1, types.CornerRadii, .{}));
                         return 1;
                     }
                 }.c),
                 .custom("SizeMode", struct {
                     fn c(lua: *zlua.Lua) i32 {
-                        SizeModeBind.push(lua, luaTableToStruct(lua, 1, types.SizeMode, .{}));
+                        SizeModeBind.push(lua, linker.util.luaTableToStruct(lua, 1, types.SizeMode, .{}));
                         return 1;
                     }
                 }.c),
                 .custom("Text", struct {
                     fn c(lua: *zlua.Lua) i32 {
                         // This asset ID isn't actually used for the text, rather we use it below to make sure that a font was given
-                        // without being too intrusive to the luaTableToStruct function.
-                        const str = luaTableToStruct(lua, 1, types.Text, .{ .font = .{ .id = u64_max, .assets = undefined } });
+                        // without being too intrusive to the linker.util.luaTableToStruct function.
+                        const str = linker.util.luaTableToStruct(lua, 1, types.Text, .{ .font = .{ .id = u64_max, .assets = undefined } });
                         if (str.font.id == u64_max) lua.raiseErrorStr("'Font' must be defined when creating 'Text'", .{});
 
                         TextBind.push(lua, str);
@@ -352,7 +319,7 @@ pub const registerLua = struct {
                 }.c),
                 .custom("Crop", struct {
                     fn c(lua: *zlua.Lua) i32 {
-                        const str = luaTableToStruct(lua, 1, types.Crop, .{});
+                        const str = linker.util.luaTableToStruct(lua, 1, types.Crop, .{});
 
                         CropBind.push(lua, str);
                         return 1;
@@ -360,7 +327,7 @@ pub const registerLua = struct {
                 }.c),
                 .custom("Image", struct {
                     fn c(lua: *zlua.Lua) i32 {
-                        const str = luaTableToStruct(lua, 1, types.Image, .{ .source = .{ .id = u64_max, .assets = undefined } });
+                        const str = linker.util.luaTableToStruct(lua, 1, types.Image, .{ .source = .{ .id = u64_max, .assets = undefined } });
                         if (str.source.id == u64_max) lua.raiseErrorStr("'Source' must be defined when creating 'Image'", .{});
 
                         ImageBind.push(lua, str);
@@ -369,7 +336,7 @@ pub const registerLua = struct {
                 }.c),
                 .custom("Borders", struct {
                     fn c(lua: *zlua.Lua) i32 {
-                        const str = luaTableToStruct(lua, 1, types.Borders, .{ });
+                        const str = linker.util.luaTableToStruct(lua, 1, types.Borders, .{ });
 
                         BordersBind.push(lua, str);
                         return 1;

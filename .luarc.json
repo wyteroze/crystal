@@ -4,7 +4,7 @@
   "format.enable": true,
   "workspace": {
     "checkThirdParty": false,
-    "maxPreload": 1,
+    "maxPreload": 1001,
     "preloadFileSize": 1
   },
   "diagnostics": {

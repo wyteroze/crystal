@@ -255,3 +255,37 @@ pub fn autoPush(l: *Lua, comptime func: anytype) void {
         }
     }.c));
 }
+
+pub fn pushEnum(l: *zlua.Lua, comptime T: type) void {
+    l.newTable();
+
+    inline for (std.meta.fields(T)) |f| {
+        const pascalName: [:0]const u8 = pascalCase(f.name) ++ "";
+        _ = l.pushStringZ(pascalName); l.setField(-2, pascalName);
+    }
+}
+
+pub fn luaTableToStruct(l: *zlua.Lua, idx: i32, comptime T: type, default: T) T {
+    var str: T = default;
+
+    l.checkType(idx, .table);
+    l.pushNil();
+    while (l.next(idx)) {
+        l.checkType(-2, .string);
+        const key = l.toString(-2) catch |e| luaErr(l, e, .{ []const u8, -2 });
+
+        var matched = false;
+        inline for (@typeInfo(T).@"struct".fields) |sf| {
+            if (std.mem.eql(u8, key, &pascalCase(sf.name))) {
+                const val = parseVal(l, sf.type, -1) catch |e| luaErr(l, e, .{});
+                @field(str, sf.name) = val;
+                matched = true;
+            }
+        }
+        if (!matched) l.raiseErrorStr("unknown field '%s'", .{ key.ptr });
+
+        l.pop(1);
+    }
+
+    return str;
+}

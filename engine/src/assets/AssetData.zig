@@ -12,6 +12,7 @@ pub const AssetType = enum {
     mesh, 
     image, 
     font,
+    audio,
     script_source,
 
     pub fn uploadable(self: AssetType) bool {
@@ -31,6 +32,7 @@ pub const CpuAssetData = union(AssetType) {
     mesh: types.Mesh,
     image: types.Image,
     font: types.Font,
+    audio: types.AudioStream,
     script_source: types.ScriptSource,
 
     pub fn deinit(self: CpuAssetData, allocator: std.mem.Allocator) void {
@@ -74,6 +76,9 @@ pub const CpuAssetData = union(AssetType) {
             return .{ .font = try importers.font_freetype.importFont(allocator, .{ .bytes = bytes }, .{ }) };
         }
 
+        if (std.mem.eql(u8, ext, ".mp3")) return .{ .audio = try importers.audio_dr.importAudio(allocator, .{ .bytes = bytes }, .{ .format = .mp3 }) };
+        if (std.mem.eql(u8, ext, ".wav")) return .{ .audio = try importers.audio_dr.importAudio(allocator, .{ .bytes = bytes }, .{ .format = .wav }) };
+
         std.log.err("unknown file type '{s}'", .{ ext });
         return error.UnknownFileType;
     }
@@ -85,6 +90,7 @@ pub const GpuAssetData = union(AssetType) {
     font: render.text.FontAtlas,
 
     // Not supported
+    audio: noreturn,
     script_source: noreturn,
 
     pub fn fromCpuData(from: CpuAssetData, name: []const u8, allocator: std.mem.Allocator, gpu_device: *gpu.GpuDevice, upload_ctx: Assets.UploadContext) !GpuAssetData {

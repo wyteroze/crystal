@@ -2,12 +2,11 @@
 
 const std = @import("std");
 const builtin = @import("builtin");
-const objc = @import("objc");
 const sdl3 = @import("sdl3");
 const desc = @import("../desc.zig");
 const types = @import("../types.zig");
 
-const flags: sdl3.InitFlags = .{ .video = true };
+const flags: sdl3.InitFlags = .{ .video = true, .audio = true };
 
 const SdlBackend = @This();
 
@@ -179,6 +178,75 @@ pub fn setCursorVisible(_: SdlBackend, mode: bool) void {
 
 pub fn getCursorVisible(_: SdlBackend) bool {
     return sdl3.mouse.visible();
+}
+
+pub fn openAudioDevice(_: SdlBackend, d: desc.AudioSpec) !types.AudioDeviceHandle {
+    const device = sdl3.audio.Device.default_playback.open(platformAudioSpecToSdlAudioSpec(d)) catch |e| {
+        std.log.err("SDL error: {?s} ({s})", .{ sdl3.errors.get(), @errorName(e) });
+        return e;
+    };
+
+    return .{ .id = device.value };
+}
+
+pub fn closeAudioDevice(_: SdlBackend, h: types.AudioDeviceHandle) void {
+    (sdl3.audio.Device{ .value = h.id }).close();
+}
+
+pub fn audioDeviceCreateStream(
+    _: SdlBackend, 
+    h: types.AudioDeviceHandle, 
+    d: desc.AudioSpec, 
+    comptime Userdata: type, 
+    comptime callback: ?*const fn (?*Userdata, types.AudioStreamHandle, usize, usize) void, 
+    user_data: ?*Userdata
+) !types.AudioStreamHandle {
+    const device = sdl3.audio.Device{ .value = h.id };
+    const stream = try device.openStream(platformAudioSpecToSdlAudioSpec(d), Userdata, struct {
+        fn c(ud: ?*Userdata, str: sdl3.audio.Stream, needed: usize, total: usize) void {
+            callback.?(ud, .{ .handle = str.value }, needed, total);
+        }
+    }.c, user_data);
+
+    return .{ .handle = @ptrCast(stream.value) };
+}
+
+pub fn deinitStream(_: SdlBackend, h: types.AudioStreamHandle) void {
+    (sdl3.audio.Stream{ .value = @ptrCast(h.handle) }).deinit();
+}
+
+pub fn pauseAudioStream(_: SdlBackend, h: types.AudioStreamHandle) void {
+    (sdl3.audio.Stream{ .value = @ptrCast(h.handle) }).pauseDevice() 
+        catch |e| std.log.err("Failed to pause audio stream: {s}", .{ @errorName(e) });
+}
+
+pub fn resumeAudioStream(_: SdlBackend, h: types.AudioStreamHandle) void {
+    (sdl3.audio.Stream{ .value = @ptrCast(h.handle) }).resumeDevice() 
+        catch |e| std.log.err("Failed to resume audio stream: {s}", .{ @errorName(e) });
+}
+
+pub fn setAudioStreamGain(_: SdlBackend, h: types.AudioStreamHandle, gain: f32) void {
+    (sdl3.audio.Stream{ .value = @ptrCast(h.handle) }).setGain(gain) 
+        catch |e| std.log.err("Failed to set audio gain: {s}", .{ @errorName(e) });
+}
+
+pub fn getAudioStreamGain(_: SdlBackend, h: types.AudioStreamHandle) f32 {
+    return (sdl3.audio.Stream{ .value = @ptrCast(h.handle) }).getGain() 
+        catch |e| blk: { std.log.err("Failed to get audio gain: {s}", .{ @errorName(e) }); break :blk 0; };
+}
+
+pub fn putAudioStreamData(_: SdlBackend, h: types.AudioStreamHandle, data: []const u8) !void {
+    try (sdl3.audio.Stream{ .value = @ptrCast(h.handle) }).putData(data);
+}
+
+// Helpers
+
+fn platformAudioSpecToSdlAudioSpec(spec: desc.AudioSpec) sdl3.audio.Spec {
+    return .{
+        .format = switch (spec.format) { .f32_le => .floating_32_bit_little_endian },
+        .sample_rate = @intCast(spec.sample_rate),
+        .num_channels = @intCast(spec.channels)
+    };
 }
 
 const KeyPair = struct { sdl: sdl3.keycode.Keycode, plat: desc.Keycode };

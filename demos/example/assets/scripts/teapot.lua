@@ -6,6 +6,7 @@ local core = require("core")
 local assets = require("assets")
 local input = require("input")
 local ui = require("ui")
+-- local audio = require("audio")
 
 local Teapot = {}
 Teapot.__index = Teapot
@@ -20,24 +21,55 @@ function Teapot.new(entity)
     }, Teapot)
 
     local chickenPng = assets.load("assets://images/chicken.jpg")
+    local jbMono = assets.load("assets://fonts/JetBrains-Mono.ttf")
     entity:AddComponent("Position", core.Vec3.new(0, 0, 5))
     entity:AddComponent("Rotation", core.Vec3.new(0, 0, 0))
     entity:AddComponent("Mesh", assets.load("assets://models/cube.fbx"))
     entity:AddComponent("Image", chickenPng)
 
+    -- local graph = audio.Graph.new()
+    -- local filter = graph:AddNode(audio.GraphNode.LowPassFilter { Cutoff = 800 })
+    -- graph.Input:Connect(filter)
+    -- filter:Connect(graph.Output)
+
+    -- entity:AddComponent("Speaker", audio.Speaker {
+    --     Volume = 1,
+    --     MinDistance = 1,
+    --     MaxDistance = 100,
+    --     Attenuation = audio.Attenuation.InverseSquare,
+    --     -- Graph = graph
+    -- })
+
+    -- local track = entity.Components.Speaker:Play(audioStream)
+    
+    -- track:Play()
+    -- track:Stop()
+    -- track.Played:Connect()
+    -- track.Stopped:Connect()
+    -- track.Looped:Connect()
+    -- track:Destroy()
+
+    local elements = {}
     entity.Events.Updated:Connect(function(dt)
         self._timer = self._timer + dt
         local toAdd = self.Multiplier * dt
         local add = core.Vec3.new(toAdd * 5, toAdd * 10, toAdd * 20)
         
         self._entity.Components.Rotation = self._entity.Components.Rotation + add
+        print(pcall(function (...)
+            elements[1].Components.Text = ui.Text {
+                Font = jbMono,
+                Content = ("The fps is %.2f rn"):format(1/dt),
+                Color = core.Color.new(1, 1, 1, 1),
+                Size = 13
+            }
+        end))
     end)
 
     entity.Events.Destroyed:Connect(function()
         print(("%s is being destroyed!"):format(self._entity.Name))
     end)
     
-    local jbMono = assets.load("assets://fonts/JetBrains-Mono.ttf")
     local mainElement = ui:CreateElement {
         Size = ui.SizeMode { Width = ui.SizeAxis.Fixed(640), Height = ui.SizeAxis.Fixed(360) },
         Color = core.Color.new(1, 0, 1, 0.5),
@@ -56,7 +88,7 @@ function Teapot.new(entity)
             RowGap = 2, ColumnGap = 2,
         }
     }
-
+    
     for i = 1, 5 do
         local child = ui:CreateElement {
             Parent = mainElement,
@@ -67,7 +99,7 @@ function Teapot.new(entity)
             }
         }
 
-        ui:CreateElement {
+        local txt = ui:CreateElement {
             Parent = child,
             Size = ui.SizeMode { Width = ui.SizeAxis.Fill, Height = ui.SizeAxis.Fill },
             Text = ui.Text {
@@ -78,6 +110,8 @@ function Teapot.new(entity)
                 Size = 13
             }
         }
+
+        table.insert(elements, txt)
     end
 
     -- The image is tinted by the element's Color, 

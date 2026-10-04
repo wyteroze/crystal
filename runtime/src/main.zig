@@ -15,6 +15,7 @@ const Scheduler = engine.Scheduler;
 const render = engine.render;
 const Input = engine.Input;
 const Ui = engine.Ui;
+const Audio = engine.Audio;
 
 const target_fps = 120;
 const fps_seconds: f32 = 1.0 / @as(f32, @floatCast(target_fps));
@@ -248,8 +249,51 @@ fn submitToRenderer(w: *ecs.World, ui: *Ui, renderer: *render.Renderer) void {
     renderer.render(requests.items, ui_objects.items) catch |e| std.log.err("render() failed: {s}", .{ @errorName(e) });
 }
 
-fn submitUiToRenderer(w: *ecs.World, _: f32, renderer: *render.Renderer) void {
-    _ = w; _ = renderer;
+fn submitToAudio(w: *ecs.World, audio: *Audio) void {
+    const speaker_id = w.components.id("Speaker").?;
+    const pos_id = w.components.id("Position").?;
+    const rot_id = w.components.id("Rotation").?;
+    const scene_id = w.components.id("Scene").?;
+
+    const camera = blk: {
+        var it = w.query(&.{scene_id}).iterator();
+        break :blk if (it.next()) |e| if (w.getComponent(e, scene_id, Scene)) |s| s.cam else null else null;
+    };
+    const cam_pos: math.Vec3 = if (camera) |c| if (w.getComponent(c, pos_id, math.Vec3)) |p| p.* else .zero else .zero;
+    const cam_rot: math.Vec3 = if (camera) |c| if (w.getComponent(c, rot_id, math.Vec3)) |r| r.* else .zero else .zero;
+    const right = math.Quat.fromEuler(cam_rot.toRadians()).toMat4().transformDirection(.new(1, 0, 0)).normalize();
+    audio.setListener(.{ .position = cam_pos, .right = right });
+
+    var iter = w.query(&.{ speaker_id }).iterator();
+    while (iter.next()) |entity| {
+        const speaker = w.getComponent(entity, speaker_id, Audio.Speaker).?;
+
+        for (speaker.tracks.items) |t| {
+            if (t.voice) |v| {
+                if (!audio.isAlive(v)) {
+                    t.voice = null;
+                    if (!t.loops) t.playing = false;
+                }
+            }
+            
+            const params: Audio.Mixer.Voice.VoiceParams = .{
+                .position = if (w.getComponent(entity, pos_id, math.Vec3)) |p| p.* else null,
+                .volume = t.volume,
+                .pitch = t.pitch,
+                .loops = t.loops,
+            };
+
+            if (t.playing) {
+                if (t.voice) |v| {
+                    audio.setParams(v, params);
+                } else {
+                    std.log.warn("No voice!!", .{});
+                }
+            } else if (t.voice) |v| {
+                if (audio.stop(v)) t.voice = null;
+            }
+        }
+    }
 }
 
 pub fn main(init: std.process.Init) !void {
@@ -331,8 +375,12 @@ pub fn main(init: std.process.Init) !void {
     var world: ecs.World = .init(ecs_allocator.allocator());
     defer world.deinit();
 
+    var audio: Audio = undefined;
+    try audio.init(io, allocator, &platform);
+    defer audio.deinit();
+
     var lua_allocator: core.TrackedAllocator = .init(allocator, "LuaRuntime");
-    var runtime: scripting.Runtime = try .init(lua_allocator.allocator(), &world, &assets, &input, &ui);
+    var runtime: scripting.Runtime = try .init(lua_allocator.allocator(), &world, &assets, &input, &ui, &audio);
     defer runtime.deinit();
     runtime.setGenerational();
     runtime.linkState();
@@ -349,6 +397,8 @@ pub fn main(init: std.process.Init) !void {
     const script_component = try world.registerComponentNative(scripting.Script, "Script", null); // For giving entities behavior
     const light_component = try world.registerComponentNativeShaped(render.types.Light, "Light", null); // For creating sources of illumination
     _ = try world.registerComponentNativeShaped([]const u8, "Name", null); // For naming an entity (we don't use it, but lua does)
+    const listener_component = try world.registerComponentNativeShaped(Audio.types.AudioListener, "AudioListener", null);
+    const speaker_component = try world.registerComponentNative(Audio.Speaker, "Speaker", null);
 
     // Create a scene inside of the world
     const scene = try world.spawnEntity();
@@ -358,6 +408,7 @@ pub fn main(init: std.process.Init) !void {
     try world.addComponent(camera, pos_component, math.Vec3, .new(0, 0, 0));
     try world.addComponent(camera, rot_component, math.Vec3, .new(0, 0, 0));
     try world.addComponent(camera, scale_component, math.Vec3, .new(1, 1, 1));
+    try world.addComponent(camera, listener_component, Audio.types.AudioListener, .{});
 
     // Camera script
     {
@@ -374,6 +425,13 @@ pub fn main(init: std.process.Init) !void {
 
     // Spawn a new entity
     const entity = try world.spawnEntity();
+    try world.addComponent(entity, speaker_component, Audio.Speaker, .{ .audio = &audio });
+    const loaded_audio = try assets.load("assets://audios/Lifestyle - Rich Gang.mp3");
+    var speaker = entity.getComponent(speaker_component, Audio.Speaker).?;
+    defer speaker.deinit();
+
+    const track = try speaker.play(loaded_audio.cpuClone(), .{});
+    defer track.deinit();
 
     const light = try world.spawnEntity();
     try world.addComponent(light, light_component, render.types.Light, .{
@@ -427,11 +485,13 @@ pub fn main(init: std.process.Init) !void {
         const dt_seconds: f32 = @floatCast(@as(f32, @floatFromInt(dt.toNanoseconds())) / std.time.ns_per_s);
         last_time = start;
 
+        audio.tick();
         input.tick();
         platform.poll();
         world.update(dt_seconds);
         ui.update();
         submitToRenderer(&world, &ui, &renderer);
+        submitToAudio(&world, &audio);
 
         const end = std.Io.Clock.awake.now(io);
 

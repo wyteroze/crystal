@@ -16,7 +16,8 @@ const bindings = .{
     @import("../../input/devices/KeyboardDevice.zig"),
     @import("../../input/devices/MouseDevice.zig"),
     @import("../../ui/Ui.zig"),
-    @import("../../core/Color.zig")
+    @import("../../core/Color.zig"),
+    @import("../../audio/Audio.zig"),
 };
 
 pub fn registerAll(l: *Lua) void {

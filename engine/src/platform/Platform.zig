@@ -66,3 +66,46 @@ pub fn setCursorVisible(self: Platform, mode: bool) void {
 pub fn getCursorVisible(self: Platform) bool {
     return switch (self.backend) { inline else => |*b| b.getCursorVisible() };
 }
+
+pub fn openAudioDevice(self: Platform, d: desc.AudioSpec) !types.AudioDeviceHandle {
+    return switch (self.backend) { inline else => |*b| b.openAudioDevice(d) };
+}
+
+pub fn closeAudioDevice(self: Platform, h: types.AudioDeviceHandle) void {
+    return switch (self.backend) { inline else => |*b| b.closeAudioDevice(h) };
+}
+
+pub fn audioDeviceCreateStream(
+    self: Platform, 
+    h: types.AudioDeviceHandle, 
+    d: desc.AudioSpec, 
+    comptime Userdata: type, 
+    comptime callback: ?*const fn (?*Userdata, types.AudioStreamHandle, usize, usize) void, 
+    user_data: ?*Userdata
+) !types.AudioStreamHandle {
+    return switch (self.backend) { inline else => |*b| b.audioDeviceCreateStream(h, d, Userdata, callback, user_data) };
+}
+
+pub fn deinitStream(self: Platform, h: types.AudioStreamHandle) void {
+    switch (self.backend) { inline else => |*b| b.deinitStream(h) }
+}
+
+pub fn pauseAudioStream(self: Platform, h: types.AudioStreamHandle) void {
+    return switch (self.backend) { inline else => |*b| b.pauseAudioStream(h) };
+}
+
+pub fn resumeAudioStream(self: Platform, h: types.AudioStreamHandle) void {
+    return switch (self.backend) { inline else => |*b| b.resumeAudioStream(h) };
+}
+
+pub fn setAudioStreamGain(self: Platform, h: types.AudioStreamHandle, gain: f32) void {
+    switch (self.backend) { inline else => |*b| b.setAudioStreamGain(h, gain) }
+}
+
+pub fn getAudioStreamGain(self: Platform, h: types.AudioStreamHandle) f32 {
+    return switch (self.backend) { inline else => |*b| b.getAudioStreamGain(h) };
+}
+
+pub fn putAudioStreamData(self: Platform, h: types.AudioStreamHandle, data: []const u8) !void {
+    switch (self.backend) { inline else => |*b| try b.putAudioStreamData(h, data) }
+}

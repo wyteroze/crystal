@@ -1,12 +1,12 @@
 // Copyright 2026 wyteroze. Licensed under the Apache-2.0 license.
 
 const std = @import("std");
-pub const Counter = @import("Counter.zig");
-pub const Job = @import("Job.zig");
+const core = @import("../core/core.zig");
 const Fiber = @import("Fiber.zig");
-const Deque = @import("Deque.zig").Deque;
 const Os = @import("../os/Os.zig");
-const MPMCQueue = @import("MPMCQueue.zig").MPMCQueue;
+pub const Counter = @import("Counter.zig");
+pub const Stepper = @import("Stepper.zig");
+pub const Job = @import("Job.zig");
 
 const fiber_pool_size = 512;
 const fiber_stack_size = 64 * 1024; // 64KB
@@ -19,12 +19,12 @@ os: *const Os,
 io: std.Io,
 allocator: std.mem.Allocator,
 fibers: []Fiber,
-free_fibers: MPMCQueue(*Fiber, fiber_pool_size),
-ready_fibers: []Deque(*Fiber),
+free_fibers: core.threading.MPMCQueue(*Fiber, fiber_pool_size),
+ready_fibers: []core.threading.Deque(*Fiber),
 home_fibers: []Fiber,
 workers: []std.Thread,
 // One for each job priority (critical, high, normal, low, background)
-deques: [std.meta.fields(Job.JobPriority).len][]Deque(Job),
+deques: [std.meta.fields(Job.JobPriority).len][]core.threading.Deque(Job),
 running: std.atomic.Value(bool) = .init(true),
 main_worker_id: usize = 0,
 
@@ -48,7 +48,7 @@ pub fn init(self: *Scheduler, allocator: std.mem.Allocator, io: std.Io, os: *con
     const owned_fibers = try fibers.toOwnedSlice(allocator);
     errdefer allocator.free(owned_fibers);
 
-    var free_fibers: MPMCQueue(*Fiber, fiber_pool_size) = .init(io);
+    var free_fibers: core.threading.MPMCQueue(*Fiber, fiber_pool_size) = .init(io);
     for (owned_fibers) |*f| try free_fibers.push(f);
 
     // These represent the thread's existing stack, and only ever hold saved register state.
@@ -58,15 +58,15 @@ pub fn init(self: *Scheduler, allocator: std.mem.Allocator, io: std.Io, os: *con
     home_fibers.appendNTimesAssumeCapacity(.{ .stack = &.{} }, core_count);
     
     // For fibers that have been woken, but not resumed. These are processed before jobs.
-    var ready_fibers: std.ArrayList(Deque(*Fiber)) = try .initCapacity(allocator, core_count);
+    var ready_fibers: std.ArrayList(core.threading.Deque(*Fiber)) = try .initCapacity(allocator, core_count);
     errdefer { for (ready_fibers.items) |*dq| dq.deinit(allocator);  }
     for (0..core_count) |_| ready_fibers.appendAssumeCapacity(try .init(allocator, 4096));
 
-    var deques: [std.meta.fields(Job.JobPriority).len][]Deque(Job) = undefined;
+    var deques: [std.meta.fields(Job.JobPriority).len][]core.threading.Deque(Job) = undefined;
     errdefer { for (deques) |dq| { for (dq) |*d| d.deinit(allocator); allocator.free(dq); } }
 
     for (&deques) |*dq| {
-        var list: std.ArrayList(Deque(Job)) = try .initCapacity(allocator, core_count);
+        var list: std.ArrayList(core.threading.Deque(Job)) = try .initCapacity(allocator, core_count);
         for (0..core_count) |_| try list.append(allocator, try .init(allocator, 4096));
         dq.* = try list.toOwnedSlice(allocator);
     }
@@ -85,8 +85,8 @@ pub fn init(self: *Scheduler, allocator: std.mem.Allocator, io: std.Io, os: *con
     };
 
     for (0..core_count) |i| {
-        const core = topology.cores[i];
-        self.workers[i] = try std.Thread.spawn(.{}, workerMain, .{ self, core });
+        const c = topology.cores[i];
+        self.workers[i] = try .spawn(.{}, workerMain, .{ self, c });
     }
 }
 

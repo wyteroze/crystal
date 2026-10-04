@@ -32,7 +32,11 @@
         .zigimg = .{
             .url = "git+https://github.com/zigimg/zigimg.git#d695acd97c02e57bb151e8f659d1280f5cd6ca70",
             .hash = "zigimg-0.1.0-8_eo2oyaFwBZwJpmqPkCfVXWBrHcqbYwmrp1I6bTD3lI",
-        }
+        },
+        .dr_libs = .{
+            .url = "git+https://github.com/mackron/dr_libs.git#dfe8377631000664666519fdb83da193fd8037f4",
+            .hash = "N-V-__8AAF4wEwDaaKSf7jM1_5eaPrvP9U4s4YPN7WSgNWeX",
+        },
     },
 
     .paths = .{ "build.zig", "build.zig.zon", "src", "vendor" },

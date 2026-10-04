@@ -12,3 +12,4 @@ pub const Scheduler = @import("scheduler/Scheduler.zig");
 pub const render = @import("render/render.zig");
 pub const Input = @import("input/Input.zig");
 pub const Ui = @import("ui/Ui.zig");
+pub const Audio = @import("audio/Audio.zig");

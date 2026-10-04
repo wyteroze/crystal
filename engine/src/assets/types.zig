@@ -65,6 +65,22 @@ pub const Font = struct {
     }
 };
 
+pub const AudioStream = struct {
+    samples: []const f32,
+    sample_rate: u32,
+    channels: u8,
+    duration: f64,
+    streaming: bool,
+
+    pub fn frameCount(self: *const AudioStream) usize {
+        return self.samples.len / self.channels;
+    }
+
+    pub fn deinit(self: *const AudioStream, allocator: std.mem.Allocator) void {
+        allocator.free(self.samples);
+    }
+};
+
 // GPU-specific. Stored in GPU memory
 
 pub const GpuImage = gpu.GpuDevice.GpuImage;

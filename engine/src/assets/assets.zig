@@ -59,7 +59,8 @@ pub const AssetHandle = struct {
         .mesh => types.Mesh,
         .image => types.Image,
         .script_source => types.ScriptSource,
-        .font => types.Font
+        .font => types.Font,
+        .audio => types.AudioStream
     } {
         const data = try self.assets.getCpuData(self.id);
         const a_type = @as(AssetData.AssetType, data);
@@ -72,7 +73,7 @@ pub const AssetHandle = struct {
         .mesh => types.GpuMesh,
         .image => types.GpuImage,
         .font => render.text.FontAtlas,
-        .script_source => unreachable
+        .script_source, .audio => unreachable
     } {
         const data = try self.assets.getGpuData(self.id);
         const a_type = @as(AssetData.AssetType, data);
@@ -86,7 +87,7 @@ pub const AssetHandle = struct {
         .mesh => types.GpuMesh,
         .image => types.GpuImage,
         .font => render.text.FontAtlas,
-        .script_source => unreachable
+        .script_source, .audio => unreachable
     } {
         if (!self.hasGpuData()) try self.upload(upload_ctx);
         return self.gpuGet(asset_type);
@@ -241,19 +242,19 @@ pub fn tick(self: *Assets) usize {
 }
 
 pub fn cpuRef(self: *Assets, id: u64) !void {
-    (self.slots.getPtr(id).?.cpu_data_refcount orelse return error.NoCpuData) += 1;
+    (self.slots.getPtr(id).?.cpu_data_refcount orelse return error.NoCpuData) +|= 1;
 }
 
 pub fn cpuDeref(self: *Assets, id: u64) !void {
-    (self.slots.getPtr(id).?.cpu_data_refcount orelse return error.NoCpuData) -= 1;
+    (self.slots.getPtr(id).?.cpu_data_refcount orelse return error.NoCpuData) -|= 1;
 }
 
 pub fn gpuRef(self: *Assets, id: u64) !void {
-    (self.slots.getPtr(id).?.gpu_data_refcount orelse return error.NoGpuData) += 1;
+    (self.slots.getPtr(id).?.gpu_data_refcount orelse return error.NoGpuData) +|= 1;
 }
 
 pub fn gpuDeref(self: *Assets, id: u64) !void {
-    (self.slots.getPtr(id).?.gpu_data_refcount orelse return error.NoGpuData) += 1;
+    (self.slots.getPtr(id).?.gpu_data_refcount orelse return error.NoGpuData) +|= 1;
 }
 
 pub fn getCpuData(self: *Assets, id: u64) !AssetData.CpuAssetData {
