@@ -30,6 +30,7 @@
         "Lua.workspace.library": [
             "demos/example/asets/scripts"
         ],
+        "Lua.runtime.version": "Lua 5.5",
         "Lua.workspace.checkThirdParty": false,
         "Lua.diagnostics.ignoredFiles": "Disable",
         "search.exclude": {
