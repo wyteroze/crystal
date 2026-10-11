@@ -1,9 +1,12 @@
 [submodule "engine/vendor/DiligentEngine/src"]
 	path = engine/vendor/DiligentEngine/src
 	url = https://github.com/DiligentGraphics/DiligentEngine.git
+	ignore = untracked
 [submodule "engine/vendor/slang/src"]
 	path = engine/vendor/slang/src
 	url = https://github.com/shader-slang/slang.git
+	ignore = untracked
 [submodule "engine/vendor/freetype/src"]
 	path = engine/vendor/freetype/src
 	url = https://gitlab.freedesktop.org/freetype/freetype.git
+	ignore = untracked
