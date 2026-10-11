@@ -13,15 +13,19 @@ pub fn build(b: *std.Build) !void {
         return;
     }
 
-    const root = b.build_root;
-    const src_path = try root.join(b.allocator, &.{ "src" });
-    const build_path = try root.join(b.allocator, &.{ "build" });
+    const src_path = b.path("src");
+    const build_path = b.path("build");
 
     // Building with debug info severely bloats .zig-cache (~1.5gb per build)
     const cmake_build_type = "Release"; _ = optimize; // optimizeModeToCMakeBuildType(optimize);
 
-    const cmake_configure = b.addSystemCommand(&.{ "cmake", "-S", src_path, "-B", build_path, "-G", "Ninja" });
-    cmake_configure.setCwd(.{ .cwd_relative = src_path });
+    const cmake_configure = b.addSystemCommand(&.{ "cmake" });
+    cmake_configure.addArg("-S");
+    cmake_configure.addDirectoryArg(src_path);
+    cmake_configure.addArg("-B");
+    cmake_configure.addDirectoryArg(build_path);
+    cmake_configure.addArgs(&.{ "-G", "Ninja" });
+    cmake_configure.setCwd(src_path);
     const install_out = cmake_configure.addPrefixedOutputDirectoryArg("-DCMAKE_INSTALL_PREFIX=", "install");
 
     cmake_configure.addArgs(&.{
@@ -35,10 +39,16 @@ pub fn build(b: *std.Build) !void {
         boolFlag(b, "FT_DISABLE_HVF", false),
     });
 
-    const cmake_build = b.addSystemCommand(&.{ "cmake", "--build", build_path, "--config", cmake_build_type, "--parallel", b.fmt("{d}", .{ try std.Thread.getCpuCount() }) });
+    const cmake_build = b.addSystemCommand(&.{ "cmake" });
+    cmake_build.addArg("--build");
+    cmake_build.addDirectoryArg(build_path);
+    cmake_build.addArgs(&.{ "--config", cmake_build_type });
+    cmake_build.addArgs(&.{ "--parallel", b.fmt("{d}", .{ try std.Thread.getCpuCount() }) });
     cmake_build.step.dependOn(&cmake_configure.step);
 
-    const cmake_install = b.addSystemCommand(&.{ "cmake", "--install", build_path });
+    const cmake_install = b.addSystemCommand(&.{ "cmake" });
+    cmake_install.addArg("--install");
+    cmake_install.addDirectoryArg(build_path);
     cmake_install.step.dependOn(&cmake_build.step);
 
     const include_path = install_out.path(b, "include/freetype2");

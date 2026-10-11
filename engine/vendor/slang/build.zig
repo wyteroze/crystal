@@ -20,15 +20,19 @@ pub fn build(b: *std.Build) !void {
         return;
     }
 
-    const root = b.build_root;
-    const src_path = try root.join(b.allocator, &.{ "src" });
-    const build_path = try root.join(b.allocator, &.{ "build" });
+    const src_path = b.path("src");
+    const build_path = b.path("build");
 
     // Building with debug info severely bloats .zig-cache (~1.5gb per build)
     const cmake_build_type = "Release"; _ = optimize; // optimizeModeToCMakeBuildType(optimize);
 
-    const cmake_configure = b.addSystemCommand(&.{ "cmake", "-S", src_path, "-B", build_path, "-G", "Ninja" });
-    cmake_configure.setCwd(.{ .cwd_relative = src_path });
+    const cmake_configure = b.addSystemCommand(&.{ "cmake" });
+    cmake_configure.addArg("-S");
+    cmake_configure.addDirectoryArg(src_path);
+    cmake_configure.addArg("-B");
+    cmake_configure.addDirectoryArg(build_path);
+    cmake_configure.addArgs(&.{ "-G", "Ninja" });
+    cmake_configure.setCwd(src_path);
     const install_out = cmake_configure.addPrefixedOutputDirectoryArg("-DCMAKE_INSTALL_PREFIX=", "install");
 
     cmake_configure.addArgs(&.{
@@ -52,10 +56,20 @@ pub fn build(b: *std.Build) !void {
         "-DSLANG_EXCLUDE_TINT=TRUE"
     });
 
-    const cmake_build = b.addSystemCommand(&.{ "cmake", "--build", build_path, "--config", cmake_build_type, "--target", "all", "--target", "slang-glsl-module", "--parallel", b.fmt("{d}", .{try std.Thread.getCpuCount()}) });
+    const cmake_build = b.addSystemCommand(&.{ "cmake" });
+    cmake_build.addArg("--build");
+    cmake_build.addDirectoryArg(build_path);
+    cmake_build.addArgs(&.{ "--config", cmake_build_type });
+    cmake_build.addArgs(&.{ "--target", "all" });
+    cmake_build.addArgs(&.{ "--target", "slang-glsl-module" });
+    cmake_build.addArgs(&.{ "--parallel", b.fmt("{d}", .{ try std.Thread.getCpuCount() }) });
     cmake_build.step.dependOn(&cmake_configure.step);
 
-    const cmake_install = b.addSystemCommand(&.{ "cmake", "--install", build_path, "--config", cmake_build_type, "--component", "Unspecified" });
+    const cmake_install = b.addSystemCommand(&.{ "cmake" });
+    cmake_install.addArg("--install");
+    cmake_install.addDirectoryArg(build_path);
+    cmake_install.addArgs(&.{ "--config", cmake_build_type });
+    cmake_install.addArgs(&.{ "--component", "Unspecified" });
     cmake_install.step.dependOn(&cmake_build.step);
 
     const include_path = install_out.path(b, "include");
@@ -70,10 +84,10 @@ pub fn build(b: *std.Build) !void {
     b.addNamedLazyPath("include", include_path);
     b.addNamedLazyPath("lib", lib_path);
     
-    b.addNamedLazyPath("lib-build", .{ .cwd_relative = try root.join(b.allocator, &.{ "build", "Release", "lib" }) });
-    b.addNamedLazyPath("lib-miniz", .{ .cwd_relative = try root.join(b.allocator, &.{ "build", "external", "miniz", "libminiz.a" }) });
-    b.addNamedLazyPath("lib-cmark", .{ .cwd_relative = try root.join(b.allocator, &.{ "build", "external", "cmark", "src", "libcmark-gfm.a" }) });
-    b.addNamedLazyPath("lib-lz4", .{ .cwd_relative = try root.join(b.allocator, &.{ "build", "external", "lz4", "build", "cmake", "liblz4.a" }) });
+    b.addNamedLazyPath("lib-build", b.path("build/Release/lib/"));
+    b.addNamedLazyPath("lib-miniz", b.path("build/external/miniz/libminiz.a"));
+    b.addNamedLazyPath("lib-cmark", b.path("build/external/cmark/src/libcmark-gfm.a"));
+    b.addNamedLazyPath("lib-lz4", b.path("build/external/lz4/build/cmake/liblz4.a"));
 }
 
 fn optimizeModeToCMakeBuildType(optimize: std.builtin.OptimizeMode) []const u8 {

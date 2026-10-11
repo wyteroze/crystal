@@ -89,8 +89,8 @@ const SdkPaths = struct {
 fn dependencyStep(dependency: *std.Build.Dependency, step_name: []const u8) *std.Build.Step {
     const found = dependency.builder.top_level_steps.get(step_name) orelse {
         std.debug.panic(
-            "dependency '{s}' has no top-level step named '{s}'",
-            .{ dependency.builder.pathFromRoot("build.zig"), step_name }
+            "dependency '{f}' has no top-level step named '{s}'",
+            .{ dependency.builder.path("build.zig"), step_name }
         );
     };
 
@@ -122,14 +122,14 @@ const CompileCommands = struct {
             //  }}
 
             try writer.writeAll("{"); {
-                try writer.print("\"directory\": \"{s}\",", .{ self.b.path(".").getPath(self.b) });
-                try writer.print("\"file\": \"{s}\",", .{ self.file_path.getPath(self.b) });
+                try writer.print("\"directory\": \"{s}\",", .{ self.b.path(".").src_path.sub_path });
+                try writer.print("\"file\": \"{s}\",", .{ self.file_path.src_path.sub_path });
 
                 try writer.writeAll("\"arguments\": ["); {
                     try writer.print("\"{s}\", \"-std={s}\"", .{ self.cmd, self.std });
                     for (self.cxx_args) |a| try writer.print(", \"-D{s}\"", .{ a });
-                    for (self.include_paths) |path| try writer.print(", \"-I{s}\"", .{ path.getPath(self.b) });
-                    try writer.print(", \"-c\", \"{s}\"", .{ self.file_path.getPath(self.b) });
+                    for (self.include_paths) |path| try writer.print(", \"-I{s}\"", .{ path.src_path.sub_path });
+                    try writer.print(", \"-c\", \"{s}\"", .{ self.file_path.src_path.sub_path });
                 } try writer.writeAll("]");
             } try writer.writeAll("}");
         }
@@ -156,6 +156,8 @@ const CompileCommands = struct {
     }
 
     pub fn finalize(self: *CompileCommands) !void {
+        if (self.b.pkg_hash.len != 0) return;
+
         var allocating_writer: std.Io.Writer.Allocating = .init(self.b.allocator);
         const writer = &allocating_writer.writer;
 
@@ -185,9 +187,8 @@ pub fn build(b: *std.Build) !void {
     const backend = b.option(diligent_vendor.Backend, "backend", "Backend to use\n(default: gl)") orelse .gl;
     const skip_cmake = b.option(bool, "skip_cmake", "Skip CMake builds (for ZLS check)") orelse false;
     
-    // Refer to TODO in src/assets/importers/audio_sdl.zig
     const dep_sdl3 = b.dependency("sdl3", .{ .target = target, .optimize = optimize, .ext_mixer = true });
-    const dep_zlua = b.dependency("zlua", .{ .target = target, .optimize = optimize, .lang = .lua55 });
+    const dep_zlua = b.dependency("zlua", .{ .target = target, .optimize = optimize, .lang = .luau });
     const dep_toml = b.dependency("toml", .{ .target = target, .optimize = optimize });
     const dep_zigimg = b.dependency("zigimg", .{ .target = target, .optimize = optimize });
     const dep_translate_c = b.dependency("translate_c", .{});
@@ -268,7 +269,6 @@ pub fn build(b: *std.Build) !void {
             },
         });
 
-        diligent_step.dependOn(compile_commands.step);
         compile_commands.addCommand(.{
             .cmd = "clang++", .std = "c++17",
             .file_path = diligent_glue_cpp_path,
@@ -325,8 +325,6 @@ pub fn build(b: *std.Build) !void {
                 b.path("src/gpu/glue/slang/")
             }
         });
-
-        slang_step.dependOn(compile_commands.step);
 
         if (target.result.os.tag == .macos and sdk != null) {
             sdk.?.applyToTranslator(slang_glue_translate);
