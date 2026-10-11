@@ -19,10 +19,10 @@ pub fn Binding(comptime T: type, comptime is_ref: bool) type {
         pub const ref = is_ref;
 
         pub fn push(l: *Lua, v: Stored) void {
-            const udata = l.newUserdata(Stored, 0);
+            const udata = l.newUserdata(Stored);
             udata.* = v;
 
-            l.setMetatableRegistry(type_name);
+            //l.setMetatableRegistry(type_name);
         }
 
         pub fn checkPtr(l: *Lua, idx: i32) *Stored {

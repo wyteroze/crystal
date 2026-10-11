@@ -65,9 +65,9 @@ pub const CpuAssetData = union(AssetType) {
             return .{ .image = try importers.image_zigimg.importImage(allocator, io, .{ .bytes = bytes }) };
         }
 
-        if (std.mem.eql(u8, ext, ".lua")) {
+        if (std.mem.eql(u8, ext, ".lua") or std.mem.eql(u8, ext, ".luau")) {
             return .{ .script_source = .{ .type = .text, .data = bytes } };
-        } else if (std.mem.eql(u8, ext, ".luac")) {
+        } else if (std.mem.eql(u8, ext, ".luac") or std.mem.eql(u8, ext, ".luauc")) {
             return .{ .script_source = .{ .type = .bytecode, .data = bytes } };
         }
 
@@ -76,8 +76,8 @@ pub const CpuAssetData = union(AssetType) {
             return .{ .font = try importers.font_freetype.importFont(allocator, .{ .bytes = bytes }, .{ }) };
         }
 
-        if (std.mem.eql(u8, ext, ".mp3")) return .{ .audio = try importers.audio_dr.importAudio(allocator, .{ .bytes = bytes }, .{ .format = .mp3 }) };
-        if (std.mem.eql(u8, ext, ".wav")) return .{ .audio = try importers.audio_dr.importAudio(allocator, .{ .bytes = bytes }, .{ .format = .wav }) };
+        if (std.mem.eql(u8, ext, ".mp3")) { defer allocator.free(bytes); return .{ .audio = try importers.audio_dr.importAudio(allocator, .{ .bytes = bytes }, .{ .format = .mp3 }) }; }
+        if (std.mem.eql(u8, ext, ".wav")) { defer allocator.free(bytes); return .{ .audio = try importers.audio_dr.importAudio(allocator, .{ .bytes = bytes }, .{ .format = .wav }) }; }
 
         std.log.err("unknown file type '{s}'", .{ ext });
         return error.UnknownFileType;

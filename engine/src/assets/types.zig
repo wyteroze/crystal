@@ -37,7 +37,7 @@ pub const Image = struct {
 };
 
 pub const ScriptSource = struct {
-    type: enum { text, bytecode, text_or_bytecode },
+    type: enum { text, bytecode },
     data: []const u8,
 
     pub fn deinit(self: *const ScriptSource, allocator: std.mem.Allocator) void {

@@ -155,21 +155,15 @@ fn arrange(
     cache: *MeasureCache, 
     allocator: std.mem.Allocator
 ) void {
-    if (!world.hasComponent(entity, ids.computed_position)) world.addComponent(entity, ids.computed_position, math.Vec2, .zero) catch {};
-    if (!world.hasComponent(entity, ids.computed_size)) world.addComponent(entity, ids.computed_size, math.Vec2, .zero) catch {};
-    entity.setComponent(ids.computed_position, math.Vec2, origin) catch {};
-    entity.setComponent(ids.computed_size, math.Vec2, final) catch {};
+    if (!world.hasComponent(entity, ids.computed_position)) world.set(entity, ids.computed_position, math.Vec2, .zero) catch {};
+    if (!world.hasComponent(entity, ids.computed_size)) world.set(entity, ids.computed_size, math.Vec2, .zero) catch {};
+    world.set(entity, ids.computed_position, math.Vec2, origin) catch {};
+    world.set(entity, ids.computed_size, math.Vec2, final) catch {};
 
     if (entity.getComponent(ids.text, types.Text)) |t| {
         const font = t.font.ensureGpuGet(.font, .{}) catch unreachable;
-        const quads = text.layoutGlyphs(allocator, &font, t.*, origin, final) catch @panic("Out of memory");
-
-        if (entity.getComponent(ids.computed_text_layout, types.ComputedTextLayout)) |computed| {
-            allocator.free(computed.quads);
-            computed.quads = quads;
-        } else {
-            world.addComponent(entity, ids.computed_text_layout, types.ComputedTextLayout, .{ .quads = quads }) catch {};
-        }
+        const quads = text.layoutGlyphs(world.allocator, &font, t.*, origin, final) catch @panic("Out of memory");
+        world.set(entity, ids.computed_text_layout, types.ComputedTextLayout, .{ .quads = quads }) catch {};
     }
 
     const layout = (entity.getComponent(ids.layout, types.Layout) orelse return).*;

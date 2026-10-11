@@ -120,6 +120,9 @@ pub const Quat = extern struct {
     pub const __lua = .val;
 };
 
+const bind = @import("../../scripting/bind/bind.zig");
+pub const api = bind.value(Quat, .{});
+
 pub fn registerLua(l: anytype) void {
     const linker = @import("../../scripting/scripting.zig").linker;
 

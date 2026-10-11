@@ -297,7 +297,10 @@ fn submitToAudio(w: *ecs.World, audio: *Audio) void {
 }
 
 pub fn main(init: std.process.Init) !void {
-    var tracked = core.TrackedAllocator.init(init.gpa, "Overall");
+    var dba: std.heap.DebugAllocator(.{ .stack_trace_frames = 100 }) = .init;
+    defer _ = &dba.detectLeaks();
+
+    var tracked = core.TrackedAllocator.init(dba.allocator(), "Overall");
     const allocator = tracked.allocator();
     const io = init.io;
 
@@ -333,30 +336,24 @@ pub fn main(init: std.process.Init) !void {
 
     var scheduler: Scheduler = undefined;
     try scheduler.init(allocator, io, &os);
-    defer scheduler.deinit();
 
     var platform_allocator: core.TrackedAllocator = .init(allocator, "Platform");
     var platform: Platform = try .init(platform_allocator.allocator(), .initSdl());
-    defer platform.deinit();
 
     var input_allocator: core.TrackedAllocator = .init(allocator, "Input");
     var input: Input = undefined;
     try input.init(input_allocator.allocator(), &platform);
-    defer input.deinit();
 
     const surface = try platform.createSurface(.{ .title = "crystal", .width = 1280, .height = 720, .target = .primary });
-    defer platform.destroySurface(surface);
     const surface_logical_size = try platform.getSurfaceLogicalSize(surface);
     const surface_pixel_size = try platform.getSurfacePixelSize(surface);
     const surface_scale = try platform.getSurfaceScale(surface);
 
     var gpu_allocator: core.TrackedAllocator = .init(allocator, "Gpu");
     var gpu_device: gpu.GpuDevice = try .init(gpu_allocator.allocator(), .initDiligent(surface.handle, surface_pixel_size));
-    defer gpu_device.deinit();
 
     var asset_allocator: core.TrackedAllocator = .init(allocator, "Assets");
     var assets: engine.Assets = try .init(asset_allocator.allocator(), io, &gpu_device, project_path);
-    defer assets.deinit();
     
     // Skybox
     const skybox_cubemap = try assets.load("assets://images/skybox_island.png");
@@ -364,101 +361,107 @@ pub fn main(init: std.process.Init) !void {
 
     var renderer_allocator: core.TrackedAllocator = .init(allocator, "Renderer");
     var renderer: render.Renderer = try .init(renderer_allocator.allocator(), surface_pixel_size, surface_logical_size, surface_scale, &gpu_device, try skybox_cubemap.gpuGet(.image));
-    defer renderer.deinit();
 
     var ui_allocator: core.TrackedAllocator = .init(allocator, "Ui");
     var ui: Ui = try .init(ui_allocator.allocator());
-    defer ui.deinit();
 
     // Create the world
     var ecs_allocator: core.TrackedAllocator = .init(allocator, "ECSWorld");
     var world: ecs.World = .init(ecs_allocator.allocator());
-    defer world.deinit();
 
     var audio: Audio = undefined;
     try audio.init(io, allocator, &platform);
-    defer audio.deinit();
 
     var lua_allocator: core.TrackedAllocator = .init(allocator, "LuaRuntime");
-    var runtime: scripting.Runtime = try .init(lua_allocator.allocator(), &world, &assets, &input, &ui, &audio);
-    defer runtime.deinit();
-    runtime.setGenerational();
-    runtime.linkState();
+    var host: scripting.bind.Host = .{ .world = &world, .assets = &assets, .input = &input, .ui = &ui, .audio = &audio };
+    var runtime: scripting.Runtime = try .init(lua_allocator.allocator(), &host);
 
+    defer { 
+        world.deinit();
+        runtime.deinit();
+        audio.deinit();
+        ui.deinit();
+        renderer.deinit();
+        gpu_device.deinit();
+        assets.deinit();
+        input.deinit();
+        platform.destroySurface(surface);
+        platform.deinit();
+        scheduler.deinit();
+    }
+    
     // Register components
     // TODO: Register these once somewhere, and access them there
     // instead of having to do world.components.id() over and over again.
-    const scene_component = try world.registerComponentNative(Scene, "Scene", null); // For organizing collections of entities
-    _ = try world.registerComponentNativeShaped(engine.Assets.AssetHandle, "Mesh", null); // For giving an entity a mesh appearance
-    _ = try world.registerComponentNativeShaped(engine.Assets.AssetHandle, "Image", null); // For giving an entity an image appearance (or a texture, if it has a mesh)
-    const pos_component = try world.registerComponentNativeShaped(math.Vec3, "Position", null); // For moving entities
-    const rot_component = try world.registerComponentNativeShaped(math.Vec3, "Rotation", null); // For rotating entites (Euler)
-    const scale_component = try world.registerComponentNativeShaped(math.Vec3, "Scale", null); // For scaling entities
-    const script_component = try world.registerComponentNative(scripting.Script, "Script", null); // For giving entities behavior
-    const light_component = try world.registerComponentNativeShaped(render.types.Light, "Light", null); // For creating sources of illumination
-    _ = try world.registerComponentNativeShaped([]const u8, "Name", null); // For naming an entity (we don't use it, but lua does)
-    const listener_component = try world.registerComponentNativeShaped(Audio.types.AudioListener, "AudioListener", null);
-    const speaker_component = try world.registerComponentNative(Audio.Speaker, "Speaker", null);
+    const scene_component = try world.registerComponent(Scene, "Scene"); // For organizing collections of entities
+    _ = try world.registerComponent(engine.Assets.AssetHandle, "Mesh"); // For giving an entity a mesh appearance
+    _ = try world.registerComponent(engine.Assets.AssetHandle, "Image"); // For giving an entity an image appearance (or a texture, if it has a mesh)
+    const pos_component = try world.registerComponent(math.Vec3, "Position"); // For moving entities
+    const rot_component = try world.registerComponent(math.Vec3, "Rotation"); // For rotating entites (Euler)
+    const scale_component = try world.registerComponent(math.Vec3, "Scale"); // For scaling entities
+    const script_component = try world.registerComponent(scripting.Script, "Script"); // For giving entities behavior
+    const light_component = try world.registerComponent(render.types.Light, "Light"); // For creating sources of illumination
+    _ = try world.registerComponent([]const u8, "Name"); // For naming an entity (we don't use it, but lua does)
+    const listener_component = try world.registerComponent(Audio.types.AudioListener, "AudioListener");
+    _ = try world.registerComponent(Audio.Speaker, "Speaker");
 
     // Create a scene inside of the world
     const scene = try world.spawnEntity();
 
     // Make a camera for the scene
     const camera = try world.spawnEntity();
-    try world.addComponent(camera, pos_component, math.Vec3, .new(0, 0, 0));
-    try world.addComponent(camera, rot_component, math.Vec3, .new(0, 0, 0));
-    try world.addComponent(camera, scale_component, math.Vec3, .new(1, 1, 1));
-    try world.addComponent(camera, listener_component, Audio.types.AudioListener, .{});
+    try world.set(camera, pos_component, math.Vec3, .new(0, 0, 0));
+    try world.set(camera, rot_component, math.Vec3, .new(0, 0, 0));
+    try world.set(camera, scale_component, math.Vec3, .new(1, 1, 1));
+    try world.set(camera, listener_component, Audio.types.AudioListener, .{});
 
     // Camera script
     {
-        const source = try assets.load("assets://scripts/camera.lua");
+        const source = try assets.load("assets://scripts/camera.luau");
         defer source.cpuRelease();
         const script = try runtime.loadScript(try source.cpuGet(.script_source));
 
-        try world.addComponent(camera, script_component, scripting.Script, script);
+        try world.set(camera, script_component, scripting.Script, script);
         const stored_script = world.getComponent(camera, script_component, scripting.Script).?;
         try stored_script.instantiate(camera);
     }
 
-    try world.addComponent(scene, scene_component, Scene, .{ .cam = camera });
+    try world.set(scene, scene_component, Scene, .{ .cam = camera });
 
     // Spawn a new entity
     const entity = try world.spawnEntity();
-    try world.addComponent(entity, speaker_component, Audio.Speaker, .{ .audio = &audio });
-    const loaded_audio = try assets.load("assets://audios/Lifestyle - Rich Gang.mp3");
-    var speaker = entity.getComponent(speaker_component, Audio.Speaker).?;
-    defer speaker.deinit();
+    // try world.set(entity, speaker_component, Audio.Speaker, .{ .audio = &audio });
+    // const loaded_audio = try assets.load("assets://audios/Lifestyle - Rich Gang.mp3");
+    // var speaker = entity.getComponent(speaker_component, Audio.Speaker).?;
 
-    const track = try speaker.play(loaded_audio.cpuClone(), .{});
-    defer track.deinit();
+    // _ = try speaker.play(loaded_audio.cpuClone(), .{});
 
     const light = try world.spawnEntity();
-    try world.addComponent(light, light_component, render.types.Light, .{
+    try world.set(light, light_component, render.types.Light, .{
         .color = .fromRgbFloat(1.0, 1.0, 1.0, 1.0),
         .intensity = 5,
         .kind = .{ .point = .{ .radius = 10 } }
     });
-    try world.addComponent(light, pos_component, math.Vec3, .zero);
+    try world.set(light, pos_component, math.Vec3, .zero);
     try light.setParent(scene);
 
     // Parent the component under the scene
     try entity.setParent(scene);
 
     // Add a script to the component
-    const source = try assets.load("assets://scripts/teapot.lua");
+    const source = try assets.load("assets://scripts/teapot.luau");
     defer source.cpuRelease();
     const script = try runtime.loadScript(try source.cpuGet(.script_source));
 
-    try world.addComponent(entity, script_component, scripting.Script, script);
+    try world.set(entity, script_component, scripting.Script, script);
     const stored_script = world.getComponent(entity, script_component, scripting.Script).?;
     try stored_script.instantiate(entity);
 
     // Render at logical size for 3D, while UI renders at pixel size to stay crisp.
     const view_entity = try ui.world.spawnEntity();
-    try ui.world.addComponent(view_entity, ui.component_ids.render_view, Ui.types.RenderViewOptions, .{ .camera = camera, .size = surface_logical_size });
-    try ui.world.addComponent(view_entity, ui.component_ids.position, math.Vec2, .new(0, 0));
-    try ui.world.addComponent(view_entity, ui.component_ids.size, Ui.types.SizeMode, .fixed(@floatFromInt(surface_logical_size[0]), @floatFromInt(surface_logical_size[1])));
+    try ui.world.set(view_entity, ui.component_ids.render_view, Ui.types.RenderViewOptions, .{ .camera = camera, .size = surface_logical_size });
+    try ui.world.set(view_entity, ui.component_ids.position, math.Vec2, .new(0, 0));
+    try ui.world.set(view_entity, ui.component_ids.size, Ui.types.SizeMode, .fixed(@floatFromInt(surface_logical_size[0]), @floatFromInt(surface_logical_size[1])));
     
     var running = true;
 
@@ -512,7 +515,7 @@ pub fn main(init: std.process.Init) !void {
             std.log.info("{f}", .{ ecs_allocator });
             std.log.info("{f}", .{ gpu_allocator });
 
-            std.log.info("[Lua GC]: {f}", .{ core.SizeFormatter.fmtSize( @intCast( runtime.gcCount() * 1024 ) ) });
+            std.log.info("[Lua GC]: {f}", .{core.SizeFormatter.fmtSize( @as(u64, @intCast(runtime.gcCount())) * 1024) });
         }
 
         const frame_time = start.durationTo(end);

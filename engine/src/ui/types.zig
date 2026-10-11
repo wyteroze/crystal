@@ -58,6 +58,7 @@ pub const GridLayout = struct {
     justify: Justify = .start,
 
     pub const __lua = .val;
+    pub const __proxy = true;
     pub fn format(
         self: @This(),
         writer: *std.Io.Writer,
@@ -158,6 +159,7 @@ pub const Padding = struct {
     }
 
     pub const __lua = .val;
+    pub const __proxy = true;
     pub fn format(
         self: @This(),
         writer: *std.Io.Writer,
@@ -176,6 +178,7 @@ pub const CornerRadii = struct {
     bottom_right: f32 = 0,
 
     pub const __lua = .val;
+    pub const __proxy = true;
     pub fn format(
         self: @This(),
         writer: *std.Io.Writer,
@@ -195,6 +198,7 @@ pub const GenericLayout = struct {
     justify: Justify = .start,
 
     pub const __lua = .val;
+    pub const __proxy = true;
     pub fn format(
         self: @This(),
         writer: *std.Io.Writer,
@@ -231,6 +235,7 @@ pub const SizeMode = struct {
     }
 
     pub const __lua = .val;
+    pub const __proxy = true;
     pub fn format(
         self: @This(),
         writer: *std.Io.Writer,
@@ -250,6 +255,7 @@ pub const Borders = struct {
     right: f32 = 0,
 
     pub const __lua = .val;
+    pub const __proxy = true;
     pub fn format(
         self: @This(),
         writer: *std.Io.Writer,
@@ -281,6 +287,7 @@ pub const Text = struct {
     }
 
     pub const __lua = .val;
+    pub const __proxy = true;
 };
 
 pub const Crop = struct {
@@ -288,6 +295,7 @@ pub const Crop = struct {
     max: math.Vec2 = .one,
 
     pub const __lua = .val;
+    pub const __proxy = true;
     pub fn format(
         self: @This(),
         writer: *std.Io.Writer,
@@ -301,4 +309,5 @@ pub const Image = struct {
     crop: Crop = .{},
 
     pub const __lua = .val;
+    pub const __proxy = true;
 };

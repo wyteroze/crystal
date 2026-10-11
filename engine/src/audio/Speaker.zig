@@ -28,3 +28,5 @@ pub fn deinit(self: *Speaker) void {
     }
     self.tracks.deinit(self.audio.allocator);
 }
+
+pub const __lua = .val;

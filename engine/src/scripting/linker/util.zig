@@ -42,11 +42,12 @@ pub fn pascalCase(comptime name: []const u8) [countPascalLen(name)]u8 {
 
 pub fn snakeCaseFromPascal(comptime E: type, pascal: []const u8) ?E {
     @setEvalBranchQuota(100_000);
-
-    inline for (std.meta.fields(E)) |field| {
-        const pascal_name = comptime &pascalCase(field.name);
+    
+    const info = @typeInfo(E).@"enum";
+    inline for (info.field_names, 0..) |nm, i| {
+        const pascal_name = comptime &pascalCase(nm);
         if (std.mem.eql(u8, pascal, pascal_name)) {
-            return @enumFromInt(field.value);
+            return @fromBackingInt(info.field_values[i]);
         }
     }
 

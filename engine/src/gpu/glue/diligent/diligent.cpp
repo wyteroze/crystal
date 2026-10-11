@@ -57,6 +57,7 @@ struct CrystalDiligentPipeline {
     IPipelineState* pso;
     IShaderResourceBinding* srb;
     VALUE_TYPE index_type;
+    bool has_index_buffer = false;
 };
 
 struct CrystalDiligentComputePipeline {
@@ -536,15 +537,24 @@ void diligent_apply_pipeline(CrystalDiligentDeviceHandle handle, CrystalPipeline
 void diligent_draw_pipeline(CrystalDiligentDeviceHandle handle, CrystalShaderHandle pipeH, uint32_t base, uint32_t count, uint32_t instances) {
     auto pipeline = static_cast<CrystalDiligentPipeline*>(pipeH.ptr);
 
-    DrawIndexedAttribs drawAttrs;
+    if (pipeline->has_index_buffer) {
+        DrawIndexedAttribs drawAttrs;
+        
+        drawAttrs.IndexType = pipeline->index_type;
+        drawAttrs.NumIndices = count;
+        drawAttrs.FirstIndexLocation = base;
+        drawAttrs.NumInstances = instances;
+        drawAttrs.Flags = DRAW_FLAG_VERIFY_ALL;
     
-    drawAttrs.IndexType = pipeline->index_type;
-    drawAttrs.NumIndices = count;
-    drawAttrs.FirstIndexLocation = base;
-    drawAttrs.NumInstances = instances;
-    drawAttrs.Flags = DRAW_FLAG_VERIFY_ALL;
-
-    handle->context->DrawIndexed(drawAttrs);
+        handle->context->DrawIndexed(drawAttrs);
+    } else {
+        DrawAttribs drawAttrs;
+        drawAttrs.NumVertices = count;
+        drawAttrs.StartVertexLocation = base;
+        drawAttrs.NumInstances = instances;
+        drawAttrs.Flags = DRAW_FLAG_VERIFY_ALL;
+        handle->context->Draw(drawAttrs);
+    }
 }
 
 void diligent_pipeline_apply_bindings(CrystalDiligentDeviceHandle handle, CrystalPipelineHandle pipeH, CrystalBindings bindings) {
@@ -564,8 +574,9 @@ void diligent_pipeline_apply_bindings(CrystalDiligentDeviceHandle handle, Crysta
 
     if (bindings.index_buffer.ptr != nullptr) {
         handle->context->SetIndexBuffer(reinterpret_cast<IBuffer*>(bindings.index_buffer.ptr), 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        pipeline->has_index_buffer = true;
     }
-
+    
     for (size_t i = 0; i < bindings.resources_len; i++) {
         const auto& res = bindings.resources[i];
 

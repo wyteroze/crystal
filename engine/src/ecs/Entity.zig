@@ -5,6 +5,7 @@ const core = @import("../core/core.zig");
 const signal = core.signal;
 const World = @import("World.zig");
 const ComponentId = @import("ComponentId.zig");
+const Codec = @import("Codec.zig");
 
 const Entity = @This();
 world: *World,
@@ -33,10 +34,6 @@ pub fn isAlive(self: Entity) bool {
     return self.world.isEntityAlive(self);
 }
 
-pub fn setComponent(self: Entity, id: ComponentId, comptime T: type, val: T) !void {
-    if (self.world.getComponent(self, id, T)) |c| c.* = val else return error.UnknownComponent;
-}
-
 pub fn hasComponent(self: Entity, name: []const u8) bool {
     const comp_id = self.world.components.id(name) orelse return false;
     return self.world.hasComponent(self, comp_id);
@@ -50,45 +47,6 @@ pub fn removeComponent(self: Entity, name: []const u8) void {
 /// Memory is owned by the caller!!!
 pub fn getComponents(self: Entity) ![]ComponentId {
     return try self.world.getComponents(self);
-}
-
-pub fn addComponentField(self: Entity, comp_name: []const u8, bytes: []u8) !void {
-    const comp_id = self.world.components.id(comp_name) orelse return error.UnknownComponent;
-    if (self.world.hasComponent(self, comp_id)) return error.AlreadyHasComponent;
-
-    const info = self.world.components.info(comp_id);
-    if (info.fields.len != 1) return error.MultiFieldUnsupported;
-
-    var storage_bytes: [64]u8 = std.mem.zeroes([64]u8);
-    @memcpy(storage_bytes[info.fields[0].offset..][0..bytes.len], bytes);
-
-    try self.world.addComponentBytes(self, comp_id, storage_bytes[0..info.size]);
-}
-
-pub fn setComponentField(self: Entity, comp_name: []const u8, bytes: []const u8) !void {
-    const comp_id = self.world.components.id(comp_name) orelse return error.UnknownComponent;
-    if (!self.world.hasComponent(self, comp_id)) return error.NoSuchComponent;
-
-    const info = self.world.components.info(comp_id);
-    if (info.fields.len != 1) return error.MultiFieldUnsupported;
-
-    const field = info.fields[0];
-    const storage = self.world.getComponentRaw(self, comp_id) orelse return error.NoSuchComponent;
-    const region = storage[field.offset..][0..field.totalSize()];
-
-    if (field.type.free) |free_fn| free_fn(self.world.allocator, region);
-    @memcpy(region, bytes);
-}
-
-pub fn getComponentFieldBytes(self: Entity, comp_name: []const u8) !?[]u8 {
-    const comp_id = self.world.components.id(comp_name) orelse return error.UnknownComponent;
-    const info = self.world.components.info(comp_id);
-    if (info.fields.len != 1) return error.MultiFieldUnsupported;
-
-    const storage = self.world.getComponentRaw(self, comp_id) orelse return null;
-    const field = info.fields[0];
-
-    return storage[field.offset..][0..field.totalSize()];
 }
 
 pub fn getParent(self: Entity) ?Entity {
@@ -112,8 +70,10 @@ pub fn getComponent(self: Entity, id: ComponentId, comptime T: type) ?*T {
 }
 
 pub fn getName(self: Entity) ?[]const u8 {
-    const name_component = self.getComponent(self.world.components.id("Name").?, []const u8) orelse return null;
-    return name_component;
+    const id = self.world.components.id("Name") orelse return null;
+    const c = self.world.getComponent(self, id, []const u8) orelse return null;
+
+    return c.*;
 }
 
 // this is so messy man.. TODO: make it better
@@ -140,6 +100,45 @@ pub const luaBinding = struct {
     const EntityBind = linker.Binding(Entity, false);
     const ChildrenSlidingWindowBind = linker.Binding(ChildrenSlidingWindow, true);
     const ComponentsSlidingWindowBind = linker.Binding(ComponentsSlidingWindow, true);
+    const RefBind = linker.Binding(ComponentRef, false);
+
+    const ComponentRef = struct {
+        entity: Entity,
+        id: ComponentId,
+        
+        pub const __lua = .val;
+        pub fn format(self: @This(), writer: *std.Io.Writer) std.Io.Writer.Error!void {
+            try writer.print("ComponentRef{{ {f}, {d} }}", .{ self.entity, self.id.value });
+        }
+    };
+
+    fn refGet(l: *zlua.Lua) i32 {
+        const r = RefBind.check(l, 1);
+        const key = l.checkString(2);
+
+        r.entity.world.pushFieldToLua(r.entity, r.id, key, l) catch |e| raiseForComponentErr(l, e, key);
+        return 1;
+    }
+
+    fn refSet(l: *zlua.Lua) i32 {
+        const r = RefBind.check(l, 1);
+        const key = l.checkString(2);
+
+        r.entity.world.setFieldFromLua(r.entity, r.id, key, l, 3) catch |e| raiseForComponentErr(l, e, key);
+        return 0;
+    }
+
+    fn pushComponent(l: *zlua.Lua, entity: Entity, name: [:0]const u8) void {
+        const w = entity.world;
+        const id = w.components.id(name) orelse raiseForComponentErr(l, error.UnknownComponent, name);
+        if (!w.hasComponent(entity, id)) return l.pushNil();
+
+        if (w.components.info(id).isProxy()) {
+            RefBind.push(l, .{ .entity = entity, .id = id });
+        } else {
+            w.pushToLua(entity, name, l) catch |e| raiseForComponentErr(l, e, name);
+        }
+    }
 
     pub fn applyComponentTable(
         lua: *zlua.Lua,
@@ -166,23 +165,7 @@ pub const luaBinding = struct {
                 }
             }
 
-            const id = world.components.id(key) orelse lua.raiseErrorStr("unknown component '%s'", .{key.ptr});
-            const info = world.components.info(id);
-            // If you're getting this error, you may be forgetting to add your newly-added type to `World.field_types`,
-            // or didn't register the type using `registerComponentNativeShaped`.
-            if (info.fields.len != 1) lua.raiseErrorStr("multi-field components not yet supported", .{});
-
-            const field = info.fields[0];
-            var bytes: [64]u8 align(16) = undefined;
-            std.debug.assert(field.type.alignment <= 16);
-            std.debug.assert(field.type.size <= bytes.len);
-
-            field.type.read(world.allocator, lua, -1, bytes[0..field.type.size]) catch |e| raiseForComponentErr(lua, e, key);
-            if (ensure and !entity.hasComponent(info.name)) {
-                entity.addComponentField(info.name, bytes[0..field.type.size]) catch |e| raiseForComponentErr(lua, e, key);
-            } else {
-                entity.setComponentField(key, bytes[0..field.type.size]) catch |e| raiseForComponentErr(lua, e, key);
-            }
+            world.setFromLua(entity, key, lua, -1, if (ensure) .upsert else .set) catch |e| raiseForComponentErr(lua, e, key);
             lua.pop(1);
         }
     }
@@ -230,14 +213,10 @@ pub const luaBinding = struct {
             } else if (l.typeOf(2) == .string) {
                 const name = l.toString(2) catch unreachable;
                 for (self.entity.getChildren()) |c| {
-                    if (!c.hasComponent("Name")) continue;
-                    const name_component_id = c.world.components.id("Name").?;
-                    const entity_name = c.getComponent(name_component_id, []const u8).?;
-
-                    if (std.mem.eql(u8, entity_name.*, name[0..name.len])) {
+                    if (c.getName()) |n| if (std.mem.eql(u8, n, name[0..name.len])) {
                         EntityBind.push(l, c);
                         return 1;
-                    }
+                    };
                 }
 
                 l.pushNil();
@@ -266,48 +245,36 @@ pub const luaBinding = struct {
             try writer.print("ComponentsSlidingWindow {x}", .{ @intFromPtr(&self) });
         }
 
-        // These `set` and `get` metamethods are identical to luaSetComponent and luaGetComponent,
-        // except they use a ComponentsSlidingWindowBind instead of a EntityBind for the `self` type
         pub fn set(l: *zlua.Lua) i32 {
             const self = ComponentsSlidingWindowBind.check(l, 1);
-            const name = l.toString(2)  catch |e| linker.util.luaErr(l, e, .{ []const u8, 2 });
-            const id = self.entity.world.components.id(name) orelse l.raiseErrorStr("unknown component '%s'", .{ name.ptr });
-            const info = self.entity.world.components.info(id);
-            if (info.fields.len != 1) l.raiseErrorStr("multi-field components not yet supported", .{});
-
-            const field = info.fields[0];
-            var bytes: [64]u8 = undefined;
-
-            field.type.read(self.entity.world.allocator, l, 3, bytes[0..field.type.size]) catch |e| raiseForComponentErr(l, e, name);
-            self.entity.setComponentField(name, bytes[0..field.type.size]) catch |e| raiseForComponentErr(l, e, name);
+            const name = l.checkString(2);
+            
+            self.entity.world.setFromLua(self.entity, name, l, 3, .upsert) catch |e| raiseForComponentErr(l, e, name);
             return 0;
         }
 
         pub fn get(l: *zlua.Lua) i32 {
             const self = ComponentsSlidingWindowBind.check(l, 1);
-            const name = l.toString(2)  catch |e| linker.util.luaErr(l, e, .{ []const u8, 2 });
-            const id = self.entity.world.components.id(name) orelse l.raiseErrorStr("unknown component '%s'", .{ name.ptr });
-            const info = self.entity.world.components.info(id);
+            const name = l.checkString(2);
 
-            const bytes = self.entity.getComponentFieldBytes(name) catch |e| raiseForComponentErr(l, e, name);
-            const b = bytes orelse {
-                l.pushNil();
-                return 1;
-            };
-            
-            info.fields[0].type.write(l, b);
+            self.entity.world.pushToLua(self.entity, name, l) catch |e| raiseForComponentErr(l, e, name);
             return 1;
         }
     };
 
-    fn raiseForComponentErr(lua: *zlua.Lua, err: anyerror, comp_name: [:0]const u8) noreturn {
+    pub fn raiseForComponentErr(lua: *zlua.Lua, err: anyerror, comp_name: [:0]const u8) noreturn {
         switch (err) {
-            error.UnknownComponent => lua.raiseErrorStr("unknown component '%s'", .{ comp_name.ptr }),
-            error.AlreadyHasComponent => lua.raiseErrorStr("entity already has component '%s'", .{ comp_name.ptr }),
-            error.NoSuchComponent => lua.raiseErrorStr("entity has no component '%s'", .{ comp_name.ptr }),
-            error.MultiFieldUnsupported => lua.raiseErrorStr("multi-field components not yet supported for '%s'", .{ comp_name.ptr }),
-            error.NoLuaShape => lua.raiseErrorStr("component '%s' has no lua type layout", .{ comp_name.ptr }),
-            error.OutOfMemory => lua.raiseErrorStr("out of memory", .{}),
+            error.UnknownComponent => lua.raiseErrorStr("Unknown component '%s'", .{ comp_name.ptr }),
+            error.AlreadyHasComponent => lua.raiseErrorStr("Entity already has component '%s'", .{ comp_name.ptr }),
+            error.NoSuchComponent => lua.raiseErrorStr("Entity has no component '%s'", .{ comp_name.ptr }),
+            error.UnknownField => lua.raiseErrorStr("Unknown field '%s'", .{ Codec.bad_field.get().ptr }),
+            error.MissingField => lua.raiseErrorStr("Missing required field '%s'", .{ Codec.bad_field.get().ptr }),
+            error.DeadEntity => lua.raiseErrorStr("Entity is dead", .{}),
+            error.ComponentTypeMismatch => lua.raiseErrorStr("Component type mismatch", .{}),
+            error.NonStringKey => lua.raiseErrorStr("Component table keys must be strings", .{}),
+            error.ExpectedTable => lua.raiseErrorStr("Expected a table for component '%s'", .{ comp_name.ptr }),
+
+            error.OutOfMemory => std.debug.panic("Out of memory", .{}),
             else => lua.raiseErrorStr("%s", .{ @errorName(err).ptr }),
         }
         unreachable;
@@ -315,30 +282,17 @@ pub const luaBinding = struct {
 
     fn luaAddComponent(lua: *zlua.Lua) i32 {
         const self = EntityBind.check(lua, 1);
-        const comp_name = lua.checkString(2);
-        const comp_id = self.world.components.id(comp_name) orelse lua.raiseErrorStr("unknown component '%s'", .{comp_name.ptr});
-        const info = self.world.components.info(comp_id);
-        if (info.fields.len != 1) lua.raiseErrorStr("multi-field components not yet supported", .{});
+        const name = lua.checkString(2);
+        self.world.setFromLua(self, name, lua, 3, .add) catch |e| raiseForComponentErr(lua, e, name);
 
-        const field = info.fields[0];
-        var bytes: [64]u8 = undefined;
-        field.type.read(self.world.allocator, lua, 3, bytes[0..field.type.size]) catch |e| raiseForComponentErr(lua, e, comp_name);
-        self.addComponentField(comp_name, bytes[0..field.type.size]) catch |e| raiseForComponentErr(lua, e, comp_name);
         return 0;
     }
 
     fn luaSetComponent(lua: *zlua.Lua) i32 {
         const self = EntityBind.check(lua, 1);
-        const comp_name = lua.checkString(2);
-        const comp_id = self.world.components.id(comp_name) orelse lua.raiseErrorStr("unknown component '%s'", .{comp_name.ptr});
-        const info = self.world.components.info(comp_id);
-        if (info.fields.len != 1) lua.raiseErrorStr("multi-field components not yet supported", .{});
+        const name = lua.checkString(2);
+        self.world.setFromLua(self, name, lua, 3, .set) catch |e| raiseForComponentErr(lua, e, name);
 
-        const field = info.fields[0];
-        var bytes: [64]u8 = undefined;
-
-        field.type.read(self.world.allocator, lua, 3, bytes[0..field.type.size]) catch |e| raiseForComponentErr(lua, e, comp_name);
-        self.setComponentField(comp_name, bytes[0..field.type.size]) catch |e| raiseForComponentErr(lua, e, comp_name);
         return 0;
     }
 
@@ -352,18 +306,9 @@ pub const luaBinding = struct {
 
     fn luaGetComponent(lua: *zlua.Lua) i32 {
         const self = EntityBind.check(lua, 1);
-        const comp_name = lua.checkString(2);
-        const comp_id = self.world.components.id(comp_name) orelse lua.raiseErrorStr("unknown component '%s'", .{comp_name.ptr});
-        const info = self.world.components.info(comp_id);
-        if (info.fields.len != 1) lua.raiseErrorStr("multi-field components not yet supported", .{});
+        const name = lua.checkString(2);
+        self.world.pushToLua(self, name, lua) catch |e| raiseForComponentErr(lua, e, name);
 
-        const bytes = self.getComponentFieldBytes(comp_name) catch |e| raiseForComponentErr(lua, e, comp_name);
-        const b = bytes orelse {
-            lua.pushNil();
-            return 1;
-        };
-        
-        info.fields[0].type.write(lua, b);
         return 1;
     }
 
@@ -457,6 +402,12 @@ pub const luaBinding = struct {
         linker.signal(l, signal.Signal(.{ f32 }));
         // Destroyed
         linker.signal(l, signal.Signal(.{}));
+
+        linker.reference(l, ComponentRef, .{
+            .name = .auto,
+            .scope = .{ .module = "ecs.entity" },
+            .properties = .luaCustom(refGet, refSet),
+        });
         
         linker.reference(l, ChildrenSlidingWindow, .{
             .name = .auto,

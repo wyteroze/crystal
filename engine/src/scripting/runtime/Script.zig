@@ -3,7 +3,7 @@
 const std = @import("std");
 const zlua = @import("zlua");
 const ecs = @import("../../ecs/ecs.zig");
-const linker = @import("../linker/linker.zig");
+const bind = @import("../bind/bind.zig");
 const types = @import("../../assets/types.zig");
 const Lua = zlua.Lua;
 
@@ -12,21 +12,38 @@ source: types.ScriptSource,
 state: *Lua,
 ref: i32,
 instance_ref: ?i32 = null,
+binder: bind.Binder(bind.api),
 
-pub fn init(state: *Lua, source: types.ScriptSource) !Script {
-    // sentinel terminate the source data
-    const data_z = try state.allocator().dupeSentinel(u8, source.data, 0);
-    defer state.allocator().free(data_z);
+pub fn init(state: *Lua, source: types.ScriptSource, binder: bind.Binder(bind.api)) !Script {
+    // compile and run script
+    const bytecode = switch (source.type) {
+        .text => try zlua.compile(state.allocator(), source.data, .{}),
+        .bytecode => source.data
+    };
+    defer if (source.type == .text) state.allocator().free(bytecode);
 
-    // load and run sentinel terminated string
-    try state.loadString(data_z);
-    state.protectedCall(.{ .args = 0, .results = 1 }) catch {};
 
-    const ref = state.ref(zlua.registry_index);
+    if (bytecode.len > 0 and bytecode[0] == 0) {
+        std.log.err("Script compilation failed: {s}", .{ bytecode[1..] });
+        return error.ScriptCompilationFailed;
+    }
+
+    try state.loadBytecode("Script", bytecode);
+    state.protectedCall(.{ .args = 0, .results = 1 }) catch {
+        std.log.err("Failed to initialize script: {s}", .{ state.toString(-1) catch unreachable });
+        state.pop(1);
+
+        return error.ScriptInitFailed;
+    };
+
+    const ref = state.ref(-1);
+    state.pop(1);
+
     return .{
         .source = source,
         .state = state,
-        .ref = ref
+        .ref = ref,
+        .binder = binder
     };
 }
 
@@ -38,7 +55,7 @@ pub fn callFunction(self: *const Script, name: [:0]const u8, comptime ResultType
     _ = self.state.getGlobal(name) catch return error.UnknownFunction;
 
     inline for (args) |a| {
-        linker.util.pushVal(self.state, @TypeOf(a), a);
+        self.binder.pushValue(a);
     }
 
     self.state.protectedCall(.{ .args = args.len, .results = ResultTypes.len, .msg_handler = handler_idx }) catch self.luaErr();
@@ -46,7 +63,7 @@ pub fn callFunction(self: *const Script, name: [:0]const u8, comptime ResultType
     var results: @Tuple(ResultTypes) = undefined;
     inline for (ResultTypes, 0..) |R, i| {
         const idx = top + 1 + 1 + @as(i32, @intCast(i));
-        results[i] = try linker.util.parseVal(self.state, R, idx);
+        results[i] = self.binder.parseValue(R, idx);
     }
 
     return results;
@@ -67,7 +84,7 @@ pub fn callMethod(self: *const Script, name: [:0]const u8, comptime ResultTypes:
     self.state.remove(-3);
 
     inline for (args) |a| {
-        linker.util.pushVal(self.state, @TypeOf(a), a);
+        self.binder.pushValue(a);
     }
 
     self.state.protectedCall(.{ .args = args.len+1, .results = ResultTypes.len, .msg_handler = handler_idx }) catch self.luaErr();
@@ -75,14 +92,17 @@ pub fn callMethod(self: *const Script, name: [:0]const u8, comptime ResultTypes:
     var results: @Tuple(ResultTypes) = undefined;
     inline for (ResultTypes, 0..) |R, i| {
         const idx = top + 1 + 1 + @as(i32, @intCast(i));
-        results[i] = try linker.util.parseVal(self.state, R, idx);
+        results[i] = self.binder.parseValue(R, idx);
     }
 
     return results;
 }
 
 /// Param is the first value passed to the .new function.
-pub fn instantiate(self: *Script, param: anytype) !void {
+pub fn instantiate(self: *Script, _: anytype) !void {
+    // Calling .ref() on a nil value returns 0, so if we get that, it means
+    // no instance table was returned by the script.
+    if (self.ref == 0) return error.NoInstanceTable;
     const top = self.state.getTop();
     defer self.state.setTop(top);
 
@@ -91,14 +111,13 @@ pub fn instantiate(self: *Script, param: anytype) !void {
     _ = self.state.getField(-1, "new");
     self.state.remove(-2);
 
-    linker.util.pushVal(self.state, @TypeOf(param), param);
     self.state.protectedCall(.{ .args = 1, .results = 1, .msg_handler = handler_idx }) catch self.luaErr(); 
 
-    self.instance_ref = self.state.ref(zlua.registry_index);
+    self.instance_ref = self.state.ref(-1);
 }
 
 pub fn deinit(self: *const Script) void {
-    self.state.unref(zlua.registry_index, self.ref);
+    self.state.unref(self.ref);
 }
 
 fn pushMsgHandler(self: *const Script) i32 {
@@ -108,7 +127,7 @@ fn pushMsgHandler(self: *const Script) i32 {
             l.traceback(l, msg, 1);
             return 1;
         }
-    }.c));
+    }.c), "msgHandler");
     return self.state.getTop();
 }
 

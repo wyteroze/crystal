@@ -190,6 +190,9 @@ pub const Mat4 = extern struct {
     pub const __lua = .val;
 };
 
+const bind = @import("../../scripting/bind/bind.zig");
+pub const api = bind.value(Mat4, .{});
+
 pub fn registerLua(l: anytype) void {
     const linker = @import("../../scripting/scripting.zig").linker;
 

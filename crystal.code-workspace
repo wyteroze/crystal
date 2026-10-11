@@ -20,25 +20,35 @@
             "-I./engine/src/gpu/glue/diligent",
             "-I./engine/src/gpu/glue/slang"
         ],
-        "Lua.workspace.ignoreDir": [
+        "Lua.workspace.library": [
+            "demos/example/asets/scripts"
+        ],
+        "luau-lsp.platform.type": "standard",
+        "luau-lsp.completion.imports.useConst": true,
+        "luau-lsp.sourcemap.enabled": false,
+        "luau-lsp.types.definitionFiles": { "@types": "./api/types.d.luau" },
+        "luau-lsp.ignoreGlobs": [
             "**/vendor",
             "**/.clangd-db",
             "**/.zig-cache",
             "**/zig-pkg",
             "**/*.code-search"
         ],
-        "Lua.workspace.library": [
-            "demos/example/asets/scripts"
+        "luau-lsp.completion.imports.ignoreGlobs": [
+            "**/vendor",
+            "**/.clangd-db",
+            "**/.zig-cache",
+            "**/zig-pkg",
+            "**/*.code-search",
+            "./api"
         ],
-        "Lua.runtime.version": "Lua 5.5",
-        "Lua.workspace.checkThirdParty": false,
-        "Lua.diagnostics.ignoredFiles": "Disable",
         "search.exclude": {
             "**/vendor": true,
             "**/.clangd-db": true,
             "**/.zig-cache": true,
             "**/zig-pkg": true,
             "**/*.code-search": true
-        }
+        },
+        "stylua.targetReleaseVersion": "latest"
 	}
 }

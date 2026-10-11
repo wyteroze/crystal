@@ -55,9 +55,9 @@ pub fn execute(self: *DepthPrepassPass, ctx: pass.PassContext) void {
 
     for (ctx.scene.objects) |obj| {
         const vs_params: [3][4][4]f32 = .{
-            @bitCast(obj.model),
-            @bitCast(ctx.view.view_matrix),
-            @bitCast(ctx.view.proj_matrix)
+            obj.model.m,
+            ctx.view.view_matrix.m,
+            ctx.view.proj_matrix.m
         };
         self.vs_ubuf.update(std.mem.asBytes(&vs_params));
 

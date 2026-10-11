@@ -13,3 +13,4 @@ build/
 install/
 .clangd-db/
 .cache/
+!engine/vendor/ziglua/build/

@@ -4,3 +4,10 @@ pub const Vec2 = @import("Vec2.zig").Vec2;
 pub const Vec3 = @import("Vec3.zig").Vec3;
 pub const Quat = @import("Quat.zig").Quat;
 pub const Mat4 = @import("Mat4.zig").Mat4;
+
+pub const api = .{
+    @import("Vec2.zig").api,
+    @import("Vec3.zig").api,
+    @import("Quat.zig").api,
+    @import("Mat4.zig").api
+};

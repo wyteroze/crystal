@@ -44,6 +44,9 @@ pub const Vec2 = extern struct {
     pub const __lua = .val;
 };
 
+const bind = @import("../../scripting/bind/bind.zig");
+pub const api = bind.value(Vec2, .{});
+
 pub const registerLua = struct {
     const zlua = @import("zlua");
     const linker = @import("../../scripting/scripting.zig").linker;

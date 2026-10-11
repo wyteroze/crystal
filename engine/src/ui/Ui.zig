@@ -36,19 +36,19 @@ changed: std.ArrayList(ecs.Entity),
 pub fn init(allocator: std.mem.Allocator) !Ui {
     var world: ecs.World = .init(allocator);
 
-    const position = try world.registerComponentNativeShaped(math.Vec2, "Position", null);
-    const size = try world.registerComponentNativeShaped(types.SizeMode, "Size", null);
-    const layout = try world.registerComponentNativeShaped(types.Layout, "Layout", null);
-    const color = try world.registerComponentNativeShaped(core.Color, "Color", null);
-    const opacity = try world.registerComponentNativeShaped(f32, "Opacity", null);
-    const text = try world.registerComponentNativeShaped(Ui.types.Text, "Text", null);
-    const render_view = try world.registerComponentNativeShaped(types.RenderViewOptions, "RenderView", null);
-    const computed_size = try world.registerComponentNativeShaped(math.Vec2, "ComputedSize", null);
-    const computed_position = try world.registerComponentNativeShaped(math.Vec2, "ComputedPosition", null);
-    const computed_text_layout = try world.registerComponentNativeShaped(types.ComputedTextLayout, "ComputedTextLayout", null);
-    const image = try world.registerComponentNativeShaped(types.Image, "Image", null);
-    const corner_radii = try world.registerComponentNativeShaped(Ui.types.CornerRadii, "CornerRadii", null);
-    const borders = try world.registerComponentNativeShaped(Ui.types.Borders, "Borders", null);
+    const position = try world.registerComponent(math.Vec2, "Position");
+    const size = try world.registerComponent(types.SizeMode, "Size");
+    const layout = try world.registerComponent(types.Layout, "Layout");
+    const color = try world.registerComponent(core.Color, "Color");
+    const opacity = try world.registerComponent(f32, "Opacity");
+    const text = try world.registerComponent(Ui.types.Text, "Text");
+    const render_view = try world.registerComponent(types.RenderViewOptions, "RenderView");
+    const computed_size = try world.registerComponent(math.Vec2, "ComputedSize");
+    const computed_position = try world.registerComponent(math.Vec2, "ComputedPosition");
+    const computed_text_layout = try world.registerComponent(types.ComputedTextLayout, "ComputedTextLayout");
+    const image = try world.registerComponent(types.Image, "Image");
+    const corner_radii = try world.registerComponent(Ui.types.CornerRadii, "CornerRadii");
+    const borders = try world.registerComponent(Ui.types.Borders, "Borders");
 
     return .{
         .allocator = allocator,
@@ -205,7 +205,10 @@ pub const registerLua = struct {
         l.pop(1);
 
         const entity = self.world.spawnEntity() catch |e| linker.util.luaErr(l, e, .{});
-        ecs.Entity.luaBinding.applyComponentTable(l, entity, 2, &.{ "Parent" }, true );
+        self.world.setComponentsFromLua(entity, l, 2, &.{ "Parent" }, .upsert) catch |err| {
+            self.world.destroyEntity(entity);
+            ecs.Entity.luaBinding.raiseForComponentErr(l, err, ecs.Codec.bad_component.get());
+        };
 
         if (parent) |p| entity.setParent(p) catch |e| linker.util.luaErr(l, e, .{});
 
@@ -219,47 +222,9 @@ pub const registerLua = struct {
     }
 
     pub fn registerLua(l: *zlua.Lua) void {
-        linker.value(l, types.Padding, .{
-            .name = .{ .named = "Padding" },
-            .scope = .{ .module = "ui.types" },
-            .fields = &.{ "top", "bottom", "left", "right" }
-        });
-        linker.value(l, types.CornerRadii, .{
-            .name = .{ .named = "CornerRadii" },
-            .scope = .{ .module = "ui.types" },
-            .fields = &.{ "top_left", "top_right", "bottom_left", "bottom_right" }
-        });
-        linker.value(l, types.Layout, .{
-            .name = .{ .named = "Layout" },
-            .scope = .{ .module = "ui.types" },
-        });
-        linker.value(l, types.SizeMode, .{
-            .name = .{ .named = "SizeMode" },
-            .scope = .{ .module = "ui.types" },
-            .fields = &.{ "width", "height" },
-        });
         linker.value(l, types.SizeAxis, .{
             .name = .{ .named = "SizeAxis" },
             .scope = .{ .module = "ui.types" }
-        });
-        linker.value(l, types.Text, .{
-            .name = .{ .named = "Text" },
-            .scope = .{ .module = "ui.types" }
-        });
-        linker.value(l, types.Image, .{
-            .name = .{ .named = "Image" },
-            .scope = .{ .module = "ui.types" },
-            .fields = &.{ "source", "crop" }
-        });
-        linker.value(l, types.Crop, .{
-            .name = .{ .named = "Crop" },
-            .scope = .{ .module = "ui.types" },
-            .fields = &.{ "min", "max" }
-        });
-        linker.value(l, types.Borders, .{
-            .name = .{ .named = "Borders" },
-            .scope = .{ .module = "ui.types" },
-            .fields = &.{ "top", "bottom", "left", "right" }
         });
         linker.value(l, types.GridAxis, .{
             .name = .{ .named = "GridAxis" },

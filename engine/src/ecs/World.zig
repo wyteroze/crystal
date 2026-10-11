@@ -1,7 +1,9 @@
 // Copyright 2026 wyteroze. Licensed under the Apache-2.0 license.
 
 const std = @import("std");
+const zlua = @import("zlua");
 const Entity = @import("Entity.zig");
+const Codec = @import("Codec.zig");
 const ComponentId = @import("ComponentId.zig");
 const ComponentRegistry = @import("ComponentRegistry.zig");
 const SystemRegistry = @import("SystemRegistry.zig");
@@ -10,7 +12,7 @@ const Query = @import("Query.zig");
 const Hierarchy = @import("Hierarchy.zig");
 const Signal = @import("../core/signal.zig").Signal;
 
-const field_types: std.StaticStringMap(ComponentId.FieldType) = blk: {
+const codecs: std.StaticStringMap(Codec) = blk: {
     const core = @import("../core/core.zig");
     const math = @import("../core/math/math.zig");
     const assets = @import("../assets/Assets.zig");
@@ -18,22 +20,23 @@ const field_types: std.StaticStringMap(ComponentId.FieldType) = blk: {
     const Ui = @import("../ui/Ui.zig");
 
     break :blk .initComptime(.{
-        .{ "boolean", ComponentId.FieldType.ofType(bool) },
-        .{ "number", ComponentId.FieldType.ofType(f64) },
-        .{ "integer", ComponentId.FieldType.ofType(i64) },
-        .{ "string", ComponentId.FieldType.ofType([]const u8) },
-        .{ "Vec3", ComponentId.FieldType.ofType(math.Vec3) },
-        .{ "Quat", ComponentId.FieldType.ofType(math.Quat) },
-        .{ "Mat4", ComponentId.FieldType.ofType(math.Mat4) },
-        .{ "Asset", ComponentId.FieldType.ofType(assets.AssetHandle) },
-        .{ "Light", ComponentId.FieldType.ofType(render.types.Light) },
-        .{ "Text", ComponentId.FieldType.ofType(Ui.types.Text) },
-        .{ "ComputedTextLayout", ComponentId.FieldType.ofType(Ui.types.ComputedTextLayout) },
-        .{ "Color", ComponentId.FieldType.ofType(core.Color) },
-        .{ "Image", ComponentId.FieldType.ofType(Ui.types.Image) }
+        .{ "boolean", Codec.of(bool) },
+        .{ "number", Codec.of(f64) },
+        .{ "integer", Codec.of(i64) },
+        .{ "string", Codec.of([]const u8) },
+        .{ "Vec3", Codec.of(math.Vec3) },
+        .{ "Quat", Codec.of(math.Quat) },
+        .{ "Mat4", Codec.of(math.Mat4) },
+        .{ "Asset", Codec.of(assets.AssetHandle) },
+        .{ "Light", Codec.of(render.types.Light) },
+        .{ "Text", Codec.of(Ui.types.Text) },
+        .{ "ComputedTextLayout", Codec.of(Ui.types.ComputedTextLayout) },
+        .{ "Color", Codec.of(core.Color) },
+        .{ "Image", Codec.of(Ui.types.Image) }
     });
 };
 
+pub const WriteMode = enum { add, set, upsert };
 pub const FieldTypeSpec = struct {
     name: []const u8,
     type_name: []const u8
@@ -86,21 +89,14 @@ pub fn deinit(self: *World) void {
 
 // Components
 
-pub fn registerComponentNative(self: *World, comptime T: type, name: []const u8, dtor: ?ComponentRegistry.DtorFn) !ComponentId {
-    const id = try self.components.registerNative(T, name, dtor);
+pub fn registerComponent(self: *World, comptime T: type, name: []const u8) !ComponentId {
+    const id = try self.components.register(T, name);
     try self.ensureStorageFor(id);
 
     return id;
 }
 
-pub fn registerComponentNativeShaped(self: *World, comptime T: type, name: []const u8, dtor: ?ComponentRegistry.DtorFn) !ComponentId {
-    const id = try self.components.registerNativeShaped(T, name, dtor);
-    try self.ensureStorageFor(id);
-
-    return id;
-}
-
-pub fn registerComponentLayout(self: *World, name: []const u8, fields: []ComponentId.FieldDesc) !ComponentId {
+pub fn registerComponentLayout(self: *World, name: []const u8, fields: []const Codec.FieldDesc) !ComponentId {
     const id = try self.components.registerLayout(name, fields);
     try self.ensureStorageFor(id);
 
@@ -110,12 +106,12 @@ pub fn registerComponentLayout(self: *World, name: []const u8, fields: []Compone
 pub fn registerComponentFromSpecs(self: *World, comp_name: []const u8, specs: []const FieldTypeSpec) !ComponentId {
     if (specs.len > 64) return error.TooManyFields;
 
-    var fields: std.ArrayList(ComponentId.FieldDesc) = .empty;
+    var fields: std.ArrayList(Codec.FieldDesc) = .empty;
     defer fields.deinit(self.allocator);
 
     for (specs) |spec| {
-        const field_type = field_types.get(spec.type_name) orelse return error.UnknownFieldType;
-        fields.append(self.allocator, .{ .name = spec.name, .type = field_type }) catch return error.OutOfMemory;
+        const codec = codecs.get(spec.type_name) orelse return error.UnknownFieldType;
+        fields.append(self.allocator, .{ .name = spec.name, .codec = codec }) catch return error.OutOfMemory;
     }
 
     return self.registerComponentLayout(comp_name, fields.items) catch error.OutOfMemory;
@@ -125,6 +121,88 @@ fn ensureStorageFor(self: *World, id: ComponentId) !void {
     while (self.storages.items.len <= id.value) {
         const temp_id: ComponentId = .{ .value = @intCast(self.storages.items.len) };
         try self.storages.append(self.allocator, .init(self.allocator, self.components.info(temp_id), temp_id));
+    }
+}
+
+pub fn set(self: *World, entity: Entity, id: ComponentId, comptime T: type, value: T) !void {
+    const storage = self.storageFor(id) orelse return error.UnknownComponent;
+    std.debug.assert(@sizeOf(T) == storage.info.size);
+
+    try storage.insert(entity, std.mem.asBytes(&value));
+}
+
+pub fn setFromLua(self: *World, entity: Entity, name: []const u8, lua: *zlua.Lua, idx: i32, mode: WriteMode) !void {
+    if (!self.isEntityAlive(entity)) return error.DeadEntity;
+    const id = self.components.id(name) orelse return error.UnknownComponent;
+    const storage = self.storageFor(id).?;
+    const exists = storage.has(entity);
+    switch (mode) {
+        .add => if (exists) return error.AlreadyHasComponent,
+        .set => if (!exists) return error.NoSuchComponent,
+        .upsert => {},
+    }
+
+    const info = storage.info;
+    var buf: [ComponentRegistry.max_component_size]u8 align(16) = undefined;
+    const bytes = buf[0..info.size];
+    @memset(bytes, 0);
+
+    try info.read(self.allocator, lua, idx, bytes);
+    errdefer info.free(self.allocator, bytes);
+    try storage.insert(entity, bytes);
+}
+
+pub fn pushToLua(self: *World, entity: Entity, name: []const u8, lua: *zlua.Lua) !void {
+    const id = self.components.id(name) orelse return error.UnknownComponent;
+    const bytes = self.getComponentRaw(entity, id) orelse return lua.pushNil();
+
+    self.components.info(id).write(lua, bytes);
+}
+
+pub fn pushFieldToLua(self: *World, entity: Entity, id: ComponentId, key: []const u8, lua: *zlua.Lua) !void {
+    const bytes = self.getComponentRaw(entity, id) orelse return error.NoSuchComponent;
+    const f = self.components.info(id).field(key) orelse {
+        Codec.bad_field.set(key);
+        return error.UnknownField;
+    };
+
+    f.codec.write(lua, bytes[f.offset..][0..f.codec.size]);
+}
+
+pub fn setFieldFromLua(self: *World, entity: Entity, id: ComponentId, key: []const u8, lua: *zlua.Lua, idx: i32) !void {
+    const bytes = self.getComponentRaw(entity, id) orelse return error.NoSuchComponent;
+    const f = self.components.info(id).field(key) orelse {
+        Codec.bad_field.set(key);
+        return error.UnknownField;
+    };
+
+    var buf: [ComponentRegistry.max_component_size]u8 align(16) = undefined;
+    const tmp = buf[0..f.codec.size];
+    @memset(tmp, 0);
+    try f.codec.read(self.allocator, lua, idx, tmp);
+
+    const dst = bytes[f.offset..][0..f.codec.size];
+    if (f.codec.free) |fr| fr(self.allocator, dst);
+    @memcpy(dst, tmp);
+}
+
+pub fn setComponentsFromLua(
+    self: *World, entity: Entity, lua: *zlua.Lua, table_idx: i32,
+    comptime skip: []const []const u8, mode: WriteMode,
+) !void {
+    const abs = lua.absIndex(table_idx);
+    lua.pushNil();
+
+    next: while (lua.next(abs)) {
+        defer lua.pop(1);
+        if (lua.typeOf(-2) != .string) return error.NonStringKey;
+        
+        const key = try lua.toString(-2);
+        inline for (skip) |s| if (std.mem.eql(u8, key, s)) continue :next;
+        self.setFromLua(entity, key, lua, -1, mode) catch |e| {
+            Codec.bad_component.set(key);
+            return e;
+        };
     }
 }
 
@@ -207,18 +285,6 @@ pub fn destroyEntity(self: *World, entity: Entity) void {
 
 // Components
 
-pub fn addComponent(self: *World, entity: Entity, id: ComponentId, comptime T: type, value: T) !void {
-    const storage = self.storageFor(id) orelse return error.UnknownComponent;
-    const bytes = std.mem.asBytes(&value);
-
-    try storage.insert(entity, bytes);
-}
-
-pub fn addComponentBytes(self: *World, entity: Entity, id: ComponentId, bytes: []const u8) !void {
-    const storage = self.storageFor(id) orelse return error.UnknownComponent;
-    try storage.insert(entity, bytes);
-}
-
 pub fn removeComponent(self: *World, entity: Entity, id: ComponentId) void {
     const storage = self.storageFor(id) orelse return;
     storage.remove(entity);
@@ -281,7 +347,6 @@ pub const __lua = .ref;
 // this is so ugly man..
 pub const registerLua = struct {
     const linker = @import("../scripting/linker/linker.zig");
-    const zlua = @import("zlua");
 
     const query_iter_metatable_name = "World.QueryIterator";
     const binding = linker.Binding(World, true);
@@ -414,7 +479,7 @@ pub const registerLua = struct {
         const required_owned = parseComponentIdList(lua, self, 2);
         const q: Query = .init(self, required_owned);
 
-        const box = lua.newUserdata(LuaQueryIterator, 0);
+        const box = lua.newUserdata(LuaQueryIterator);
         box.* = .{ .world = self, .required = required_owned, .iter = q.iterator() };
 
         if (lua.newMetatable(query_iter_metatable_name)) {

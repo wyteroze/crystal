@@ -92,12 +92,13 @@ pub fn build(b: *std.Build) void {
 
     // invoked when running `zig build`
     const run_step = b.step("run", "Run the app");
-
     const run_cmd = b.addRunArtifact(exe);
     run_step.dependOn(&run_cmd.step);
     run_cmd.step.dependOn(b.getInstallStep());
-
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
-    }
+    
+    const test_step = b.step("test", "Test the app");
+    const test_cmd = b.addTest(.{ .root_module = exe_mod });
+    test_step.dependOn(&test_cmd.step);
+    test_cmd.step.dependOn(b.getInstallStep());
+    run_cmd.addPassthruArgs();
 }

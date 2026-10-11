@@ -24,7 +24,7 @@ ready_fibers: []core.threading.Deque(*Fiber),
 home_fibers: []Fiber,
 workers: []std.Thread,
 // One for each job priority (critical, high, normal, low, background)
-deques: [std.meta.fields(Job.JobPriority).len][]core.threading.Deque(Job),
+deques: [Job.JobPriority.priority_count][]core.threading.Deque(Job),
 running: std.atomic.Value(bool) = .init(true),
 main_worker_id: usize = 0,
 
@@ -62,7 +62,7 @@ pub fn init(self: *Scheduler, allocator: std.mem.Allocator, io: std.Io, os: *con
     errdefer { for (ready_fibers.items) |*dq| dq.deinit(allocator);  }
     for (0..core_count) |_| ready_fibers.appendAssumeCapacity(try .init(allocator, 4096));
 
-    var deques: [std.meta.fields(Job.JobPriority).len][]core.threading.Deque(Job) = undefined;
+    var deques: [Job.JobPriority.priority_count][]core.threading.Deque(Job) = undefined;
     errdefer { for (deques) |dq| { for (dq) |*d| d.deinit(allocator); allocator.free(dq); } }
 
     for (&deques) |*dq| {

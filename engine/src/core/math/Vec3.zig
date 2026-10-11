@@ -56,6 +56,18 @@ pub const Vec3 = extern struct {
     pub const __lua = .val;
 };
 
+const bind = @import("../../scripting/bind/bind.zig");
+pub const api = bind.value(Vec3, .{
+    .name = "Vec3",
+    .fields = &.{ "x", "y", "z" },
+    .statics = &.{ 
+        bind.constant("zero", Vec3.zero), 
+        bind.constant("one", Vec3.one),
+        bind.func("new", Vec3.new),
+    },
+    .ops = .{ .tostring = .auto }
+});
+
 pub const registerLua = struct {
     const zlua = @import("zlua");
     const linker = @import("../../scripting/scripting.zig").linker;

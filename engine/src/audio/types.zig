@@ -12,4 +12,6 @@ pub const Attenuation = union(enum) {
     exponential,
     inverse_square,
     custom: *const fn(f32) f32,
+
+    pub const __lua = .val;
 };

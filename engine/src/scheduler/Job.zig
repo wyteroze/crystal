@@ -41,6 +41,8 @@ pub fn Wrap(comptime func: anytype) type {
 }
 
 pub const JobPriority = enum(u8) {
+    pub const priority_count = @typeInfo(@This()).@"enum".field_names.len;
+
     critical = 0,
     high = 1,
     normal = 2,
