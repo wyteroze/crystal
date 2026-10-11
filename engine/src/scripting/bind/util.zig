@@ -28,6 +28,14 @@ pub fn globals(comptime r: recipes.GlobalsRecipe) types.Member {
     return .{ .name = "", .kind = .globals, .impl = struct { pub const recipe = r; } };
 }
 
+pub fn handle(comptime T: type, comptime r: recipes.HandleRecipe) types.Member {
+    return .{
+        .name = r.name orelse names.shortTypeName(T),
+        .kind = .handle,
+        .impl = struct { pub const Type = T; pub const recipe = r; }
+    };
+}
+
 pub fn value(comptime T: type, comptime r: recipes.ValueRecipe) types.Member {
     comptime validateValue(T, r);
     return .{

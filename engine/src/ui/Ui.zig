@@ -87,228 +87,228 @@ pub fn update(self: *Ui) void {
     changed.clearRetainingCapacity();
 }
 
-pub const registerLua = struct {
-    const zlua = @import("zlua");
-    const linker = @import("../scripting/linker/linker.zig");
-    const Runtime = @import("../scripting/runtime/Runtime.zig");
-    const LayoutBind = linker.Binding(types.Layout, false);
-    const PaddingBind = linker.Binding(types.Padding, false);
-    const CornerRadiiBind = linker.Binding(types.CornerRadii, false);
-    const SizeModeBind = linker.Binding(types.SizeMode, false);
-    const SizeAxisBind = linker.Binding(types.SizeAxis, false);
-    const TextBind = linker.Binding(types.Text, false);
-    const CropBind = linker.Binding(types.Crop, false);
-    const ImageBind = linker.Binding(types.Image, false);
-    const BordersBind = linker.Binding(types.Borders, false);
-    const GridLayoutBind = linker.Binding(types.GridLayout, false);
-    const GridAxisBind = linker.Binding(types.GridAxis, false);
+// pub const registerLua = struct {
+//     const zlua = @import("zlua");
+//     const linker = @import("../scripting/linker/linker.zig");
+//     const Runtime = @import("../scripting/runtime/Runtime.zig");
+//     const LayoutBind = linker.Binding(types.Layout, false);
+//     const PaddingBind = linker.Binding(types.Padding, false);
+//     const CornerRadiiBind = linker.Binding(types.CornerRadii, false);
+//     const SizeModeBind = linker.Binding(types.SizeMode, false);
+//     const SizeAxisBind = linker.Binding(types.SizeAxis, false);
+//     const TextBind = linker.Binding(types.Text, false);
+//     const CropBind = linker.Binding(types.Crop, false);
+//     const ImageBind = linker.Binding(types.Image, false);
+//     const BordersBind = linker.Binding(types.Borders, false);
+//     const GridLayoutBind = linker.Binding(types.GridLayout, false);
+//     const GridAxisBind = linker.Binding(types.GridAxis, false);
 
-    fn sizeAxisFixed(lua: *zlua.Lua) i32 {
-        SizeAxisBind.push(lua, .{ .fixed = @floatCast(lua.checkNumber(1)) });
-        return 1;
-    }
+//     fn sizeAxisFixed(lua: *zlua.Lua) i32 {
+//         SizeAxisBind.push(lua, .{ .fixed = @floatCast(lua.checkNumber(1)) });
+//         return 1;
+//     }
 
-    // layoutGeneric and layoutGrid is so that you can do either
-    // `ui.Layout {}` for generic layout, or `ui.Layout.Grid {}` for grid layout
+//     // layoutGeneric and layoutGrid is so that you can do either
+//     // `ui.Layout {}` for generic layout, or `ui.Layout.Grid {}` for grid layout
 
-    // 1 = table, 2 = value
-    fn layoutGeneric(lua: *zlua.Lua) i32 {
-        const generic = linker.util.luaTableToStruct(lua, 2, types.GenericLayout, .{});
-        LayoutBind.push(lua, .{ .generic = generic });
-        return 1;
-    }
+//     // 1 = table, 2 = value
+//     fn layoutGeneric(lua: *zlua.Lua) i32 {
+//         const generic = linker.util.luaTableToStruct(lua, 2, types.GenericLayout, .{});
+//         LayoutBind.push(lua, .{ .generic = generic });
+//         return 1;
+//     }
 
-    // 1 = table, 2 = key, 3 = value
-    fn layoutGrid(lua: *zlua.Lua) i32 {
-        if (!std.mem.eql(u8, lua.toString(2) catch return 0, "Grid")) return 0;
-        lua.pushFunction(zlua.wrap(struct {
-            fn c(lua_state: *zlua.Lua) i32 {
-                const grid = linker.util.luaTableToStruct(lua_state, 1, types.GridLayout, .{});
-                if (grid.justify == .space_between) 
-                    lua_state.raiseErrorStr("Justify.SpaceBetween is not usable on GridLayouts", .{});
-                if (grid.flow == .row and grid.rows == .auto or grid.flow == .column and grid.columns == .auto) 
-                    lua_state.raiseErrorStr("GridLayout.Flow can't use an axis that uses GridAxis.Auto.", .{});
+//     // 1 = table, 2 = key, 3 = value
+//     fn layoutGrid(lua: *zlua.Lua) i32 {
+//         if (!std.mem.eql(u8, lua.toString(2) catch return 0, "Grid")) return 0;
+//         lua.pushFunction(zlua.wrap(struct {
+//             fn c(lua_state: *zlua.Lua) i32 {
+//                 const grid = linker.util.luaTableToStruct(lua_state, 1, types.GridLayout, .{});
+//                 if (grid.justify == .space_between) 
+//                     lua_state.raiseErrorStr("Justify.SpaceBetween is not usable on GridLayouts", .{});
+//                 if (grid.flow == .row and grid.rows == .auto or grid.flow == .column and grid.columns == .auto) 
+//                     lua_state.raiseErrorStr("GridLayout.Flow can't use an axis that uses GridAxis.Auto.", .{});
 
-                LayoutBind.push(lua_state, .{ .grid = grid });
-                return 1;
-            }
-        }.c));
-        return 1;
-    }
+//                 LayoutBind.push(lua_state, .{ .grid = grid });
+//                 return 1;
+//             }
+//         }.c));
+//         return 1;
+//     }
 
-    fn gridAxisFixed(lua: *zlua.Lua) i32 {
-        GridAxisBind.push(lua, .{ .fixed = @intCast(lua.checkInteger(1)) });
-        return 1;
-    }
+//     fn gridAxisFixed(lua: *zlua.Lua) i32 {
+//         GridAxisBind.push(lua, .{ .fixed = @intCast(lua.checkInteger(1)) });
+//         return 1;
+//     }
 
-    fn uiGet(l: *zlua.Lua) i32 {
-        const key = l.toString(2) catch |e| linker.util.luaErr(l, e, .{ []const u8, 2 });
+//     fn uiGet(l: *zlua.Lua) i32 {
+//         const key = l.toString(2) catch |e| linker.util.luaErr(l, e, .{ []const u8, 2 });
 
-        if (std.mem.eql(u8, key, "SizeAxis")) {
-            l.newTable();
-            SizeAxisBind.push(l, .hug);  l.setField(-2, "Hug");
-            SizeAxisBind.push(l, .fill); l.setField(-2, "Fill");
-            l.pushFunction(zlua.wrap(sizeAxisFixed)); l.setField(-2, "Fixed");
-            return 1;
-        } else if (std.mem.eql(u8, key, "Layout")) {
-            l.newTable();
-            _ = l.getMetatableRegistry("LayoutMt");
-            l.setMetatable(-2);
-            return 1;
-        } else if (std.mem.eql(u8, key, "LayoutDirection")) {
-            linker.util.pushEnum(l, types.LayoutDirection);
-            return 1;
-        } else if (std.mem.eql(u8, key, "GridAxis")) {
-            l.newTable();
-            GridAxisBind.push(l, .auto); l.setField(-2, "Auto");
-            l.pushFunction(zlua.wrap(gridAxisFixed)); l.setField(-2, "Fixed");
+//         if (std.mem.eql(u8, key, "SizeAxis")) {
+//             l.newTable();
+//             SizeAxisBind.push(l, .hug);  l.setField(-2, "Hug");
+//             SizeAxisBind.push(l, .fill); l.setField(-2, "Fill");
+//             l.pushFunction(zlua.wrap(sizeAxisFixed)); l.setField(-2, "Fixed");
+//             return 1;
+//         } else if (std.mem.eql(u8, key, "Layout")) {
+//             l.newTable();
+//             _ = l.getMetatableRegistry("LayoutMt");
+//             l.setMetatable(-2);
+//             return 1;
+//         } else if (std.mem.eql(u8, key, "LayoutDirection")) {
+//             linker.util.pushEnum(l, types.LayoutDirection);
+//             return 1;
+//         } else if (std.mem.eql(u8, key, "GridAxis")) {
+//             l.newTable();
+//             GridAxisBind.push(l, .auto); l.setField(-2, "Auto");
+//             l.pushFunction(zlua.wrap(gridAxisFixed)); l.setField(-2, "Fixed");
 
-            return 1;
-        } else if (std.mem.eql(u8, key, "GridFlow")) {
-            linker.util.pushEnum(l, types.GridFlow);
-            return 1;
-        } else if (std.mem.eql(u8, key, "Align")) {
-            linker.util.pushEnum(l, types.Align);
-            return 1;
-        } else if (std.mem.eql(u8, key, "Justify")) {
-            linker.util.pushEnum(l, types.Justify);
-            return 1;
-        } else {
-            // fallback to exising methods
-            l.getMetatable(1) catch { l.pushNil(); return 1; };
-            _ = l.getField(-1, "__methods");
-            l.pushValue(2);
-            _ = l.getTable(-2);
+//             return 1;
+//         } else if (std.mem.eql(u8, key, "GridFlow")) {
+//             linker.util.pushEnum(l, types.GridFlow);
+//             return 1;
+//         } else if (std.mem.eql(u8, key, "Align")) {
+//             linker.util.pushEnum(l, types.Align);
+//             return 1;
+//         } else if (std.mem.eql(u8, key, "Justify")) {
+//             linker.util.pushEnum(l, types.Justify);
+//             return 1;
+//         } else {
+//             // fallback to exising methods
+//             l.getMetatable(1) catch { l.pushNil(); return 1; };
+//             _ = l.getField(-1, "__methods");
+//             l.pushValue(2);
+//             _ = l.getTable(-2);
 
-            return 1;
-        }
+//             return 1;
+//         }
 
-        l.pushNil();
-        return 1;
-    }
+//         l.pushNil();
+//         return 1;
+//     }
 
-    fn uiSet(l: *zlua.Lua) i32 {
-        l.raiseErrorStr("'ui' is read-only", .{});
+//     fn uiSet(l: *zlua.Lua) i32 {
+//         l.raiseErrorStr("'ui' is read-only", .{});
         
-        return 0;
-    }
+//         return 0;
+//     }
 
-    fn luaCreateElement(l: *zlua.Lua) i32 {
-        const self = Runtime.fromState(l).ui;
-        l.checkType(2, .table);
+//     fn luaCreateElement(l: *zlua.Lua) i32 {
+//         const self = Runtime.fromState(l).ui;
+//         l.checkType(2, .table);
 
-        const parent: ?ecs.Entity = switch (l.getField(2, "Parent")) {
-            .nil => null,
-            .userdata => linker.util.parseVal(l, ecs.Entity, -1) catch |e| linker.util.luaErr(l, e, .{}),
-            else => l.raiseErrorStr("Parent must be an Entity, got %s", .{ l.typeNameIndex(-1).ptr }),
-        };
-        l.pop(1);
+//         const parent: ?ecs.Entity = switch (l.getField(2, "Parent")) {
+//             .nil => null,
+//             .userdata => linker.util.parseVal(l, ecs.Entity, -1) catch |e| linker.util.luaErr(l, e, .{}),
+//             else => l.raiseErrorStr("Parent must be an Entity, got %s", .{ l.typeNameIndex(-1).ptr }),
+//         };
+//         l.pop(1);
 
-        const entity = self.world.spawnEntity() catch |e| linker.util.luaErr(l, e, .{});
-        self.world.setComponentsFromLua(entity, l, 2, &.{ "Parent" }, .upsert) catch |err| {
-            self.world.destroyEntity(entity);
-            ecs.Entity.luaBinding.raiseForComponentErr(l, err, ecs.Codec.bad_component.get());
-        };
+//         const entity = self.world.spawnEntity() catch |e| linker.util.luaErr(l, e, .{});
+//         self.world.setComponentsFromLua(entity, l, 2, &.{ "Parent" }, .upsert) catch |err| {
+//             self.world.destroyEntity(entity);
+//             ecs.Entity.luaBinding.raiseForComponentErr(l, err, ecs.Codec.bad_component.get());
+//         };
 
-        if (parent) |p| entity.setParent(p) catch |e| linker.util.luaErr(l, e, .{});
+//         if (parent) |p| entity.setParent(p) catch |e| linker.util.luaErr(l, e, .{});
 
-        linker.Binding(ecs.Entity, false).push(l, entity);
-        return 1;
-    }
+//         linker.Binding(ecs.Entity, false).push(l, entity);
+//         return 1;
+//     }
 
-    fn luaMeasureText(l: *zlua.Lua) i32 {
-        _ = l;
-        return 0;
-    }
+//     fn luaMeasureText(l: *zlua.Lua) i32 {
+//         _ = l;
+//         return 0;
+//     }
 
-    pub fn registerLua(l: *zlua.Lua) void {
-        linker.value(l, types.SizeAxis, .{
-            .name = .{ .named = "SizeAxis" },
-            .scope = .{ .module = "ui.types" }
-        });
-        linker.value(l, types.GridAxis, .{
-            .name = .{ .named = "GridAxis" },
-            .scope = .{ .module = "ui.types" }
-        });
-        linker.value(l, types.GenericLayout, .{ 
-            .name = .{ .named = "GenericLayout" },
-            .scope = .{ .module = "ui.types" },
-            .fields = &.{ "direction", "gap", "padding", "align_items", "justify" },
-        });
-        linker.value(l, types.GridLayout, .{
-            .name = .{ .named = "GridLayout" },
-            .scope = .{ .module = "ui.types" },
-            .fields = &.{ "columns", "rows", "flow", "row_gap", "column_gap" }
-        });
+//     pub fn registerLua(l: *zlua.Lua) void {
+//         linker.value(l, types.SizeAxis, .{
+//             .name = .{ .named = "SizeAxis" },
+//             .scope = .{ .module = "ui.types" }
+//         });
+//         linker.value(l, types.GridAxis, .{
+//             .name = .{ .named = "GridAxis" },
+//             .scope = .{ .module = "ui.types" }
+//         });
+//         linker.value(l, types.GenericLayout, .{ 
+//             .name = .{ .named = "GenericLayout" },
+//             .scope = .{ .module = "ui.types" },
+//             .fields = &.{ "direction", "gap", "padding", "align_items", "justify" },
+//         });
+//         linker.value(l, types.GridLayout, .{
+//             .name = .{ .named = "GridLayout" },
+//             .scope = .{ .module = "ui.types" },
+//             .fields = &.{ "columns", "rows", "flow", "row_gap", "column_gap" }
+//         });
 
-        l.newMetatable("LayoutMt") catch unreachable;
-        l.pushFunction(zlua.wrap(layoutGeneric)); l.setField(-2, "__call");
-        l.pushFunction(zlua.wrap(layoutGrid)); l.setField(-2, "__index");
-        l.pop(1);
+//         l.newMetatable("LayoutMt") catch unreachable;
+//         l.pushFunction(zlua.wrap(layoutGeneric)); l.setField(-2, "__call");
+//         l.pushFunction(zlua.wrap(layoutGrid)); l.setField(-2, "__index");
+//         l.pop(1);
         
-        linker.module(l, .{
-            .name = "ui",
-            .functions = &.{
-                .custom("CreateElement", luaCreateElement),
-                //.custom("MeasureText", luaMeasureText),
+//         linker.module(l, .{
+//             .name = "ui",
+//             .functions = &.{
+//                 .custom("CreateElement", luaCreateElement),
+//                 //.custom("MeasureText", luaMeasureText),
 
-                // Types
-                .custom("Padding", struct {
-                    fn c(lua: *zlua.Lua) i32 {
-                        PaddingBind.push(lua, linker.util.luaTableToStruct(lua, 1, types.Padding, .{}));
-                        return 1;
-                    }
-                }.c),
-                .custom("CornerRadii", struct {
-                    fn c(lua: *zlua.Lua) i32 {
-                        CornerRadiiBind.push(lua, linker.util.luaTableToStruct(lua, 1, types.CornerRadii, .{}));
-                        return 1;
-                    }
-                }.c),
-                .custom("SizeMode", struct {
-                    fn c(lua: *zlua.Lua) i32 {
-                        SizeModeBind.push(lua, linker.util.luaTableToStruct(lua, 1, types.SizeMode, .{}));
-                        return 1;
-                    }
-                }.c),
-                .custom("Text", struct {
-                    fn c(lua: *zlua.Lua) i32 {
-                        // This asset ID isn't actually used for the text, rather we use it below to make sure that a font was given
-                        // without being too intrusive to the linker.util.luaTableToStruct function.
-                        const str = linker.util.luaTableToStruct(lua, 1, types.Text, .{ .font = .{ .id = u64_max, .assets = undefined } });
-                        if (str.font.id == u64_max) lua.raiseErrorStr("'Font' must be defined when creating 'Text'", .{});
+//                 // Types
+//                 .custom("Padding", struct {
+//                     fn c(lua: *zlua.Lua) i32 {
+//                         PaddingBind.push(lua, linker.util.luaTableToStruct(lua, 1, types.Padding, .{}));
+//                         return 1;
+//                     }
+//                 }.c),
+//                 .custom("CornerRadii", struct {
+//                     fn c(lua: *zlua.Lua) i32 {
+//                         CornerRadiiBind.push(lua, linker.util.luaTableToStruct(lua, 1, types.CornerRadii, .{}));
+//                         return 1;
+//                     }
+//                 }.c),
+//                 .custom("SizeMode", struct {
+//                     fn c(lua: *zlua.Lua) i32 {
+//                         SizeModeBind.push(lua, linker.util.luaTableToStruct(lua, 1, types.SizeMode, .{}));
+//                         return 1;
+//                     }
+//                 }.c),
+//                 .custom("Text", struct {
+//                     fn c(lua: *zlua.Lua) i32 {
+//                         // This asset ID isn't actually used for the text, rather we use it below to make sure that a font was given
+//                         // without being too intrusive to the linker.util.luaTableToStruct function.
+//                         const str = linker.util.luaTableToStruct(lua, 1, types.Text, .{ .font = .{ .id = u64_max, .assets = undefined } });
+//                         if (str.font.id == u64_max) lua.raiseErrorStr("'Font' must be defined when creating 'Text'", .{});
 
-                        TextBind.push(lua, str);
-                        return 1;
-                    }
-                }.c),
-                .custom("Crop", struct {
-                    fn c(lua: *zlua.Lua) i32 {
-                        const str = linker.util.luaTableToStruct(lua, 1, types.Crop, .{});
+//                         TextBind.push(lua, str);
+//                         return 1;
+//                     }
+//                 }.c),
+//                 .custom("Crop", struct {
+//                     fn c(lua: *zlua.Lua) i32 {
+//                         const str = linker.util.luaTableToStruct(lua, 1, types.Crop, .{});
 
-                        CropBind.push(lua, str);
-                        return 1;
-                    }
-                }.c),
-                .custom("Image", struct {
-                    fn c(lua: *zlua.Lua) i32 {
-                        const str = linker.util.luaTableToStruct(lua, 1, types.Image, .{ .source = .{ .id = u64_max, .assets = undefined } });
-                        if (str.source.id == u64_max) lua.raiseErrorStr("'Source' must be defined when creating 'Image'", .{});
+//                         CropBind.push(lua, str);
+//                         return 1;
+//                     }
+//                 }.c),
+//                 .custom("Image", struct {
+//                     fn c(lua: *zlua.Lua) i32 {
+//                         const str = linker.util.luaTableToStruct(lua, 1, types.Image, .{ .source = .{ .id = u64_max, .assets = undefined } });
+//                         if (str.source.id == u64_max) lua.raiseErrorStr("'Source' must be defined when creating 'Image'", .{});
 
-                        ImageBind.push(lua, str);
-                        return 1;
-                    }
-                }.c),
-                .custom("Borders", struct {
-                    fn c(lua: *zlua.Lua) i32 {
-                        const str = linker.util.luaTableToStruct(lua, 1, types.Borders, .{ });
+//                         ImageBind.push(lua, str);
+//                         return 1;
+//                     }
+//                 }.c),
+//                 .custom("Borders", struct {
+//                     fn c(lua: *zlua.Lua) i32 {
+//                         const str = linker.util.luaTableToStruct(lua, 1, types.Borders, .{ });
 
-                        BordersBind.push(lua, str);
-                        return 1;
-                    }
-                }.c)
-            },
-            .properties = .luaCustom(uiGet, uiSet) 
-        });
-    }
-}.registerLua;
+//                         BordersBind.push(lua, str);
+//                         return 1;
+//                     }
+//                 }.c)
+//             },
+//             .properties = .luaCustom(uiGet, uiSet) 
+//         });
+//     }
+// }.registerLua;

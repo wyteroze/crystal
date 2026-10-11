@@ -343,169 +343,169 @@ pub fn format(
     try writer.print("World", .{ });
 }
 
-pub const __lua = .ref;
-// this is so ugly man..
-pub const registerLua = struct {
-    const linker = @import("../scripting/linker/linker.zig");
+// pub const __lua = .ref;
+// // this is so ugly man..
+// pub const registerLua = struct {
+//     const linker = @import("../scripting/linker/linker.zig");
 
-    const query_iter_metatable_name = "World.QueryIterator";
-    const binding = linker.Binding(World, true);
+//     const query_iter_metatable_name = "World.QueryIterator";
+//     const binding = linker.Binding(World, true);
 
-    const LuaSystemCtx = struct {
-        lua: *zlua.Lua,
-        table_ref: i32,
-        query: []ComponentId,
-        name: []const u8
-    };
+//     const LuaSystemCtx = struct {
+//         lua: *zlua.Lua,
+//         table_ref: i32,
+//         query: []ComponentId,
+//         name: []const u8
+//     };
 
-    const LuaQueryIterator = struct {
-        world: *World,
-        required: []ComponentId,
-        iter: Query.Iterator
-    };
+//     const LuaQueryIterator = struct {
+//         world: *World,
+//         required: []ComponentId,
+//         iter: Query.Iterator
+//     };
 
-    fn luaSystemTrampoline(world: *World, dt: f32, ctx: *anyopaque) void {
-        const ctx_typed: *LuaSystemCtx = @ptrCast(@alignCast(ctx));
-        const lua = ctx_typed.lua;
+//     fn luaSystemTrampoline(world: *World, dt: f32, ctx: *anyopaque) void {
+//         const ctx_typed: *LuaSystemCtx = @ptrCast(@alignCast(ctx));
+//         const lua = ctx_typed.lua;
 
-        _ = lua.getIndexRaw(zlua.registry_index, ctx_typed.table_ref);
-        _ = lua.getField(-1, "Tick");
-        lua.pushValue(-2);
-        binding.push(lua, world);
-        lua.pushNumber(dt);
+//         _ = lua.getIndexRaw(zlua.registry_index, ctx_typed.table_ref);
+//         _ = lua.getField(-1, "Tick");
+//         lua.pushValue(-2);
+//         binding.push(lua, world);
+//         lua.pushNumber(dt);
 
-        lua.protectedCall(.{ .args = 3, .results = 0 }) catch {
-            const msg = lua.toString(-1) catch "<no message>";
-            std.log.err("Lua system '{s}' Tick error: {s}", .{ ctx_typed.name, msg });
+//         lua.protectedCall(.{ .args = 3, .results = 0 }) catch {
+//             const msg = lua.toString(-1) catch "<no message>";
+//             std.log.err("Lua system '{s}' Tick error: {s}", .{ ctx_typed.name, msg });
 
-            lua.pop(1);
-        };
-        lua.pop(1);
-    }
+//             lua.pop(1);
+//         };
+//         lua.pop(1);
+//     }
 
-    fn parseComponentIdList(lua: *zlua.Lua, self: *World, list_idx: i32) []ComponentId {
-        var out: std.ArrayList(ComponentId) = .empty;
+//     fn parseComponentIdList(lua: *zlua.Lua, self: *World, list_idx: i32) []ComponentId {
+//         var out: std.ArrayList(ComponentId) = .empty;
 
-        const len = lua.lenRaw(list_idx);
-        var i: usize = 1;
-        while (i <= len) : (i += 1) {
-            _ = lua.getIndexRaw(list_idx, @intCast(i));
-            const comp_name = lua.toString(-1)
-                catch lua.raiseErrorStr("component list can only contain component names (strings)", .{});
-            const comp_id = self.components.id(comp_name)
-                orelse lua.raiseErrorStr("unknown component '%s' in component list", .{ comp_name.ptr });
-            out.append(self.allocator, comp_id)
-                catch lua.raiseErrorStr("out of memory", .{});
+//         const len = lua.lenRaw(list_idx);
+//         var i: usize = 1;
+//         while (i <= len) : (i += 1) {
+//             _ = lua.getIndexRaw(list_idx, @intCast(i));
+//             const comp_name = lua.toString(-1)
+//                 catch lua.raiseErrorStr("component list can only contain component names (strings)", .{});
+//             const comp_id = self.components.id(comp_name)
+//                 orelse lua.raiseErrorStr("unknown component '%s' in component list", .{ comp_name.ptr });
+//             out.append(self.allocator, comp_id)
+//                 catch lua.raiseErrorStr("out of memory", .{});
 
-            lua.pop(1);
-        }
+//             lua.pop(1);
+//         }
 
-        return out.toOwnedSlice(self.allocator)
-            catch lua.raiseErrorStr("out of memory", .{});
-    }
+//         return out.toOwnedSlice(self.allocator)
+//             catch lua.raiseErrorStr("out of memory", .{});
+//     }
 
-    fn luaSystemDtor(allocator: std.mem.Allocator, ctx: *anyopaque) void {
-        const ctx_typed: *LuaSystemCtx = @ptrCast(@alignCast(ctx));
-        ctx_typed.lua.unref(zlua.registry_index, ctx_typed.table_ref);
-        allocator.free(ctx_typed.query);
-        allocator.free(ctx_typed.name);
-        allocator.destroy(ctx_typed);
-    }
+//     fn luaSystemDtor(allocator: std.mem.Allocator, ctx: *anyopaque) void {
+//         const ctx_typed: *LuaSystemCtx = @ptrCast(@alignCast(ctx));
+//         ctx_typed.lua.unref(zlua.registry_index, ctx_typed.table_ref);
+//         allocator.free(ctx_typed.query);
+//         allocator.free(ctx_typed.name);
+//         allocator.destroy(ctx_typed);
+//     }
 
-    fn luaQueryNext(lua: *zlua.Lua) i32 {
-        const box = lua.toUserdata(LuaQueryIterator, zlua.Lua.upvalueIndex(1)) catch unreachable;
-        const entity = box.iter.next() orelse {
-            lua.pushNil();
-            return 1;
-        };
+//     fn luaQueryNext(lua: *zlua.Lua) i32 {
+//         const box = lua.toUserdata(LuaQueryIterator, zlua.Lua.upvalueIndex(1)) catch unreachable;
+//         const entity = box.iter.next() orelse {
+//             lua.pushNil();
+//             return 1;
+//         };
 
-        lua.pushInteger(@intCast(box.iter.cursor));
-        linker.Binding(Entity, false).push(lua, entity);
-        return 2;
-    }
+//         lua.pushInteger(@intCast(box.iter.cursor));
+//         linker.Binding(Entity, false).push(lua, entity);
+//         return 2;
+//     }
 
-    fn luaQueryIterGc(lua: *zlua.Lua) i32 {
-        const box = lua.toUserdata(LuaQueryIterator, 1) catch return 0;
-        box.world.allocator.free(box.required);
-        return 0;
-    }
+//     fn luaQueryIterGc(lua: *zlua.Lua) i32 {
+//         const box = lua.toUserdata(LuaQueryIterator, 1) catch return 0;
+//         box.world.allocator.free(box.required);
+//         return 0;
+//     }
 
-    fn registerComponentLua(self: *World, name: []u8, fields: []struct { name: []u8, type: []u8 }) !ComponentId {
-        const specs = try self.allocator.alloc(FieldTypeSpec, fields.len);
-        defer self.allocator.free(specs);
+//     fn registerComponentLua(self: *World, name: []u8, fields: []struct { name: []u8, type: []u8 }) !ComponentId {
+//         const specs = try self.allocator.alloc(FieldTypeSpec, fields.len);
+//         defer self.allocator.free(specs);
 
-        for (fields, 0..) |f, i| {
-            specs[i] = .{ .name = f.name, .type_name = f.type };
-        }
+//         for (fields, 0..) |f, i| {
+//             specs[i] = .{ .name = f.name, .type_name = f.type };
+//         }
 
-        return self.registerComponentFromSpecs(name, specs);
-    }
+//         return self.registerComponentFromSpecs(name, specs);
+//     }
 
-    fn registerSystemLua(lua: *zlua.Lua) i32 {
-        const self = binding.check(lua, 1);
+//     fn registerSystemLua(lua: *zlua.Lua) i32 {
+//         const self = binding.check(lua, 1);
 
-        _ = lua.getField(2, "Name");
-        const name = lua.toString(-1) catch lua.raiseErrorStr("'Name' field invalid or missing from system", .{});
-        const name_owned = self.allocator.dupe(u8, name) catch lua.raiseErrorStr("out of memory", .{});
-        lua.pop(1);
+//         _ = lua.getField(2, "Name");
+//         const name = lua.toString(-1) catch lua.raiseErrorStr("'Name' field invalid or missing from system", .{});
+//         const name_owned = self.allocator.dupe(u8, name) catch lua.raiseErrorStr("out of memory", .{});
+//         lua.pop(1);
 
-        _ = lua.getField(2, "Query");
-        const query_list = parseComponentIdList(lua, self, lua.getTop());
-        lua.pop(1);
+//         _ = lua.getField(2, "Query");
+//         const query_list = parseComponentIdList(lua, self, lua.getTop());
+//         lua.pop(1);
 
-        _ = lua.getField(2, "Tick");
-        if (!lua.isFunction(-1)) lua.raiseErrorStr("'Tick' function is invalid or missing from system", .{});
-        lua.pop(1);
+//         _ = lua.getField(2, "Tick");
+//         if (!lua.isFunction(-1)) lua.raiseErrorStr("'Tick' function is invalid or missing from system", .{});
+//         lua.pop(1);
 
-        lua.pushValue(2);
-        const table_ref = lua.ref(zlua.registry_index);
+//         lua.pushValue(2);
+//         const table_ref = lua.ref(zlua.registry_index);
 
-        const ctx = self.allocator.create(LuaSystemCtx) catch lua.raiseErrorStr("out of memory", .{});
-        ctx.* = .{
-            .lua = lua,
-            .table_ref = table_ref,
-            .query = query_list,
-            .name = name_owned
-        };
+//         const ctx = self.allocator.create(LuaSystemCtx) catch lua.raiseErrorStr("out of memory", .{});
+//         ctx.* = .{
+//             .lua = lua,
+//             .table_ref = table_ref,
+//             .query = query_list,
+//             .name = name_owned
+//         };
 
-        self.registerSystemErased(name_owned, luaSystemTrampoline, @ptrCast(ctx), luaSystemDtor) catch lua.raiseErrorStr("failed to register system", .{});
+//         self.registerSystemErased(name_owned, luaSystemTrampoline, @ptrCast(ctx), luaSystemDtor) catch lua.raiseErrorStr("failed to register system", .{});
 
-        return 0;
-    }
+//         return 0;
+//     }
 
-    fn queryLua(lua: *zlua.Lua) i32 {
-        const self = binding.check(lua, 1);
+//     fn queryLua(lua: *zlua.Lua) i32 {
+//         const self = binding.check(lua, 1);
 
-        const required_owned = parseComponentIdList(lua, self, 2);
-        const q: Query = .init(self, required_owned);
+//         const required_owned = parseComponentIdList(lua, self, 2);
+//         const q: Query = .init(self, required_owned);
 
-        const box = lua.newUserdata(LuaQueryIterator);
-        box.* = .{ .world = self, .required = required_owned, .iter = q.iterator() };
+//         const box = lua.newUserdata(LuaQueryIterator);
+//         box.* = .{ .world = self, .required = required_owned, .iter = q.iterator() };
 
-        if (lua.newMetatable(query_iter_metatable_name)) {
-            lua.pushFunction(zlua.wrap(luaQueryIterGc));
-            lua.setField(-2, "__gc");
-        } else |_| {}
-        lua.setMetatable(-2);
+//         if (lua.newMetatable(query_iter_metatable_name)) {
+//             lua.pushFunction(zlua.wrap(luaQueryIterGc));
+//             lua.setField(-2, "__gc");
+//         } else |_| {}
+//         lua.setMetatable(-2);
 
-        lua.pushClosure(zlua.wrap(luaQueryNext), 1);
-        lua.pushNil(); 
-        lua.pushNil();
+//         lua.pushClosure(zlua.wrap(luaQueryNext), 1);
+//         lua.pushNil(); 
+//         lua.pushNil();
 
-        return 3;
-    }
+//         return 3;
+//     }
 
-    pub fn registerLua(l: anytype) void {
-        linker.reference(l, World, .{
-            .name = .{ .named = "World" },
-            .scope = .{ .module = "ecs.world" },
-            .methods = &.{
-                .named("SpawnEntity", World.spawnEntity),
-                .named("RegisterComponent", registerComponentLua),
-                .custom("RegisterSystem", registerSystemLua),
-                .custom("Query", queryLua)
-            },
+//     pub fn registerLua(l: anytype) void {
+//         linker.reference(l, World, .{
+//             .name = .{ .named = "World" },
+//             .scope = .{ .module = "ecs.world" },
+//             .methods = &.{
+//                 .named("SpawnEntity", World.spawnEntity),
+//                 .named("RegisterComponent", registerComponentLua),
+//                 .custom("RegisterSystem", registerSystemLua),
+//                 .custom("Query", queryLua)
+//             },
 
-        });
-    }
-}.registerLua;
+//         });
+//     }
+// }.registerLua;

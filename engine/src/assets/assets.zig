@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const gpu = @import("../gpu/gpu.zig");
+const bind = @import("../scripting/bind/bind.zig");
 const Source = @import("sources/Source.zig");
 const render = @import("../render/render.zig");
 const DirSource = @import("sources/DirSource.zig");
@@ -36,7 +37,7 @@ pub const AssetHandle = struct {
         return self;
     }
 
-    pub fn cpuRelease(self: AssetHandle) void {
+    pub fn cpuRelease(self: AssetHandle) void {        
         self.assets.cpuDeref(self.id) catch {
             std.log.warn("attempt to release cpu data when none exists", .{});
         };
@@ -103,9 +104,6 @@ pub const AssetHandle = struct {
     pub fn eql(self: AssetHandle, other: AssetHandle) bool {
         return self.id == other.id;
     }
-
-    pub const __lua = .val;
-    pub const __opaque = true;
 
     pub fn format(
         self: @This(),
@@ -242,18 +240,22 @@ pub fn tick(self: *Assets) usize {
 }
 
 pub fn cpuRef(self: *Assets, id: u64) !void {
+    std.debug.assert(self.slots.capacity() != 0);
     (self.slots.getPtr(id).?.cpu_data_refcount orelse return error.NoCpuData) +|= 1;
 }
 
 pub fn cpuDeref(self: *Assets, id: u64) !void {
+    std.debug.assert(self.slots.capacity() != 0);
     (self.slots.getPtr(id).?.cpu_data_refcount orelse return error.NoCpuData) -|= 1;
 }
 
 pub fn gpuRef(self: *Assets, id: u64) !void {
+    std.debug.assert(self.slots.capacity() != 0);
     (self.slots.getPtr(id).?.gpu_data_refcount orelse return error.NoGpuData) +|= 1;
 }
 
 pub fn gpuDeref(self: *Assets, id: u64) !void {
+    std.debug.assert(self.slots.capacity() != 0);
     (self.slots.getPtr(id).?.gpu_data_refcount orelse return error.NoGpuData) +|= 1;
 }
 
@@ -265,39 +267,50 @@ pub fn getGpuData(self: *Assets, id: u64) !AssetData.GpuAssetData {
     return (self.slots.get(id) orelse return error.NoAsset).gpu_data orelse return error.NoGpuData;
 }
 
-pub const registerLua = struct {
-    const zlua = @import("zlua");
-    const linker = @import("../scripting/linker/linker.zig");
-    const Runtime = @import("../scripting/runtime/Runtime.zig");
-    const HandleBind = linker.Binding(AssetHandle, false);
-
-    fn luaLoadAsset(l: *zlua.Lua) !i32 {
-        const r: *Runtime = .fromState(l);
-        const uri = l.toString(1) catch |e| linker.util.luaErr(l, e, .{ []const u8, 1 });
-        const handle = try r.assets.load(uri);
-
-        // Clone since lua has a reference to it.
-        HandleBind.push(l, handle.cpuClone());
-        return 1;
+pub const api = bind.module("assets", .{
+    .kind = .{ .singleton = Assets },
+    .members = &.{
+        bind.func("load", Assets.load),
+        bind.handle(AssetHandle, .{
+            .release = bind.func("release", AssetHandle.cpuRelease),
+            .ops = .{ .eq = .{ .member = bind.func("eq", AssetHandle.eql) }, .tostring = .auto }
+        })
     }
+});
 
-    pub fn registerLua(l: *zlua.Lua) void {
-        linker.reference(l, AssetHandle, .{
-            .name = .auto,
-            .scope = .{ .module = "assets.types" },
-            .gc = .nonNamed(struct {
-                fn c(self: AssetHandle) void {
-                    self.cpuRelease();
-                }
-            }.c)
-        });
+// pub const registerLua = struct {
+//     const zlua = @import("zlua");
+//     const linker = @import("../scripting/linker/linker.zig");
+//     const Runtime = @import("../scripting/runtime/Runtime.zig");
+//     const HandleBind = linker.Binding(AssetHandle, false);
 
-        linker.module(l, .{
-            .name = "assets",
-            .functions = &.{
-                .custom("load", luaLoadAsset)
-            },
-        });
+//     fn luaLoadAsset(l: *zlua.Lua) !i32 {
+//         const r: *Runtime = .fromState(l);
+//         const uri = l.toString(1) catch |e| linker.util.luaErr(l, e, .{ []const u8, 1 });
+//         const handle = try r.assets.load(uri);
 
-    }
-}.registerLua;
+//         // Clone since lua has a reference to it.
+//         HandleBind.push(l, handle.cpuClone());
+//         return 1;
+//     }
+
+//     pub fn registerLua(l: *zlua.Lua) void {
+//         linker.reference(l, AssetHandle, .{
+//             .name = .auto,
+//             .scope = .{ .module = "assets.types" },
+//             .gc = .nonNamed(struct {
+//                 fn c(self: AssetHandle) void {
+//                     self.cpuRelease();
+//                 }
+//             }.c)
+//         });
+
+//         linker.module(l, .{
+//             .name = "assets",
+//             .functions = &.{
+//                 .custom("load", luaLoadAsset)
+//             },
+//         });
+
+//     }
+// }.registerLua;

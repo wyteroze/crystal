@@ -22,15 +22,16 @@ fn entryName(comptime e: InstanceEntry) []const u8 {
     return switch (e) { .field => |f| f.lua, .prop => |p| p.name, .method => |m| m.name };
 }
 
-fn instanceEntries(comptime r: recipes.ValueRecipe) []const InstanceEntry {
-    comptime {
-        var out: []const InstanceEntry = &.{};
-        for (r.fields) |f| out = out ++ &[_]InstanceEntry{ .{ .field = .{ .zig = f, .lua = names.pascal(f) } } };
-        for (r.props) |p| out = out ++ &[_]InstanceEntry{ .{ .prop = p } };
-        for (r.methods) |m| out = out ++ &[_]InstanceEntry{ .{ .method = m } };
-        return out;
-    }
-}
+fn instanceEntries(comptime r: anytype) []const InstanceEntry { comptime {
+    var out: []const InstanceEntry = &.{};
+    const T = @TypeOf(r);
+
+    if (@hasField(T, "fields")) { for (r.fields) |f| out = out ++ &[_]InstanceEntry{ .{ .field = .{ .zig = f, .lua = names.pascal(f) } } }; }
+    if (@hasField(T, "props")) { for (r.props) |p| out = out ++ &[_]InstanceEntry{ .{ .prop = p } }; }
+    if (@hasField(T, "methods")) { for (r.methods) |m| out = out ++ &[_]InstanceEntry{ .{ .method = m } }; }
+
+    return out;
+} }
 
 pub fn Binder(comptime api: anytype) type {
     const R = Registry(api);
@@ -54,6 +55,7 @@ pub fn Binder(comptime api: anytype) type {
 
             inline for (R.entries) |e| switch (e.member.kind) {
                 .value => installValueMeta(l, e.T, e.member.impl.recipe),
+                .handle => installHandleMeta(l, e.T, e.member.impl.recipe),
                 else => {}
             };
 
@@ -78,12 +80,12 @@ pub fn Binder(comptime api: anytype) type {
             l.setGlobal("require");
         }
 
-        pub fn pushValue(self: *Self, val: anytype) void {
-            M.push(self.l, val);
+        pub fn pushValue(_: *Self, l: *zlua.Lua, val: anytype) void {
+            M.push(l, val);
         }
 
-        pub fn parseValue(self: *Self, comptime T: type, idx: i32) *T {
-            M.parse(T, self.l, idx);
+        pub fn parseValue(_: *Self, l: *zlua.Lua, comptime T: type, idx: i32) *T {
+            M.parse(T, l, idx);
         }
 
         fn loader(comptime mod: types.Member) fn (*zlua.Lua) i32 {
@@ -116,6 +118,10 @@ pub fn Binder(comptime api: anytype) type {
                     .func => { l.pushFunction(W.cFn(m.impl.function, .{}), m.name); l.setField(-2, m.name); },
                     .constant => { M.push(l, m.impl.val); l.setField(-2, m.name); },
                     .value => { pushTypeTable(l, m); l.setField(-2, m.name); },
+                    .handle, .object => if (m.impl.recipe.statics.len > 0) {
+                        pushTypeTable(l, m);
+                        l.setField(-2, m.name);
+                    },
 
                     else => @compileError(std.fmt.comptimePrint("Type not allowed here: {s}", .{ m.name })),
                 }
@@ -221,14 +227,53 @@ pub fn Binder(comptime api: anytype) type {
                 l.setField(-2, "__index");
             }
 
+            pushOps(l, T, r);
+
+            l.setUserdataMetatable(R.tagOf(T));
+        }
+
+        fn installHandleMeta(l: *zlua.Lua, comptime T: type, comptime r: recipes.HandleRecipe) void {
+            const base = l.getTop();
+            defer std.debug.assert(l.getTop() == base);
+
+            const E = comptime instanceEntries(r);
+            const tag = R.tagOf(T);
+
+            l.newTable();
+
+            _ = l.pushStringZ(r.name orelse names.shortTypeName(T));
+            l.setField(-2, "__type");
+
+            if (E.len > 0) {
+                l.pushFunction(indexFn(T, E), "__index");
+                l.setField(-2, "__index");
+            }
+
+            pushOps(l, T, r);
+
+            if (r.release) |rel| {
+                l.setUserdataDtor(tag, handleDtorFn(T, rel.impl.function));
+            }
+
+            l.setUserdataMetatable(tag);
+        }
+
+        fn handleDtorFn(comptime T: type, comptime func: fn (T) void) zlua.CUserdataDtorFn {
+            return struct {
+                fn dtorFn(_: *zlua.LuaState, userdata: *anyopaque) callconv(.c) void {
+                    const h: *T = @ptrCast(@alignCast(userdata));
+                    func(h.*);
+                }
+            }.dtorFn;
+        }
+
+        fn pushOps(l: *zlua.Lua, comptime T: type, comptime r: anytype) void {
             inline for (@typeInfo(types.Ops).@"struct".field_names) |nm| {
                 if (@field(r.ops, nm)) |op| {
                     l.pushFunction(opFn(T, nm, op), nm);
                     l.setField(-2, "__" ++ nm);
                 }
             }
-
-            l.setUserdataMetatable(R.tagOf(T));
         }
     };
 }

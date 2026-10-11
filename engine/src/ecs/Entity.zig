@@ -92,7 +92,11 @@ pub fn format(
     try writer.print("Entity{{ index: {d}, generation: {d} }}", .{ self.index, self.generation });
 }
 
-pub const __lua = .val;
+const bind = @import("../scripting/bind/bind.zig");
+pub const sub_api = bind.handle(Entity, .{
+    .alive = bind.func("isAlive", Entity.isAlive),
+    .ops = .{ .eq = .{ .member = bind.func("eq", Entity.eql) }, .tostring = .auto }
+});
 
 pub const luaBinding = struct {
     const linker = @import("../scripting/linker/linker.zig");

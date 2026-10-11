@@ -163,7 +163,7 @@ pub const CompareOperator = enum(u2) {
 };
 
 /// Type for C userdata destructors
-pub const CUserdataDtorFn = *const fn (userdata: *anyopaque) callconv(.c) void;
+pub const CUserdataDtorFn = *const fn (state: *LuaState, userdata: *anyopaque) callconv(.c) void;
 
 /// Type for C interrupt callback
 pub const CInterruptCallbackFn = *const fn (state: ?*LuaState, gc: c_int) callconv(.c) void;
@@ -1828,6 +1828,11 @@ pub const Lua = opaque {
         // so the returned pointer should never be null
         const ptr = c.lua_newuserdatadtor(@ptrCast(lua), @sizeOf(T), @ptrCast(dtor_fn)).?;
         return @ptrCast(@alignCast(ptr));
+    }
+
+    pub fn setUserdataDtor(lua: *Lua, tag: i32, dtor_fn: CUserdataDtorFn) void {
+        comptime checkSupport(.{ .luau }, @src().fn_name);
+        c.lua_setuserdatadtor(@ptrCast(lua), tag, @ptrCast(dtor_fn));
     }
 
     /// Pops a key from the stack, and pushes a key–value pair from the table at the given `index`, the "next" pair after the

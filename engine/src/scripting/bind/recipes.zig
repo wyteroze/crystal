@@ -16,11 +16,13 @@ pub const ValueRecipe = struct {
 
 pub const HandleRecipe = struct {
     name: ?[:0]const u8 = null,
-    alive: types.Member,
-    props: []const types.Member = &.{}, 
-    statics: []const types.Member = &.{}, 
+    /// For handles that Lua doesn't own. This is called when used to ensure the handle is alive.
+    alive: ?types.Member = null,
+    /// For handles that Lua owns. This is called on garbage-collection.
+    release: ?types.Member = null,
+    props: []const types.Member = &.{},
+    statics: []const types.Member = &.{},
     methods: []const types.Member = &.{},
-    facets: []const types.Member = &.{},
     ops: types.Ops = .{},
 };
 

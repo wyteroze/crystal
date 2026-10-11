@@ -13,3 +13,4 @@ pub const readonly = util.readonly;
 pub const value = util.value;
 pub const module = util.module;
 pub const globals = util.globals;
+pub const handle = util.handle;

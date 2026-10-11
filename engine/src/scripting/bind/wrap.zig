@@ -45,7 +45,7 @@ pub fn Wrap(comptime Mar: type) type {
             switch (@typeInfo(R)) {
                 .void => return 0,
                 .error_union => |eu| {
-                    const v = r catch |e| return l.raiseErrorStr("%s", .{ @errorName(e) });
+                    const v = r catch |e| return l.raiseErrorStr("%s", .{ @errorName(e).ptr });
                     return pushResult(eu.payload, l, v);
                 },
                 .@"struct" => |s| if (s.is_tuple) {

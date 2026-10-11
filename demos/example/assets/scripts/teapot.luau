@@ -2,7 +2,7 @@
 Copyright 2026 wyteroze. Licensed under the Apache-2.0 license.
 --]]
 
--- local assets = require("@assets")
+local assets = require("@assets")
 
 local Teapot = {}
 Teapot.__index = Teapot
@@ -11,10 +11,11 @@ function Teapot.new(entity)
     local self = setmetatable({
         Multiplier = 1,
     }, Teapot)
+    
+    print(entity)
+    local chickenPng = assets.load("assets://images/chicken.jpg")
+    local jbMono = assets.load("assets://fonts/JetBrains-Mono.ttf")
 
-    -- local chickenPng = assets.load("assets://images/chicken.jpg"):Await()
-    -- print(chickenPng)
-    -- local jbMono = assets.load("assets://fonts/JetBrains-Mono.ttf")
     -- entity:AddComponent("Position", core.Vec3.new(0, 0, 5))
     -- entity:AddComponent("Rotation", core.Vec3.new(0, 0, 0))
     -- entity:AddComponent("Mesh", assets.load("assets://models/cube.fbx"))

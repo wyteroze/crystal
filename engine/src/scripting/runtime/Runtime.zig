@@ -25,11 +25,21 @@ pub fn init(allocator: std.mem.Allocator, host: *bind.Host) !Runtime {
 }
 
 pub fn deinit(self: Runtime) void {
+    self.gcCollect();
     self.state.deinit();
 }
 
 pub fn loadScript(self: Runtime, source: Assets.types.ScriptSource) !Script {
-    return .init(self.state.newThread(), source, self.binder);
+    const thread = self.state.newThread();
+    const thread_ref = self.state.ref(-1);
+    errdefer self.state.unref(thread_ref);
+    self.state.pop(1);
+
+    return .init(self.state, thread, thread_ref, source, self.binder);
+}
+
+pub fn gcCollect(self: Runtime) void {
+    return self.state.gcCollect();
 }
 
 pub fn gcCount(self: Runtime) i32 {

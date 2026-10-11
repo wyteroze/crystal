@@ -52,10 +52,7 @@ pub fn of(comptime T: type) Codec {
                 destroy(T, a, @ptrCast(@alignCast(bytes.ptr)));
             }
         }.f else null,
-        .fields = if (comptime isProxy(T)) blk: {
-            const fs = comptime fieldsOf(T);
-            break :blk &fs;
-        } else &.{},
+        .fields = &.{}
     };
 }
 

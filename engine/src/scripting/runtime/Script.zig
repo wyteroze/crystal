@@ -9,12 +9,14 @@ const Lua = zlua.Lua;
 
 const Script = @This();
 source: types.ScriptSource,
+main: *Lua,
 state: *Lua,
+thread_ref: i32,
 ref: i32,
 instance_ref: ?i32 = null,
 binder: bind.Binder(bind.api),
 
-pub fn init(state: *Lua, source: types.ScriptSource, binder: bind.Binder(bind.api)) !Script {
+pub fn init(main: *Lua, state: *Lua, thread_ref: i32, source: types.ScriptSource, binder: bind.Binder(bind.api)) !Script {
     // compile and run script
     const bytecode = switch (source.type) {
         .text => try zlua.compile(state.allocator(), source.data, .{}),
@@ -41,7 +43,9 @@ pub fn init(state: *Lua, source: types.ScriptSource, binder: bind.Binder(bind.ap
 
     return .{
         .source = source,
+        .main = main,
         .state = state,
+        .thread_ref = thread_ref,
         .ref = ref,
         .binder = binder
     };
@@ -55,7 +59,7 @@ pub fn callFunction(self: *const Script, name: [:0]const u8, comptime ResultType
     _ = self.state.getGlobal(name) catch return error.UnknownFunction;
 
     inline for (args) |a| {
-        self.binder.pushValue(a);
+        self.binder.pushValue(self.state, a);
     }
 
     self.state.protectedCall(.{ .args = args.len, .results = ResultTypes.len, .msg_handler = handler_idx }) catch self.luaErr();
@@ -63,7 +67,7 @@ pub fn callFunction(self: *const Script, name: [:0]const u8, comptime ResultType
     var results: @Tuple(ResultTypes) = undefined;
     inline for (ResultTypes, 0..) |R, i| {
         const idx = top + 1 + 1 + @as(i32, @intCast(i));
-        results[i] = self.binder.parseValue(R, idx);
+        results[i] = self.binder.parseValue(self.state, R, idx);
     }
 
     return results;
@@ -84,24 +88,26 @@ pub fn callMethod(self: *const Script, name: [:0]const u8, comptime ResultTypes:
     self.state.remove(-3);
 
     inline for (args) |a| {
-        self.binder.pushValue(a);
+        self.binder.pushValue(self.state, a);
     }
 
-    self.state.protectedCall(.{ .args = args.len+1, .results = ResultTypes.len, .msg_handler = handler_idx }) catch self.luaErr();
+    self.state.protectedCall(.{ .args = args.len+1, .results = ResultTypes.len, .msg_handler = handler_idx }) catch {
+        self.luaErr();
+        return error.MethodCallFailed;
+    };
 
     var results: @Tuple(ResultTypes) = undefined;
     inline for (ResultTypes, 0..) |R, i| {
-        const idx = top + 1 + 1 + @as(i32, @intCast(i));
-        results[i] = self.binder.parseValue(R, idx);
+        const idx = handler_idx + 1 + @as(i32, @intCast(i));
+        results[i] = self.binder.parseValue(self.state, R, idx);
     }
 
     return results;
 }
 
 /// Param is the first value passed to the .new function.
-pub fn instantiate(self: *Script, _: anytype) !void {
-    // Calling .ref() on a nil value returns 0, so if we get that, it means
-    // no instance table was returned by the script.
+pub fn instantiate(self: *Script, param: anytype) !void {
+    std.log.info("instantiate: ref={d}", .{self.ref});
     if (self.ref == 0) return error.NoInstanceTable;
     const top = self.state.getTop();
     defer self.state.setTop(top);
@@ -111,13 +117,19 @@ pub fn instantiate(self: *Script, _: anytype) !void {
     _ = self.state.getField(-1, "new");
     self.state.remove(-2);
 
-    self.state.protectedCall(.{ .args = 1, .results = 1, .msg_handler = handler_idx }) catch self.luaErr(); 
+    self.binder.pushValue(self.state, param);
+    self.state.protectedCall(.{ .args = 1, .results = 1, .msg_handler = handler_idx }) catch {
+        self.luaErr();
+        return error.InstantiateFailed;
+    };
 
     self.instance_ref = self.state.ref(-1);
 }
 
 pub fn deinit(self: *const Script) void {
+    if (self.instance_ref) |r| self.state.unref(r);
     self.state.unref(self.ref);
+    self.main.unref(self.thread_ref);
 }
 
 fn pushMsgHandler(self: *const Script) i32 {
@@ -128,6 +140,7 @@ fn pushMsgHandler(self: *const Script) i32 {
             return 1;
         }
     }.c), "msgHandler");
+
     return self.state.getTop();
 }
 

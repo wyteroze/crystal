@@ -8,9 +8,10 @@ const types = @import("types.zig");
 pub fn Marshal(comptime Reg: type) type {
     return struct {
         pub fn parse(comptime T: type, l: *zlua.Lua, idx: i32) T {
+            if (comptime ptrToValue(T)) |V| return try parseValue(V, l, idx); 
             if (comptime Reg.kindOf(T)) |k| switch (k) {
                 .value => return parseValue(T, l, idx).*,
-                .handle => return parseHandle(T, l, idx),
+                .handle => return parseHandle(T, l, idx).*,
                 .object => @compileError("Objects are taken by pointer"),
                 else => unreachable
             };
@@ -77,6 +78,14 @@ pub fn Marshal(comptime Reg: type) type {
             return l.toUserdataTagged(T, idx, @intCast(Reg.tagOf(T))) catch l.typeError(idx, names.shortTypeName(T));
         }
 
+        fn ptrToValue(comptime T: type) ?type {
+            const info = @typeInfo(T);
+            if (info != .pointer or info.pointer.size != .one) return null;
+
+            const C = info.pointer.child;
+            return if (Reg.kindOf(C) == .value) C else null;
+        }
+
         fn parseEnum(comptime T: type, l: *zlua.Lua, idx: i32) T {
             const map = comptime blk: {
                 const fs: std.StaticStringMap(T) = @typeInfo(T).@"enum".fields;
@@ -97,12 +106,24 @@ pub fn Marshal(comptime Reg: type) type {
                 if (p.size != .slice or p.child != u8) @compileError("unsupported pointer type " ++ @typeName(T));
             }
 
-            if (!.isString(idx)) l.typeError(idx, @tagName(l.typeOf(idx)));
+            if (!l.isString(idx)) l.typeError(idx, @tagName(l.typeOf(idx)));
             return l.toString(idx) catch unreachable;
         }
 
         fn parseRecord(comptime T: type, _: *zlua.Lua, _: i32, _: *types.Diag) T { @compileError("records are not implemented yet"); }
-        fn parseHandle(comptime T: type, _: *zlua.Lua, _: i32, _: *types.Diag) T { @compileError("handles are not implemented yet"); }
-        fn pushHandle(_: *zlua.Lua, v: anytype) void { @compileError("handles are not implemented yet: " ++ @typeName(@TypeOf(v))); }
+
+        fn parseHandle(comptime T: type, l: *zlua.Lua, idx: i32) *T {
+            return l.toUserdataTagged(T, idx, @intCast(Reg.tagOf(T))) catch l.typeError(idx, names.shortTypeName(T));
+        }
+
+        fn pushHandle(l: *zlua.Lua, v: anytype) void {
+            const T = @TypeOf(v);
+            const tag = Reg.tagOf(T);
+            const p = l.newUserdataTagged(T, @intCast(tag));
+            p.* = v;
+
+            l.getUserdataMetatable(@intCast(tag));
+            _ = l.setMetatable(-2);
+        }
     };
 }
