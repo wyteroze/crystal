@@ -45,7 +45,22 @@ pub const Vec2 = extern struct {
 };
 
 const bind = @import("../../scripting/bind/bind.zig");
-pub const api = bind.value(Vec2, .{});
+pub const api = bind.value(Vec2, .{
+    .name = "Vec2",
+    .fields = &.{ "x", "y" },
+    .statics = &.{ 
+        bind.constant("zero", Vec2.zero), 
+        bind.constant("one", Vec2.one),
+        bind.func("new", Vec2.new),
+    },
+    .ops = .{ 
+        .tostring = .auto, 
+        .add = .{ .member = bind.func("add", Vec2.add) },
+        .sub = .{ .member = bind.func("sub", Vec2.sub) },
+        .mul = .{ .member = bind.func("mul", Vec2.mul) },
+        .div = .{ .member = bind.func("div", Vec2.div) }
+    }
+});
 
 pub const registerLua = struct {
     const zlua = @import("zlua");

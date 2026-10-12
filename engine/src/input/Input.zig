@@ -1,15 +1,21 @@
 // Copyright 2026 wyteroze. Licensed under the Apache-2.0 license.
 
 const std = @import("std");
+const core = @import("../core/core.zig");
 const devices = @import("devices/devices.zig");
 const signal = @import("../core/signal.zig");
 const Platform = @import("../platform/Platform.zig");
 
 const max_usize = std.math.maxInt(usize);
 
-pub const KeyboardEvent = signal.Signal(.{ *devices.KeyboardDevice });
-pub const MouseEvent = signal.Signal(.{ *devices.MouseDevice });
-pub const GamepadEvent = signal.Signal(.{ *devices.GamepadDevice });
+pub const KeyboardEvent = signal.Signal(.{ KeyboardHandle });
+pub const MouseEvent = signal.Signal(.{ MouseHandle });
+pub const GamepadEvent = signal.Signal(.{ GamepadHandle });
+
+pub const KeyboardHandle = devices.DeviceHandle(devices.KeyboardDevice, "keyboards");
+pub const MouseHandle = devices.DeviceHandle(devices.MouseDevice, "mice");
+pub const GamepadHandle = devices.DeviceHandle(devices.GamepadDevice, "gamepads");
+pub const TouchHandle = devices.DeviceHandle(devices.TouchDevice, "touch_devices");
 
 const Input = @This();
 allocator: std.mem.Allocator,
@@ -36,24 +42,35 @@ unigamepad: *devices.GamepadDevice,
 unitouchdevice: *devices.TouchDevice,
 
 // Connected devices
-keyboards: std.AutoHashMap(usize, devices.KeyboardDevice),
-mice: std.AutoHashMap(usize, devices.MouseDevice),
-gamepads: std.AutoHashMap(usize, devices.GamepadDevice),
-touch_devices: std.AutoHashMap(usize, devices.TouchDevice),
+keyboards: std.AutoHashMap(usize, *devices.KeyboardDevice),
+mice: std.AutoHashMap(usize, *devices.MouseDevice),
+gamepads: std.AutoHashMap(usize, *devices.GamepadDevice),
+touch_devices: std.AutoHashMap(usize, *devices.TouchDevice),
 
 pub fn init(self: *Input, allocator: std.mem.Allocator, platform: *Platform) !void {
-    var keyboards: std.AutoHashMap(usize, devices.KeyboardDevice) = .init(allocator);
-    var mice: std.AutoHashMap(usize, devices.MouseDevice) = .init(allocator);
-    var gamepads: std.AutoHashMap(usize, devices.GamepadDevice) = .init(allocator);
-    var touch_devices: std.AutoHashMap(usize, devices.TouchDevice) = .init(allocator);
+    var keyboards: std.AutoHashMap(usize, *devices.KeyboardDevice) = .init(allocator);
+    var mice: std.AutoHashMap(usize, *devices.MouseDevice) = .init(allocator);
+    var gamepads: std.AutoHashMap(usize, *devices.GamepadDevice) = .init(allocator);
+    var touch_devices: std.AutoHashMap(usize, *devices.TouchDevice) = .init(allocator);
 
     self.*.dispatcher = .init(allocator);
 
     // Unidevices
-    try keyboards.put(max_usize, .init(&self.dispatcher, allocator, max_usize));
-    try mice.put(max_usize, .init(&self.dispatcher, allocator, max_usize));
-    try gamepads.put(max_usize, .init(&self.dispatcher, allocator));
-    try touch_devices.put(max_usize, .init(&self.dispatcher, allocator));
+    const unikeyboard = try allocator.create(devices.KeyboardDevice);
+    unikeyboard.* = .init(&self.dispatcher, allocator, max_usize);
+    try keyboards.put(max_usize, unikeyboard);
+
+    const unimouse = try allocator.create(devices.MouseDevice);
+    unimouse.* = .init(&self.dispatcher, allocator, max_usize);
+    try mice.put(max_usize, unimouse);
+
+    const unigamepad = try allocator.create(devices.GamepadDevice);
+    unigamepad.* = .init(&self.dispatcher, allocator);
+    try gamepads.put(max_usize, unigamepad);
+
+    const unitouchdevice = try allocator.create(devices.TouchDevice);
+    unitouchdevice.* = .init(&self.dispatcher, allocator);
+    try touch_devices.put(max_usize, unitouchdevice);
 
     const platform_event_con = try platform.platform_event.connect(struct {
         fn c(slf: *Input, evt: Platform.desc.PlatformEvent) void {
@@ -76,10 +93,10 @@ pub fn init(self: *Input, allocator: std.mem.Allocator, platform: *Platform) !vo
         .mouse_disconnected = .init(allocator, &self.dispatcher),
         .gamepad_connected = .init(allocator, &self.dispatcher),
         .gamepad_disconected = .init(allocator, &self.dispatcher),
-        .unikeyboard = keyboards.getPtr(max_usize).?,
-        .unimouse = mice.getPtr(max_usize).?,
-        .unigamepad = gamepads.getPtr(max_usize).?,
-        .unitouchdevice = touch_devices.getPtr(max_usize).?,
+        .unikeyboard = unikeyboard,
+        .unimouse = unimouse,
+        .unigamepad = unigamepad,
+        .unitouchdevice = unitouchdevice,
     };
 }
 
@@ -89,10 +106,10 @@ pub fn deinit(self: *Input) void {
     var gp_iter = self.gamepads.valueIterator();
     var td_iter = self.touch_devices.valueIterator();
 
-    while (kb_iter.next()) |kb| kb.deinit();
-    while (ms_iter.next()) |ms| ms.deinit();
-    while (gp_iter.next()) |gp| gp.deinit();
-    while (td_iter.next()) |td| td.deinit();
+    while (kb_iter.next()) |kb| { kb.*.deinit(); self.allocator.destroy(kb.*); }
+    while (ms_iter.next()) |ms| { ms.*.deinit(); self.allocator.destroy(ms.*); }
+    while (gp_iter.next()) |gp| { gp.*.deinit(); self.allocator.destroy(gp.*); }
+    while (td_iter.next()) |td| { td.*.deinit(); self.allocator.destroy(td.*); }
     
     self.keyboards.deinit();
     self.mice.deinit();
@@ -110,14 +127,23 @@ pub fn deinit(self: *Input) void {
 fn onPlatformEvent(self: *Input, event: Platform.desc.PlatformEvent) !void {
     switch (event) {
         .keyboard_connected => |e| { 
-            try self.keyboards.put(@intCast(e.id), .init(&self.dispatcher, self.allocator, e.id));
-            self.keyboard_connected.fire(.{ self.getKeyboard(e.id).? });
+            const kb = try self.allocator.create(devices.KeyboardDevice);
+            errdefer self.allocator.destroy(kb);
+
+            kb.* = .init(&self.dispatcher, self.allocator, e.id);
+            try self.keyboards.put(@intCast(e.id), kb);
+
+            self.keyboard_connected.fire(.{ .{ .input = self, .id = e.id } });
         },
         .keyboard_disconnected => |e| { 
-            var kb = self.keyboards.fetchRemove(@intCast(e.id))
-                orelse { std.log.err("Attempt to disconnect kb id {d}, but it doesn't exist/isn't registered", .{ e.id }); return; };
+            const h: KeyboardHandle = .{ .input = self, .id = e.id };
+            if (!h.isAlive()) { std.log.err("Attempt to disconnect kb id {d}, but it doesn't exist/isn't registered", .{ e.id }); return; }
             
-            self.keyboard_disconnected.fire(.{ &kb.value });
+            self.keyboard_disconnected.fire(.{ h });
+
+            const kv = self.keyboards.fetchRemove(@intCast(e.id)).?;
+            kv.value.deinit();
+            self.allocator.destroy(kv.value);
         },
         .keyboard_key_down => |e| { 
             try self.unikeyboard.keyPressed(e); 
@@ -128,13 +154,23 @@ fn onPlatformEvent(self: *Input, event: Platform.desc.PlatformEvent) !void {
             (self.getKeyboard(e.keyboard_id) orelse return).keyReleased(e); 
         },
         .mouse_connected => |e| {
-            try self.mice.put(@intCast(e.id), .init(&self.dispatcher, self.allocator, e.id));
-            self.mouse_connected.fire(.{ self.getMouse(e.id).? });
+            const ms = try self.allocator.create(devices.MouseDevice);
+            errdefer self.allocator.destroy(ms);
+
+            ms.* = .init(&self.dispatcher, self.allocator, e.id);
+            try self.mice.put(@intCast(e.id), ms);
+
+            self.mouse_connected.fire(.{ .{ .input = self, .id = e.id } });
         },
         .mouse_disconnected => |e| {
-            var ms = self.mice.fetchRemove(@intCast(e.id))
-                orelse { std.log.err("Attempt to disconnect mouse id {d}, but it doesn't exist/isn't registered", .{ e.id }); return; };
-            self.mouse_disconnected.fire(.{ &ms.value });
+            const h: MouseHandle = .{ .input = self, .id = e.id };
+            if (!h.isAlive()) { std.log.err("Attempt to disconnect mouse id {d}, but it doesn't exist/isn't registered", .{ e.id }); return; }
+            
+            self.mouse_disconnected.fire(.{ h });
+
+            const kv = self.mice.fetchRemove(@intCast(e.id)).?;
+            kv.value.deinit();
+            self.allocator.destroy(kv.value);
         },
         .mouse_button_down => |e| {
             try self.unimouse.buttonDown(e); 
@@ -159,25 +195,24 @@ fn onPlatformEvent(self: *Input, event: Platform.desc.PlatformEvent) !void {
 // Called at the start of every frame
 pub fn tick(self: *Input) void {
     var ms_iter = self.mice.valueIterator();
-    while (ms_iter.next()) |ms| {
-        ms.resetDeltas();
-    }
+    while (ms_iter.next()) |ms| ms.*.resetDeltas();
+    self.dispatcher.flush();
 }
 
 pub fn getKeyboard(self: *Input, id: usize) ?*devices.KeyboardDevice {
-    return self.keyboards.getPtr(id);
+    return self.keyboards.get(id);
 }
 
 pub fn getMouse(self: *Input, id: usize) ?*devices.MouseDevice {
-    return self.mice.getPtr(id);
+    return self.mice.get(id);
 }
 
 pub fn getGamepad(self: *Input, id: usize) ?*devices.GamepadDevice {
-    return self.gamepads.getPtr(id);
+    return self.gamepads.get(id);
 }
 
 pub fn getTouchDevice(self: *Input, id: usize) ?*devices.TouchDevice {
-    return self.touch_devices.getPtr(id);
+    return self.touch_devices.get(id);
 }
 
 pub fn setCursorLocked(self: *Input, mode: bool) void {
@@ -196,127 +231,103 @@ pub fn getCursorVisible(self: *Input) bool {
     return self.platform.getCursorVisible();
 }
 
-pub const registerLua = struct {
-    const linker = @import("../scripting/linker/linker.zig");
-    const Runtime = @import("../scripting/runtime/Runtime.zig");
-    const zlua = @import("zlua");
-    const KeyboardDeviceBind = linker.Binding(devices.KeyboardDevice, true);
-    const MouseDeviceBind = linker.Binding(devices.MouseDevice, true);
-    const InputBind = linker.Binding(Input, false);
+const bind = @import("../scripting/bind/bind.zig");
 
-    fn pushSignal(l: *zlua.Lua, sig: anytype) void {
-        linker.util.pushVal(l, @TypeOf(sig), sig);
-    }
+pub const api = bind.module("input", .{
+    .kind = .{ .singleton = Input },
+    .members = &.{
+        bind.func("IsCursorLocked", getCursorLocked),
+        bind.func("SetCursorLocked", setCursorLocked),
+        bind.func("IsCursorVisible", getCursorVisible),
+        bind.func("SetCursorVisible", setCursorVisible),
+        bind.func("GetKeyboard", struct {
+            fn c(self: *Input, id: usize) ?KeyboardHandle {
+                return if (self.keyboards.contains(id)) .{ .input = self, .id = id } else null;
+            }
+        }.c),
+        bind.func("GetMouse", struct {
+            fn c(self: *Input, id: usize) ?MouseHandle {
+                return if (self.mice.contains(id)) .{ .input = self, .id = id } else null;
+            }
+        }.c),
+        bind.readonly("Keyboards", struct {
+            fn c(self: *Input) KeyboardHandle {
+                return .{ .input = self, .id = self.unikeyboard.id };
+            }
+        }.c),
+        bind.readonly("Mice", struct {
+            fn c(self: *Input) MouseHandle {
+                return .{ .input = self, .id = self.unimouse.id };
+            }
+        }.c),
 
-    fn luaGet(l: *zlua.Lua) i32 {
-        const r: *Runtime = .fromState(l);
-        const self = r.input;
-        const key = l.toString(2) catch |e| linker.util.luaErr(l, e, .{ []const u8, 2 });
-
-        if (std.mem.eql(u8, key, "Keyboards")) {
-            const unikeyboard = self.unikeyboard;
-
-            l.newTable();
-            pushSignal(l, &unikeyboard.key_pressed);
-            l.setField(-2, "KeyPressed");
-            pushSignal(l, &unikeyboard.key_released);
-            l.setField(-2, "KeyReleased");
-            pushSignal(l, &self.keyboard_connected);
-            l.setField(-2, "Connected");
-            pushSignal(l, &self.keyboard_disconnected);
-            l.setField(-2, "Disconnected");
-
-            return 1;
-        } else if (std.mem.eql(u8, key, "Mice")) {
-            const unimouse = self.unimouse;
-
-            l.newTable();
-            pushSignal(l, &unimouse.button_pressed);
-            l.setField(-2, "ButtonPressed");
-            pushSignal(l, &unimouse.button_released);
-            l.setField(-2, "ButtonReleased");
-            pushSignal(l, &unimouse.moved_evt);
-            l.setField(-2, "Moved");
-            pushSignal(l, &unimouse.scrolled_evt);
-            l.setField(-2, "Scrolled");
-            pushSignal(l, &self.mouse_connected);
-            l.setField(-2, "Connected");
-            pushSignal(l, &self.mouse_disconnected);
-            l.setField(-2, "Disconnected");
-
-            return 1;
-        } else if (std.mem.eql(u8, key, "CursorLocked")) {
-            l.pushBoolean(self.getCursorLocked());
-            return 1;
-        } else if (std.mem.eql(u8, key, "CursorVisible")) {
-            l.pushBoolean(self.getCursorVisible());
-            return 1;
-        } else {
-            // fallback to exising methods
-            l.getMetatable(1) catch { l.pushNil(); return 1; };
-            _ = l.getField(-1, "__methods");
-            l.pushValue(2);
-            _ = l.getTable(-2);
-
-            return 1;
-        }
-    }
-
-    fn luaSet(l: *zlua.Lua) i32 {
-        const r: *Runtime = .fromState(l);
-        const self = r.input;
-        const key = l.toString(2) catch |e| linker.util.luaErr(l, e, .{ []const u8, 2 });
-
-        if (std.mem.eql(u8, key, "CursorLocked")) {
-            l.checkType(3, .boolean);
-            self.setCursorLocked(l.toBoolean(3));
-            return 0;
-        } else if (std.mem.eql(u8, key, "CursorVisible")) {
-            l.checkType(3, .boolean);
-            self.setCursorVisible(l.toBoolean(3));
-            return 0;
-        } else if (std.mem.eql(u8, key, "Keyboards")
-            or std.mem.eql(u8, key, "Mice")
-        ) {
-            l.raiseErrorStr("'input.%s' is read-only", .{});
-        } else {
-            l.raiseErrorStr("'input.%s' doesn't exist", .{});
-        }
-    }
-
-    fn luaGetKeyboard(l: *zlua.Lua) i32 {
-        const r: *Runtime = .fromState(l);
-        // Even though lua is 1-indexed, it'd be too much friction
-        // to have to turn lua ids to/from zig ids every time we want
-        // to deal with device IDs. A little inconsistency is worth it for maintainability
-        const keyboard_id = l.checkInteger(2);
-        if (keyboard_id < 0) l.raiseErrorStr("%d is not a valid keyboard ID", .{ keyboard_id });
-
-        KeyboardDeviceBind.push(l, r.input.getKeyboard(@intCast(keyboard_id)) orelse l.raiseErrorStr("No keyboard of ID %d exists.", .{ keyboard_id }));
-        return 1;
-    }
-
-    fn luaGetMouse(l: *zlua.Lua) i32 {
-        const r: *Runtime = .fromState(l);
-        const mouse_id = l.checkInteger(2);
-        if (mouse_id < 0) l.raiseErrorStr("%d is not a valid mouse ID", .{ mouse_id });
-
-        MouseDeviceBind.push(l, r.input.getMouse(@intCast(mouse_id)) orelse l.raiseErrorStr("No mouse of ID %d exists.", .{ mouse_id }));
-        return 1;
-    }
-
-    pub fn registerLua(l: *zlua.Lua) void {
-        linker.signal(l, signal.Signal(.{ *devices.KeyboardDevice }));
-        linker.signal(l, signal.Signal(.{ *devices.MouseDevice }));
-        linker.signal(l, signal.Signal(.{ *devices.GamepadDevice }));
-
-        linker.module(l, .{
-            .name = "input",
-            .functions = &.{
-                .custom("GetKeyboard", luaGetKeyboard),
-                .custom("GetMouse", luaGetMouse)
+        bind.handle(KeyboardHandle, .{
+            .name = "Keyboard",
+            .alive = bind.func("isAlive", KeyboardHandle.isAlive),
+            .methods = &.{
+                bind.func("IsKeyPressed", struct {
+                    fn c(self: KeyboardHandle, key: Platform.desc.Keycode) !bool {
+                        return (try self.require()).isKeyPressed(key);
+                    }
+                }.c)
             },
-            .properties = .luaCustom(luaGet, luaSet),
-        });
+            .props = &.{
+                bind.readonly("Id", struct {
+                    fn c(self: KeyboardHandle) usize { return self.id; }
+                }.c),
+            },
+            .signals = &.{
+                bind.signal("KeyPressed", struct {
+                    fn c(self: KeyboardHandle) !*devices.KeyboardDevice.KeyEvent {
+                        return &(try self.require()).key_pressed;
+                    }
+                }.c),
+                bind.signal("KeyReleased", struct {
+                    fn c(self: KeyboardHandle) !*devices.KeyboardDevice.KeyEvent {
+                        return &(try self.require()).key_released;
+                    }
+                }.c),
+            },
+            .ops = .{ .eq = .{ .member = bind.func("eq", KeyboardHandle.eql) }, .tostring = .auto },
+        }),
+        bind.handle(MouseHandle, .{
+            .name = "Mouse",
+            .alive = bind.func("isAlive", MouseHandle.isAlive),
+            .methods = &.{
+                bind.func("IsButtonDown", struct {
+                    fn c(self: MouseHandle, button: Platform.desc.MouseButton) !bool {
+                        return (try self.require()).isButtonDown(button);
+                    }
+                }.c),
+                bind.func("GetMoveDelta", struct {
+                    fn c(self: MouseHandle) !core.math.Vec2 {
+                        return (try self.require()).getMoveDelta();
+                    }
+                }.c),
+            },
+            .props = &.{
+                bind.readonly("Id", struct {
+                    fn c(self: MouseHandle) usize { return self.id; }
+                }.c),
+            },
+            .signals = &.{
+                bind.signal("ButtonPressed", struct {
+                    fn c(self: MouseHandle) !*devices.MouseDevice.ButtonEvent {
+                        return &(try self.require()).button_pressed;
+                    }
+                }.c),
+                bind.signal("ButtonReleased", struct {
+                    fn c(self: MouseHandle) !*devices.MouseDevice.ButtonEvent {
+                        return &(try self.require()).button_released;
+                    }
+                }.c),
+                bind.signal("Scrolled", struct {
+                    fn c(self: MouseHandle) !*devices.MouseDevice.ScrollEvent {
+                        return &(try self.require()).scrolled_evt;
+                    }
+                }.c),
+            },
+            .ops = .{ .eq = .{ .member = bind.func("eq", MouseHandle.eql) }, .tostring = .auto },
+        })
     }
-}.registerLua;
+});

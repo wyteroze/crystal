@@ -100,6 +100,19 @@ end
 
 -- Math globals
 
+declare Vec2: {
+    --- Creates a new `Vec2` from the given components.
+    read new: (x: number?, y: number?) -> Vec2,
+    --- A `Vec2` with 0 length.
+    read zero: Vec2,
+    --- A `Vec2` with 1 length.
+    read one: Vec2,
+    --- A `Vec2` with a value of 1 on the X axis.
+    read xAxis: Vec2,
+    --- A `Vec2` with a value of 1 on the Y axis.
+    read yAxis: Vec2,
+}
+
 --- A 3D value that has a length and direction.
 declare Vec3: {
     --- Creates a new `Vec3` from the given components.
@@ -143,12 +156,44 @@ declare Mat4: {
 }
 
 export type SignalConnection = {
-    Disconnect: (self: SignalConnection) -> ()
+    --- Disconnects this connection from the signal, meaning the callback will no longer be called by the signal.
+    read Disconnect: (self: SignalConnection) -> ()
 }
 
 export type Signal<T...> = {
-    Connect: (self: Signal<T...>, callback: (T...) -> ()) -> SignalConnection,
-    Fire: (self: Signal<T...>, T...) -> ()
+    --- Connects a callback to this signal.
+    read Connect: (self: Signal<T...>, callback: (T...) -> ()) -> SignalConnection,
+    --- Fires the signal. Callbacks are called at the end of this frame, rather than immediately.
+    read Fire: (self: Signal<T...>, T...) -> ()
+}
+
+-- ASSETS --
+
+export type AssetPath = string
+export type LoadStatus = "Success" | "Fail" | "Waiting"
+export type Asset = {
+    read SourcePath: string,
+    read LoadStatus: LoadStatus,
+    --- Halts this thread until the asset finishes loading.
+    read Await: (self: Asset) -> (Asset)
+}
+
+export type ImageAsset = Asset & {
+    read Size: Vec2,
+}
+
+export type FontAsset = Asset & {
+
+}
+
+export type MeshAsset = Asset & {
+
+}
+
+export type AudioAsset = Asset & {
+    read SampleRate: number,
+    read Channels: number,
+    read Duration: number,
 }
 
 -- ECS --
@@ -159,9 +204,92 @@ declare extern type Entity with
     function AddComponent(self, name: string, value: any): ()
 
     --- Fires when this entity is destroyed.
-    Destroyed: Signal<()>
+    read Destroyed: Signal<()>
     --- Fires when this entity is updated, with the frame delta time as the first argument.
-    Updated: Signal<number>
-    
-    Components: { [string]: any }
+    read Updated: Signal<number>
+    --- The components of this entity. 
+    read Components: { [string]: any }
+end
+
+-- INPUT --
+
+export type Keycode =
+    "Return" | "Escape" | "Backspace" | "Tab" | "Space" |
+    "Exclaim" | "DoubleApostrophe" | "Hash" | "Dollar" | "Percent" | "Ampersand" | "Apostrophe" |
+    "LeftParen" | "RightParen" | "Asterisk" | "Plus" | "Comma" | "Minus" | "Period" | "Slash" |
+    "Zero" | "One" | "Two" | "Three" | "Four" | "Five" | "Six" | "Seven" | "Eight" | "Nine" |
+    "Colon" | "Semicolon" | "Less" | "Equals" | "Greater" | "Question" | "At" |
+    "LeftBracket" | "Backslash" | "RightBracket" | "Caret" | "Underscore" | "Grave" |
+    "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H" | "I" | "J" | "K" | "L" | "M" |
+    "N" | "O" | "P" | "Q" | "R" | "S" | "T" | "U" | "V" | "W" | "X" | "Y" | "Z" |
+    "LeftBrace" | "Pipe" | "RightBrace" | "Tilde" | "Delete" | "PlusMinus" | "CapsLock" |
+    "F1" | "F2" | "F3" | "F4" | "F5" | "F6" |
+    "F7" | "F8" | "F9" | "F10" | "F11" | "F12" |
+    "PrintScreen" | "ScrollLock" | "Pause" | "Insert" |
+    "Home" | "PageUp" | "End" | "PageDown" | "Right" | "Left" | "Down" | "Up" |
+    "NumLockClear" | "KeypadDivide" | "KeypadMultiply" | "KeypadMinus" | "KeypadPlus" | "KeypadEnter" |
+    "Keypad1" | "Keypad2" | "Keypad3" | "Keypad4" | "Keypad5" |
+    "Keypad6" | "Keypad7" | "Keypad8" | "Keypad9" | "Keypad0" |
+    "KeypadPeriod" | "Application" | "Power" | "KeypadEquals" |
+    "F13" | "F14" | "F15" | "F16" | "F17" | "F18" |
+    "F19" | "F20" | "F21" | "F22" | "F23" | "F24" |
+    "Execute" | "Help" | "Menu" | "Select" | "Stop" | "Again" | "Undo" | "Cut" | "Copy" | "Paste" | "Find" |
+    "Mute" | "VolumeUp" | "VolumeDown" | "KeypadComma" | "KeypadEqualsAs400" |
+    "AltErase" | "Cancel" | "Clear" | "Prior" | "Separator" | "Out" | "Oper" | "ClearAgain" | "CrSel" | "ExSel" |
+    "Keypad00" | "Keypad000" | "ThousandsSeparator" | "DecimalSeparator" | "CurrencyUnit" | "CurrencySubunit" |
+    "KeypadLeftParen" | "KeypadRightParen" | "KeypadLeftBrace" | "KeypadRightBrace" |
+    "KeypadTab" | "KeypadBackspace" | "KeypadA" | "KeypadB" | "KeypadC" | "KeypadD" | "KeypadE" | "KeypadF" |
+    "KeypadXor" | "KeypadPower" | "KeypadPercent" | "KeypadLess" | "KeypadGreater" |
+    "KeypadAmpersand" | "KeypadDoubleAmpersand" | "KeypadVerticalbar" | "KeypadDoubleVerticalBar" |
+    "KeypadColon" | "KeypadHash" | "KeypadSpace" | "KeypadAt" | "KeypadExclam" |
+    "KeypadMemStore" | "KeypadMemRecall" | "KeypadMemClear" |
+    "KeypadMemAdd" | "KeypadMemSubtract" | "KeypadMemMultiply" | "KeypadMemDivide" |
+    "KeypadPlusMinus" | "KeypadClear" | "KeypadClearEntry" |
+    "KeypadBinary" | "KeypadOctal" | "KeypadDecimal" | "KeypadHexadecimal" |
+    "LeftCtrl" | "LeftShift" | "LeftAlt" | "LeftGui" |
+    "RightCtrl" | "RightShift" | "RightAlt" | "RightGui" |
+    "Mode" | "Sleep" | "Wake" | "ChannelIncrement" | "ChannelDecrement" |
+    "MediaPlay" | "MediaPause" | "MediaRecord" | "MediaFastForward" | "MediaRewind" |
+    "MediaNextTrack" | "MediaPreviousTrack" | "MediaStop" | "MediaEject" | "MediaPlayPause" | "MediaSelect" |
+    "AcNew" | "AcOpen" | "AcClose" | "AcExit" | "AcSave" | "AcPrint" |
+    "AcProperties" | "AcSearch" | "AcHome" | "AcBack" | "AcForward" | "AcStop" | "AcRefresh" | "AcBookmarks" |
+    "SoftLeft" | "SoftRight" | "Call" | "EndCall" |
+    "LeftTab" | "Level5Shift" | "MultiKeyCompose" |
+    "LeftMeta" | "RightMeta" | "LeftHyper" | "RightHyper" |
+    "Unknown"
+
+export type MouseButton =
+    "Left" | "Middle" | "Right" |
+    "SideButtonBack" | "SideButtonForward"
+
+declare extern type Keyboard with
+    --- Fires when a key is pressed, with the pressed keycode as the first argument of the callback.
+    read KeyPressed: Signal<Keycode>
+    --- Fires when a key is released, with the released keycode as the first argument of the callback.
+    read KeyReleased: Signal<Keycode>
+
+    --- Returns true if the given keycode is pressed.
+    function IsKeyPressed(self, key: Keycode): boolean
+end
+
+declare extern type Mouse with
+    --- Fires when a button is pressed, with the pressed button as the first argument of the callback.
+    read ButtonPressed: Signal<MouseButton>
+    --- Fires when a button is released, with the released button as the first argument of the callback.
+    read ButtonReleased: Signal<MouseButton>
+    --- Fires when the mouse moves, with the delta as the first argument of the callback, and the position as the second argument of the callback.
+    read Moved: Signal<Vec2, Vec2>
+    --- Fires when the scroll wheel moves, with the delta as the first argument of the callback.
+    --- The X axis represents side-to-side scrolling, while the Y axis represents top-to-bottom-scrolling (most common).
+    read Scrolled: Signal<Vec2>
+
+    --- Returns true if the given mouse button is pressed.
+    function IsButtonPressed(self, button: MouseButton): boolean
+    --- Returns the mouse move delta.
+    function GetMoveDelta(self): Vec2
+    --- Returns the mouse scroll delta.
+    --- The X axis represents side-to-side scrolling, while the Y axis represents top-to-bottom-scrolling (most common).
+    function GetScrollDelta(self): Vec2
+    --- Returns the position of the mouse.
+    function GetPosition(self): Vec2
 end

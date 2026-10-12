@@ -23,13 +23,16 @@ fn entryName(comptime e: InstanceEntry) []const u8 {
     return switch (e) { .field => |f| f.lua, .prop => |p| p.name, .method => |m| m.name };
 }
 
+fn isGetter(comptime m: types.Member) bool { return m.kind == .prop or m.kind == .signal; }
+
 fn instanceEntries(comptime r: anytype) []const InstanceEntry { comptime {
     var out: []const InstanceEntry = &.{};
     const T = @TypeOf(r);
 
-    if (@hasField(T, "fields")) { for (r.fields) |f| out = out ++ &[_]InstanceEntry{ .{ .field = .{ .zig = f, .lua = names.pascal(f) } } }; }
-    if (@hasField(T, "props")) { for (r.props) |p| out = out ++ &[_]InstanceEntry{ .{ .prop = p } }; }
-    if (@hasField(T, "methods")) { for (r.methods) |m| out = out ++ &[_]InstanceEntry{ .{ .method = m } }; }
+    if (@hasField(T, "fields")) { for (r.fields) |f| out = out ++ .{ InstanceEntry{ .field = .{ .zig = f, .lua = names.pascal(f) } } }; }
+    if (@hasField(T, "props")) { for (r.props) |p| out = out ++ .{ InstanceEntry{ .prop = p } }; }
+    if (@hasField(T, "methods")) { for (r.methods) |m| out = out ++ .{ InstanceEntry{ .method = m } }; }
+    if (@hasField(T, "signals")) { for (r.signals) |s| out = out ++ .{ InstanceEntry{ .prop = s } }; }
 
     return out;
 } }
@@ -47,7 +50,7 @@ pub fn Binder(comptime api: anytype) type {
         const codecs: []const Codec = blk: {
             var out: []const Codec = &.{};
             for (R.entries) |e| switch (e.member.kind) {
-                .value, .handle => out = out ++ &[_]Codec{ codecFor(e) },
+                .value, .handle => out = out ++ .{ codecFor(e) },
                 else => {}
             };
 
@@ -72,20 +75,23 @@ pub fn Binder(comptime api: anytype) type {
                 else => {}
             };
 
+            // globals
             inline for (api) |entry| if (entry.kind == .globals) {
                 l.pushGlobalTable();
                 std.log.debug("---- Registered {d} globals:", .{ entry.impl.recipe.members.len });
-                fillTable(l, entry.impl.recipe.members);
+                fillTable(l, entry.impl.recipe.members, false);
                 std.log.debug("---- Globals done", .{});
 
                 l.pop(1);
             };
 
+            // modules (build require table)
             l.newTable();
             inline for (api) |entry| if (entry.kind == .module) {
                 l.newTable();
                 std.log.debug("---- Registered module '{s}' with entries:", .{ entry.name });
-                fillTable(l, entry.impl.recipe.members);
+                fillTable(l, entry.impl.recipe.members, true);
+                installModuleProps(l, entry.impl.recipe.members);
                 std.log.debug("---- Module entries done", .{});
                 l.setReadonly(-1, true);
 
@@ -144,14 +150,7 @@ pub fn Binder(comptime api: anytype) type {
             }.c;
         }
 
-        fn buildModule(l: *zlua.Lua, comptime mod: types.Member) void {
-            l.newTable();
-            fillTable(l, mod);
-
-            std.log.debug("Registered module '{s}'", .{ mod.name });
-        }
-
-        fn fillTable(l: *zlua.Lua, comptime members: []const types.Member) void {
+        fn fillTable(l: *zlua.Lua, comptime members: []const types.Member, comptime allow_props: bool) void {
             const top = l.getTop();
             // Table to fill should be at top of stack
             inline for (members) |m| {
@@ -163,6 +162,8 @@ pub fn Binder(comptime api: anytype) type {
                         pushTypeTable(l, m);
                         l.setField(-2, m.name);
                     },
+                    .prop => if (!allow_props)
+                        @compileError("props are not allowed here: " ++ m.name),
 
                     else => @compileError(std.fmt.comptimePrint("Type not allowed here: {s}", .{ m.name })),
                 }
@@ -197,11 +198,11 @@ pub fn Binder(comptime api: anytype) type {
         }
 
         fn indexFn(comptime T: type, comptime E: []const InstanceEntry) zlua.CFn {
-            const Map = comptime blk: {
+            const Map: std.StaticStringMap(u16) = comptime blk: {
                 var kv: [E.len]struct { []const u8, u16 } = undefined;
                 for (E, 0..) |e, i| kv[i] = .{ entryName(e), i };
                 
-                break :blk std.StaticStringMap(u16).initComptime(kv);
+                break :blk .initComptime(kv);
             };
 
             return zlua.wrap(struct {
@@ -215,7 +216,7 @@ pub fn Binder(comptime api: anytype) type {
                     switch (i) {
                         inline 0...E.len - 1 => |k| switch (E[k]) {
                             .field => |fd| { M.push(l, @field(self, fd.zig)); return 1; },
-                            .prop => |p| if (p.impl != @TypeOf(null)) return W.Gen(p.impl.getter, .{}).call(l) else l.raiseErrorStr("%s is write-only", .{ p.impl.name }),
+                            .prop => |p| return W.Gen(p.impl.getter, .{}).call(l),
                             .method => |m| { l.pushFunction(W.cFn(m.impl.function, .{}), m.name); return 1; },
                         },
 
@@ -256,6 +257,50 @@ pub fn Binder(comptime api: anytype) type {
             }.f);
         }
 
+        fn modulePropIndexFn(comptime members: []const types.Member) zlua.CFn {
+            const props = comptime blk: {
+                var out: []const types.Member = &.{};
+                for (members) |m| if (isGetter(m)) { out = out ++ .{ m }; };
+                break :blk out;
+            };
+
+            const Map = comptime blk: {
+                var kv: [props.len]struct { []const u8, u16 } = undefined;
+                for (props, 0..) |p, i| kv[i] = .{ p.name, i };
+
+                break :blk std.StaticStringMap(u16).initComptime(kv);
+            };
+
+            return zlua.wrap(struct {
+                fn f(l: *zlua.Lua) i32 {
+                    if (l.typeOf(2) != .string) { l.pushNil(); return 1; }
+
+                    const key = l.toString(2) catch unreachable;
+                    const i = Map.get(key) orelse { l.pushNil(); return 1; };
+
+                    l.setTop(0);
+
+                    switch (i) {
+                        inline 0...props.len - 1 => |k| return W.Gen(props[k].impl.getter, .{}).call(l),
+                        else => unreachable,
+                    }
+                }
+            }.f);
+        }
+
+        /// Expects the module table at the top of the stack.
+        fn installModuleProps(l: *zlua.Lua, comptime members: []const types.Member) void {
+            comptime var count = 0;
+            inline for (members) |m| if (comptime isGetter(m)) { count += 1; };
+            if (count == 0) return;
+
+            l.newTable();
+            l.pushFunction(modulePropIndexFn(members), "moduleIndexFn");
+            l.setField(-2, "__index");
+            l.setReadonly(-1, true);
+            l.setMetatable(-2);
+        }
+
         fn opFn(comptime T: type, comptime name: []const u8, comptime op: types.Op) zlua.CFn {
             switch (op) {
                 .member => |m| return W.cFn(m.impl.function, .{}),
@@ -273,12 +318,13 @@ pub fn Binder(comptime api: anytype) type {
             return struct {
                 fn f(l: *zlua.Lua) i32 {
                     const self = M.parse(T, l, 1);
-                    var buf: [128]u8 = undefined;
+                    const allocator = l.allocator();
                     
                     const s = (if (@hasDecl(T, "format"))
-                        std.fmt.bufPrint(&buf, "{f}", .{ self })
+                        allocator.print("{f}", .{ self })
                     else
-                        std.fmt.bufPrint(&buf, "{any}", .{ self })) catch "<too long>";
+                        allocator.print("{s}", .{ l.typeNameIndex(1) })) catch @panic("Out of memory");
+                    defer allocator.free(s);
                     
                     _ = l.pushString(s);
                     return 1;

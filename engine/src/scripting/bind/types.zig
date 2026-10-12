@@ -3,7 +3,7 @@
 const std = @import("std");
 
 pub const BindError = error { BadArg, Engine, Destroyed };
-pub const Kind = enum { func, constant, prop, value, handle, object, module, globals };
+pub const Kind = enum { func, constant, prop, signal, value, handle, object, module, globals };
 pub const Member = struct { name: [:0]const u8, kind: Kind, impl: type };
 
 pub const Op = union(enum) { auto, member: Member };

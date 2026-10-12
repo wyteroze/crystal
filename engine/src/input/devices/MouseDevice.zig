@@ -57,7 +57,7 @@ pub fn isButtonDown(self: *MouseDevice, key: Platform.desc.MouseButton) bool {
     return self.buttons_pressed.contains(key);
 }
 
-pub fn getDelta(self: *MouseDevice) math.Vec2 {
+pub fn getMoveDelta(self: *MouseDevice) math.Vec2 {
     return self.frame_delta;
 }
 
@@ -90,64 +90,9 @@ pub fn moved(self: *MouseDevice, event: Platform.desc.MouseMoveEvent) void {
     self.moved_evt.fire(.{ delta, pos });
 }
 
-pub const __lua = .ref;
-pub const registerLua = struct {
-    const linker = @import("../../scripting/linker/linker.zig");
-    const zlua = @import("zlua");
-    const MouseDeviceBind = linker.Binding(MouseDevice, true);
-
-    fn pushSignal(l: *zlua.Lua, sig: anytype) void {
-        linker.util.pushVal(l, @TypeOf(sig), sig);
-    }
-
-    fn mouseDeviceGet(l: *zlua.Lua) i32 {
-        const self = MouseDeviceBind.check(l, 1);
-        const key = l.toString(2) catch |e| linker.util.luaErr(l, e, .{ []const u8, 2 });
-        
-        if (std.mem.eql(u8, key, "ButtonPressed")) {
-            pushSignal(l, &self.button_pressed);
-            return 1;
-        } else if (std.mem.eql(u8, key, "ButtonReleased")) {
-            pushSignal(l, &self.button_released);
-            return 1;
-        } else if (std.mem.eql(u8, key, "Scrolled")) {
-            pushSignal(l, &self.scrolled_evt);
-            return 1;
-        } else if (std.mem.eql(u8, key, "Moved")) {
-            pushSignal(l, &self.moved_evt);
-            return 1;
-        } else if (std.mem.eql(u8, key, "Id")) {
-            l.pushInteger(@intCast(self.id));
-            return 1;
-        } else {
-            // fallback to exising methods
-            l.getMetatable(1) catch { l.pushNil(); return 1; };
-            _ = l.getField(-1, "__methods");
-            l.pushValue(2);
-            _ = l.getTable(-2);
-
-            return 1;
-        }
-    }
-
-    fn mouseDeviceSet(l: *zlua.Lua) i32 {
-        l.raiseErrorStr("MouseDevice is read-only", .{});
-    }
-
-    pub fn registerLua(l: *zlua.Lua) void {
-        linker.signal(l, signal.Signal(.{ Platform.desc.MouseButton }));
-        linker.signal(l, signal.Signal(.{ math.Vec2 }));
-        linker.signal(l, signal.Signal(.{ math.Vec2, math.Vec2 }));
-        
-        linker.reference(l, MouseDevice, .{
-            .scope = .{ .module = "input.devices.MouseDevice" },
-            .properties = .luaCustom(mouseDeviceGet, mouseDeviceSet),
-            .methods = &.{
-                .named("IsButtonDown", MouseDevice.isButtonDown),
-                .named("GetDelta", MouseDevice.getDelta),
-                .named("GetPosition", MouseDevice.getPosition),
-                .named("GetScrollDelta", MouseDevice.getScrollDelta)
-            }
-        });
-    }
-}.registerLua;
+pub fn format(
+    self: @This(),
+    writer: *std.Io.Writer,
+) std.Io.Writer.Error!void {
+    try writer.print("MouseDevice {d}", .{ self.id });
+}

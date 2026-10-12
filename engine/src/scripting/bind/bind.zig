@@ -15,3 +15,4 @@ pub const value = util.value;
 pub const module = util.module;
 pub const globals = util.globals;
 pub const handle = util.handle;
+pub const signal = util.signal;

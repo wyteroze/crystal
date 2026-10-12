@@ -12,8 +12,8 @@ pub const all: []const types.Member = blk: {
     var containers: []const types.Member = &.{};
 
     for (found) |m| switch (m.kind) {
-        .value, .func, .constant => loose = loose ++ &[_]types.Member{m},
-        .globals, .module => containers = containers ++ &[_]types.Member{m},
+        .value, .func, .constant => loose = loose ++ .{ m },
+        .globals, .module => containers = containers ++ .{ m },
         else => @compileError("unexpected top-level api member: " ++ m.name),
     };
 

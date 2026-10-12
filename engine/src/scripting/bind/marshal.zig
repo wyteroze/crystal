@@ -4,11 +4,13 @@ const std = @import("std");
 const zlua = @import("zlua");
 const names = @import("names.zig");
 const types = @import("types.zig");
+const signal = @import("signal.zig");
 
 pub fn Marshal(comptime Reg: type) type {
     return struct {
         pub fn parse(comptime T: type, l: *zlua.Lua, idx: i32) T {
-            if (comptime ptrToValue(T)) |V| return try parseValue(V, l, idx); 
+            @setEvalBranchQuota(1_000_000);
+            if (comptime ptrToValue(T)) |V| return parseValue(V, l, idx); 
             if (comptime Reg.kindOf(T)) |k| switch (k) {
                 .value => return parseValue(T, l, idx).*,
                 .handle => return parseHandle(T, l, idx).*,
@@ -17,7 +19,7 @@ pub fn Marshal(comptime Reg: type) type {
             };
 
             switch (@typeInfo(T)) {
-                .bool => { if (!l.isBoolean(idx)) l.typeError(idx, "boolean"); return l.toBoolean(idx) catch unreachable; },
+                .bool => { if (!l.isBoolean(idx)) l.typeError(idx, "boolean"); return l.toBoolean(idx); },
                 .int => { if (!l.isNumber(idx)) l.typeError(idx, "integer"); return @intCast(l.toInteger(idx) catch unreachable); },
                 .float => { if (!l.isNumber(idx)) l.typeError(idx, "number"); return @floatCast(l.toNumber(idx) catch unreachable); },
                 .optional => |o| return if (l.isNoneOrNil(idx)) null else parse(o.child, l, idx),
@@ -29,6 +31,8 @@ pub fn Marshal(comptime Reg: type) type {
         }
 
         pub fn push(l: *zlua.Lua, v: anytype) void {
+            @setEvalBranchQuota(1_000_000);
+
             const T = @TypeOf(v);
             if (comptime Reg.kindOf(T)) |k| switch (k) {
                 .value => return pushValue(l, v),
@@ -36,6 +40,7 @@ pub fn Marshal(comptime Reg: type) type {
                 else => unreachable,
             };
 
+            if (comptime signalOf(T)) |Sig| return pushHandle(l, signal.Handle(Sig){ .signal = v });
             switch (@typeInfo(T)) {
                 .bool => l.pushBoolean(v),
                 .int, .comptime_int => l.pushInteger(@intCast(v)),
@@ -86,18 +91,26 @@ pub fn Marshal(comptime Reg: type) type {
             return if (Reg.kindOf(C) == .value) C else null;
         }
 
+        fn signalOf(comptime T: type) ?type {
+            const info = @typeInfo(T);
+            if (info != .pointer or info.pointer.size != .one) return null;
+
+            const C = info.pointer.child;
+            return if (@typeInfo(C) == .@"struct" and @hasDecl(C, "Args") and @hasDecl(C, "rawConnect")) C else null;
+        }
+
         fn parseEnum(comptime T: type, l: *zlua.Lua, idx: i32) T {
-            const map = comptime blk: {
-                const fs: std.StaticStringMap(T) = @typeInfo(T).@"enum".fields;
-                var kv: [fs.len]struct { []const u8, T } = undefined;
-                for (fs, 0..) |f, i| kv[i] = .{ names.pascal(f.name), @enumFromInt(f.value) };
+            const map: std.StaticStringMap(T) = comptime blk: {
+                const info = @typeInfo(T).@"enum";
+                var kv: [info.field_names.len]struct { []const u8, T } = undefined;
+                for (info.field_names, 0..) |nm, i| kv[i] = .{ names.pascal(nm), @enumFromInt(info.field_values[i]) };
 
                 break :blk .initComptime(kv);
             };
-            if (l.typeOf(idx) != .string) l.raiseErrorStr("arg {d}: expected {s} (string), got {s}", .{ idx, @typeName(T), @tagName(l.typeOf(idx)) });
+            if (l.typeOf(idx) != .string) l.raiseErrorStr("arg {d}: expected {s} (string), got {s}", .{ idx, @typeName(T).ptr, @tagName(l.typeOf(idx)).ptr });
 
             const s = l.toString(idx) catch unreachable;
-            return map.get(s) orelse l.raiseErrorStr("arg {d}: '{s}' is not a valid {s}", .{ idx, s, @typeName(T) });
+            return map.get(s) orelse l.raiseErrorStr("arg {d}: '{s}' is not a valid {s}", .{ idx, s.ptr, @typeName(T).ptr });
         }
 
         fn parseString(comptime T: type, l: *zlua.Lua, idx: i32) T {

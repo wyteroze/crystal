@@ -8,16 +8,11 @@ pub const Query = @import("Query.zig");
 pub const SparseSet = @import("SparseSet.zig");
 pub const World = @import("World.zig");
 
-const scripting = @import("../scripting/scripting.zig");
-const bind = scripting.bind;
-const lua_signal = scripting.lua_signal;
+const bind = @import("../scripting/bind/bind.zig");
 
 pub const api = bind.module("ecs", .{
     .kind = .library,
     .members = &.{
         Entity.sub_api,
-        lua_signal.connection,
-        lua_signal.handle(World.UpdateSignal),
-        lua_signal.handle(World.DestroySignal),
     }
 });

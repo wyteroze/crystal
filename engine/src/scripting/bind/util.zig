@@ -45,8 +45,26 @@ pub fn value(comptime T: type, comptime r: recipes.ValueRecipe) types.Member {
     };
 }
 
+pub fn signal(comptime name: [:0]const u8, comptime get: anytype) types.Member {
+    return .{ .name = name, .kind = .signal, .impl = struct {
+        pub const Signal = signalType(get);
+        pub const getter = get;
+    } };
+}
+
 fn validateValue(comptime T: type, comptime r: recipes.ValueRecipe) void {
     inline for (r.fields) |f| if (!@hasField(T, f))
         @compileError(@typeName(T) ++ " has no field '" ++ f ++ "' (listed in .fields)");
     if (@alignOf(T) > 8) @compileError(@typeName(T) ++ ": alignment > 8 is not allowed in Lua userdata");
+}
+
+fn signalType(comptime get: anytype) type {
+    comptime var R = @typeInfo(@TypeOf(get)).@"fn".return_type.?;
+    if (@typeInfo(R) == .error_union) R = @typeInfo(R).error_union.payload;
+
+    const info = @typeInfo(R);
+    if (info != .pointer or info.pointer.size != .one or !@hasDecl(info.pointer.child, "Args"))
+        @compileError("bind.signal getter must return `*S` or `!*S`, where `S` is a signal type!");
+
+    return info.pointer.child;
 }

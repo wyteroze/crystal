@@ -44,6 +44,13 @@ pub fn isKeyPressed(self: *KeyboardDevice, key: Platform.desc.Keycode) bool {
     return self.keys_pressed.contains(key);
 }
 
+pub fn format(
+    self: @This(),
+    writer: *std.Io.Writer,
+) std.Io.Writer.Error!void {
+    try writer.print("KeyboardDevice {d}", .{ self.id });
+}
+
 pub const __lua = .ref;
 pub const registerLua = struct {
     const linker = @import("../../scripting/linker/linker.zig");

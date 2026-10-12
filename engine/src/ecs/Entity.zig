@@ -91,9 +91,7 @@ pub fn format(
     try writer.print("Entity{{ index: {d}, generation: {d} }}", .{ self.index, self.generation });
 }
 
-const scripting = @import("../scripting/scripting.zig");
-const bind = scripting.bind;
-const lua_signal = scripting.lua_signal;
+const bind = @import("../scripting/bind/bind.zig");
 // Needs to be pub so the walker can find it.
 pub const lua_components = @import("lua_components.zig");
 
@@ -107,21 +105,15 @@ pub const sub_api = bind.handle(Entity, .{
         bind.func("RemoveComponent", Entity.removeComponent)
     },
     .props = &.{
-        bind.prop("Updated", struct {
-            fn c(self: Entity) !lua_signal.Handle(World.UpdateSignal) {
-                return .{ .signal = try self.updated() };
-            }
-        }.c, null),
-        bind.prop("Destroyed", struct {
-            fn c(self: Entity) !lua_signal.Handle(World.DestroySignal) {
-                return .{ .signal = try self.destroyed() };
-            }
-        }.c, null),
         bind.readonly("Components", struct {
             fn c(self: Entity) lua_components.Components {
                 return .{ .entity = self };
             }
         }.c)
+    },
+    .signals = &.{
+        bind.signal("Updated", Entity.updated),
+        bind.signal("Destroyed", Entity.destroyed),
     },
     .ops = .{ .eq = .{ .member = bind.func("eq", Entity.eql) }, .tostring = .auto }
 });

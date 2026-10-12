@@ -379,7 +379,6 @@ pub fn main(init: std.process.Init) !void {
 
     defer { 
         world.deinit();
-        runtime.deinit();
         audio.deinit();
         ui.deinit();
         renderer.deinit();
@@ -389,6 +388,7 @@ pub fn main(init: std.process.Init) !void {
         platform.destroySurface(surface);
         platform.deinit();
         scheduler.deinit();
+        runtime.deinit();
     }
     
     // Register components
@@ -424,7 +424,9 @@ pub fn main(init: std.process.Init) !void {
 
         try world.set(camera, script_component, scripting.Script, script);
         const stored_script = world.getComponent(camera, script_component, scripting.Script).?;
-        try stored_script.instantiate(camera);
+        stored_script.instantiate(camera) catch |e| {
+            std.log.err("Failed to instantiate camera script: {s}", .{ @errorName(e) });
+        };
     }
 
     try world.set(scene, scene_component, Scene, .{ .cam = camera });

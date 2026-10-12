@@ -110,7 +110,7 @@ pub const MouseButton = enum {
     Middle,
     Right,
     SideButtonBack,
-    SideButtonForwards
+    SideButtonForward
 };
 
 // Gamepad input

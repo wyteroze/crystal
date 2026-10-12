@@ -525,7 +525,7 @@ const mouse_pairs = [_]MousePair{
     .{ .sdl = .middle, .plat = .Middle },
     .{ .sdl = .right, .plat = .Right },
     .{ .sdl = .x1, .plat = .SideButtonBack },
-    .{ .sdl = .x2, .plat = .SideButtonForwards }
+    .{ .sdl = .x2, .plat = .SideButtonForward }
 };
 
 fn sdlMouseButtonToPlatformMouseButton(button: sdl3.mouse.Button) desc.MouseButton {

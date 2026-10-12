@@ -11,6 +11,7 @@ pub const ValueRecipe = struct {
     props: []const types.Member = &.{},
     statics: []const types.Member = &.{},
     methods: []const types.Member = &.{},
+    signals: []const types.Member = &.{},
     ops: types.Ops = .{}
 };
 
@@ -23,6 +24,7 @@ pub const HandleRecipe = struct {
     props: []const types.Member = &.{},
     statics: []const types.Member = &.{},
     methods: []const types.Member = &.{},
+    signals: []const types.Member = &.{},
     ops: types.Ops = .{},
 };
 
@@ -34,12 +36,14 @@ pub const ObjectRecipe = struct {
     props: []const types.Member = &.{}, 
     statics: []const types.Member = &.{}, 
     methods: []const types.Member = &.{},
+    signals: []const types.Member = &.{},
     ops: types.Ops = .{},
 };
 
 pub const ModuleRecipe = struct {
     kind: union(enum) { library, singleton: type } = .library,
     members: []const types.Member = &.{},
+    signals: []const types.Member = &.{},
 };
 
 pub const GlobalsRecipe = struct {

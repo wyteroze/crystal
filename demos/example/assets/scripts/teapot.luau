@@ -49,7 +49,7 @@ function Teapot.new(entity: Entity)
         self._timer = self._timer + dt
         local toAdd = self.Multiplier * dt
         local add = Vec3.new(toAdd * 5, toAdd * 10, toAdd * 20)
-
+        
         self._entity.Components.Rotation += add
         -- print(pcall(function (...)
         --     elements[1].Components.Text.Content = ("The fps is %.2f rn"):format(1/dt)
