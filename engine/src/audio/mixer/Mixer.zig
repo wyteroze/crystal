@@ -30,7 +30,7 @@ pub fn init(platform: *Platform, audio_events: *AudioEvents) !Mixer {
 }
 
 pub fn deinit(self: *Mixer) void {
-    for (self.voices) |v| v.deinit();
+    for (&self.voices) |*v| v.deinit();
 }
 
 pub fn streamCallback(ctx: ?*Mixer, stream: Platform.types.AudioStreamHandle, needed: usize, _: usize) void {
@@ -48,8 +48,17 @@ pub fn streamCallback(ctx: ?*Mixer, stream: Platform.types.AudioStreamHandle, ne
 
         for (&self.voices) |*v| {
             if (!v.active) continue;
-            if (!v.finished) v.mixInto(out, n, self.listener);
-            if (v.finished and self.audio_events.push(.{ .voice_finished = v.id })) v.active = false;
+
+            if (!v.finished) {
+                const r = v.mixInto(out, n, self.listener);
+                if (r.started) _ = self.audio_events.push(.{ .voice_started = v.id });
+                if (r.looped) _ = self.audio_events.push(.{ .voice_looped = v.id });
+            }
+
+            if (v.finished and self.audio_events.push(.{ .voice_finished = v.id })) {
+                v.deinit();
+                v.active = false;
+            }
         }
 
         self.platform.putAudioStreamData(stream, std.mem.sliceAsBytes(out)) catch continue;
@@ -68,13 +77,9 @@ fn doCommand(self: *Mixer, cmd: Command) void {
                 .gain = 0
             };
         },
-        .stop => |id| {
+        .stop, .destroy => |id| {
             const v = &self.voices[id.index];
             if (v.active and v.id.generation == id.generation) v.finished = true;
-        },
-        .destroy => |id| {
-            const v = &self.voices[id.index];
-            v.deinit();
         },
         .set_params => |p| {
             const v = &self.voices[p.voice.index];

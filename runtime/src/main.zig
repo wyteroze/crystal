@@ -264,35 +264,32 @@ fn submitToAudio(w: *ecs.World, audio: *Audio) void {
     const right = math.Quat.fromEuler(cam_rot.toRadians()).toMat4().transformDirection(.new(1, 0, 0)).normalize();
     audio.setListener(.{ .position = cam_pos, .right = right });
 
-    var iter = w.query(&.{ speaker_id }).iterator();
-    while (iter.next()) |entity| {
-        const speaker = w.getComponent(entity, speaker_id, Audio.Speaker).?;
+    for (0..Audio.max_voices) |i| {
+        const index: u16 = @intCast(i);
+        const state = audio.slot_state[index];
+        if (state != .active and state != .reserved) continue;
 
-        for (speaker.tracks.items) |t| {
-            if (t.voice) |v| {
-                if (!audio.isAlive(v)) {
-                    t.voice = null;
-                    if (!t.loops) t.playing = false;
-                }
-            }
-            
-            const params: Audio.Mixer.Voice.VoiceParams = .{
-                .position = if (w.getComponent(entity, pos_id, math.Vec3)) |p| p.* else null,
-                .volume = t.volume,
-                .pitch = t.pitch,
-                .loops = t.loops,
-            };
+        const t = &audio.tracks[index];
+        const owner = t.owner orelse continue;
+        const id = audio.getHandle(index).id;
 
-            if (t.playing) {
-                if (t.voice) |v| {
-                    audio.setParams(v, params);
-                } else {
-                    std.log.warn("No voice!!", .{});
-                }
-            } else if (t.voice) |v| {
-                if (audio.stop(v)) t.voice = null;
-            }
-        }
+        if (!owner.isAlive()) { audio.destroy(id); continue; }
+        const speaker = w.getComponent(owner, speaker_id, Audio.Speaker) orelse {
+            audio.destroy(id);
+            continue;
+        };
+
+        if (state != .active) continue;
+
+        audio.setParams(id, .{
+            .position = if (w.getComponent(owner, pos_id, math.Vec3)) |p| p.* else null,
+            .volume = t.volume * speaker.volume,
+            .pitch = t.pitch,
+            .loops = t.loops,
+            .min_distance = speaker.min_distance,
+            .max_distance = speaker.max_distance,
+            .attenuation = speaker.attenuation,
+        });
     }
 }
 

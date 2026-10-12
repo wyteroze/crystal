@@ -15,6 +15,7 @@ function Teapot.new(entity: Entity)
     }, Teapot)
     
     print(entity)
+    local audioStream = assets.load("assets://audios/Lifestyle - Rich Gang.mp3")
     local chickenPng = assets.load("assets://images/chicken.jpg")
 
     entity:AddComponent("Position", Vec3.new(0, 0, 5))
@@ -27,15 +28,15 @@ function Teapot.new(entity: Entity)
     -- graph.Input:Connect(filter)
     -- filter:Connect(graph.Output)
 
-    -- entity:AddComponent("Speaker", audio.Speaker {
-    --     Volume = 1,
-    --     MinDistance = 1,
-    --     MaxDistance = 100,
-    --     Attenuation = audio.Attenuation.InverseSquare,
-    --     -- Graph = graph
-    -- })
+    entity:AddComponent("Speaker", {
+        Volume = 1,
+        MinDistance = 1,
+        MaxDistance = 100,
+        Attenuation = "InverseSquare",
+        -- Graph = graph
+    })
 
-    -- local track = entity.Components.Speaker:Play(audioStream)
+    local track: AudioTrack = entity.Components.Speaker:Play(audioStream)
     
     -- track:Play()
     -- track:Stop()
@@ -49,7 +50,7 @@ function Teapot.new(entity: Entity)
         self._timer = self._timer + dt
         local toAdd = self.Multiplier * dt
         local add = Vec3.new(toAdd * 5, toAdd * 10, toAdd * 20)
-        
+    
         self._entity.Components.Rotation += add
         -- print(pcall(function (...)
         --     elements[1].Components.Text.Content = ("The fps is %.2f rn"):format(1/dt)

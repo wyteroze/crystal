@@ -293,3 +293,49 @@ declare extern type Mouse with
     --- Returns the position of the mouse.
     function GetPosition(self): Vec2
 end
+
+-- AUDIO --
+
+--- A component used to emit audio from entities.
+declare extern type Speaker with
+    --- Immediately begins playing an audio, and returns an `AudioTrack` that represents playback.
+    function Play(self, audio: Asset): AudioTrack
+    --- The volume of this speaker. The range of allowed values is from 0 to 10, and other values are clamped to this range.
+    Volume: number
+    --- The distance within which an `AudioListener` hears the speaker at full `Volume`.
+    --- Beyond this distance, loudness falls off according to `Attenuation`.
+    MinDistance: number
+    --- The distance beyond which an `AudioListener` cannot hear the speaker at all.
+    MaxDistance: number
+    --- Controls how loudness falls off between `MinDistance` and `MaxDistance` for this speaker.
+    Attenuation: AudioAttenuation
+end
+
+--- Represents the playback of a piece of audio.
+declare extern type AudioTrack with
+    --- Begins playback of this track, resuming it from its current time position.
+    --- Calling this does not reset the time position of this audio,
+    --- but can still be achieved by setting this track's `TimePosition` to 0.
+    function Play(self): ()
+    --- Stops playback of this track.
+    function Stop(self): ()
+    --- Destroys this track, invalidating it and stopping playback.
+    --- Attempting to access any properties or call any methods after destroying a track will result in an error.
+    function Destroy(self): ()
+    
+    --- Fires when this track is played.
+    read Played: Signal<()>
+    --- Fires when this track is stopped.
+    read Stopped: Signal<()>
+    --- Fires when this track loops.
+    read Looped: Signal<()>
+end
+
+--- The falloff curve used to determine how loudness decreases with distance from a `Speaker`.
+export type AudioAttenuation =
+    --- Loudness decreases at a constant rate, and reaches silence at `MaxDistance`.
+    "Linear" | 
+    --- Loudness drops off quickly near the speaker, and levels out with distance.
+    "Exponential" | 
+    --- Loudness follows the inverse-square law of sound.
+    "InverseSquare"

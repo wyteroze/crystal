@@ -90,7 +90,6 @@ function Camera._step(self: Camera, dt: number)
     local ms = input.GetMouse(1) :: Mouse
 
     -- TODO: Allow vec * (or /) number 
-    print(kb, ms)
     
     -- 5 m/s
     local moveX = (btn(kb:IsKeyPressed("D"))-btn(kb:IsKeyPressed("A")))*dt*self.Speed

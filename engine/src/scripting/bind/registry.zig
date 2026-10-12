@@ -33,7 +33,7 @@ fn addUnique(comptime list: []const type, comptime T: type) []const type {
 fn collectEntries(comptime api: anytype, comptime Reg: type) []const Entry { comptime {
     var out: []const Entry = &.{};
     for (api) |mod| for (mod.impl.recipe.members) |m| switch (m.kind) {
-        .value, .handle, .object => out = out ++ .{ Entry{ .T = m.impl.Type, .member = m } },
+        .value, .handle, .object, .record => out = out ++ .{ Entry{ .T = m.impl.Type, .member = m } },
         else => {}
     };
 

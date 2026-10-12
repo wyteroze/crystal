@@ -14,6 +14,7 @@ pub fn Marshal(comptime Reg: type) type {
             if (comptime Reg.kindOf(T)) |k| switch (k) {
                 .value => return parseValue(T, l, idx).*,
                 .handle => return parseHandle(T, l, idx).*,
+                .record => return parseRecord(T, l, idx),
                 .object => @compileError("Objects are taken by pointer"),
                 else => unreachable
             };
@@ -37,6 +38,7 @@ pub fn Marshal(comptime Reg: type) type {
             if (comptime Reg.kindOf(T)) |k| switch (k) {
                 .value => return pushValue(l, v),
                 .handle => return pushHandle(l, v),
+                .record => return pushRecord(T, l, v),
                 else => unreachable,
             };
 
@@ -123,7 +125,48 @@ pub fn Marshal(comptime Reg: type) type {
             return l.toString(idx) catch unreachable;
         }
 
-        fn parseRecord(comptime T: type, _: *zlua.Lua, _: i32, _: *types.Diag) T { @compileError("records are not implemented yet"); }
+        fn parseRecord(comptime T: type, l: *zlua.Lua, idx: i32) T {
+            const t = l.absIndex(idx);
+            if (l.typeOf(t) != .table) l.raiseErrorStr("expected a table for %s", .{ @typeName(T).ptr });
+            const info = @typeInfo(T).@"struct";
+
+            var out: T = .{};
+            inline for (info.field_names, 0..) |nm, i| {
+                const key = comptime names.pascal(nm);
+                const ty = l.getField(t, key);
+                defer l.pop(1);
+
+                if (ty != .nil) @field(out, nm) = parse(info.field_types[i], l, -1);
+            }
+
+            l.pushNil();
+            while (l.next(t)) {
+                if (l.typeOf(-2) != .string) l.raiseErrorStr("%s: field names must be strings", .{ @typeName(T).ptr });
+
+                const key = l.toString(-2) catch unreachable;
+                var known = false;
+                inline for (info.field_names) |nm| {
+                    if (std.mem.eql(u8, key, comptime names.pascal(nm))) known = true;
+                }
+
+                if (!known)
+                    l.raiseErrorStr("%s: unknown field '%s'", .{ @typeName(T).ptr, key.ptr });
+
+                l.pop(1);
+            }
+
+            return out;
+        }
+
+        fn pushRecord(comptime T: type, l: *zlua.Lua, v: T) void {
+            l.newTable();
+
+            const info = @typeInfo(T).@"struct";
+            inline for (info.field_names) |nm| {
+                push(l, @field(v, nm));
+                l.setField(-2, comptime names.pascal(nm));
+            }
+        }
 
         fn parseHandle(comptime T: type, l: *zlua.Lua, idx: i32) *T {
             return l.toUserdataTagged(T, idx, @intCast(Reg.tagOf(T))) catch l.typeError(idx, names.shortTypeName(T));

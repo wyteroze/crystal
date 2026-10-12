@@ -7,6 +7,7 @@ pub const Entity = @import("Entity.zig");
 pub const Query = @import("Query.zig");
 pub const SparseSet = @import("SparseSet.zig");
 pub const World = @import("World.zig");
+pub const Codec = @import("Codec.zig");
 
 const bind = @import("../scripting/bind/bind.zig");
 

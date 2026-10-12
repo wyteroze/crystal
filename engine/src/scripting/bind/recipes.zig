@@ -40,6 +40,11 @@ pub const ObjectRecipe = struct {
     ops: types.Ops = .{},
 };
 
+pub const RecordRecipe = struct {
+    name: ?[:0]const u8 = null,
+    handle: ?type = null,
+};
+
 pub const ModuleRecipe = struct {
     kind: union(enum) { library, singleton: type } = .library,
     members: []const types.Member = &.{},

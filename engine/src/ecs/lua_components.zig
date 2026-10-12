@@ -75,6 +75,8 @@ pub fn getComponent(e: Entity, l: *zlua.Lua, codecs: []const Codec, name: []cons
     }
 
     const c = Codec.find(codecs, info.type_name) orelse return error.ComponentNotExposedToLua;
+    if (c.push_component) |pc| { pc(l, e, bytes); return .{ .n = 1 }; }
+    
     c.push(l, bytes);
     return .{ .n = 1 };
 }

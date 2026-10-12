@@ -7,7 +7,8 @@ const types = @import("types.zig");
 const names = @import("names.zig");
 const recipes = @import("recipes.zig");
 const Host = @import("Host.zig");
-const Codec = @import("../../ecs/Codec.zig");
+const ecs = @import("../../ecs/ecs.zig");
+const Codec = ecs.Codec;
 pub const registry = @import("registry.zig");
 pub const Marshal = @import("marshal.zig").Marshal;
 pub const Wrap = @import("wrap.zig").Wrap;
@@ -50,7 +51,7 @@ pub fn Binder(comptime api: anytype) type {
         const codecs: []const Codec = blk: {
             var out: []const Codec = &.{};
             for (R.entries) |e| switch (e.member.kind) {
-                .value, .handle => out = out ++ .{ codecFor(e) },
+                .value, .handle, .record => out = out ++ .{ codecFor(e) },
                 else => {}
             };
 
@@ -106,6 +107,9 @@ pub fn Binder(comptime api: anytype) type {
 
         fn codecFor(comptime e: registry.Entry) Codec {
             const T = e.T;
+            const is_record = e.member.kind == .record;
+            const H: ?type = if (is_record) e.member.impl.recipe.handle else null;
+
             return .{
                 .type_name = @typeName(T),
                 .size = @sizeOf(T),
@@ -121,7 +125,12 @@ pub fn Binder(comptime api: anytype) type {
                         @memcpy(std.mem.asBytes(&v), bytes[0..@sizeOf(T)]);
                         M.push(l, v);
                     }
-                }.f
+                }.f,
+                .push_component = if (H) |Handle| struct {
+                    fn f(l: *zlua.Lua, entity: ecs.Entity, _: []const u8) void {
+                        M.push(l, Handle.fromComponent(Host.fromState(l), entity));
+                    }
+                }.f else null
             };
         }
 
@@ -165,6 +174,7 @@ pub fn Binder(comptime api: anytype) type {
                     .prop => if (!allow_props)
                         @compileError("props are not allowed here: " ++ m.name),
 
+                    .record => {},
                     else => @compileError(std.fmt.comptimePrint("Type not allowed here: {s}", .{ m.name })),
                 }
 
@@ -226,35 +236,49 @@ pub fn Binder(comptime api: anytype) type {
             }.f);
         }
 
-        fn newindexFn(comptime _: type, comptime E: []const InstanceEntry) zlua.CFn {
-            _ = comptime blk: {
-                var kv: [E.len]struct { []const u8, u16 } = undefined;
-                for (E, 0..) |e, i| kv[i] = .{ entryName(e), i };
-                
-                break :blk std.StaticStringMap(u16).initComptime(kv);
-            };
+        fn newindexFn(comptime T: type, comptime E: []const InstanceEntry) zlua.CFn {
+            const Map = comptime entryMap(E);
 
             return zlua.wrap(struct {
                 fn f(l: *zlua.Lua) i32 {
-                    l.raiseErrorStr("newindexFn() is unimplemented!", .{});
+                    if (l.typeOf(2) != .string) l.raiseErrorStr("member name must be a string", .{});
 
-                    // const self = M.parse(T, l, 1);
-                    // if (l.typeOf(2) != .string) { l.pushNil(); return 1; }
+                    const key = l.toString(2) catch unreachable;
+                    const i = Map.get(key) orelse l.raiseErrorStr("'%s' is not a valid member", .{ key.ptr });
 
-                    // const key = l.toString(2) catch unreachable;
-                    // const i = Map.get(key) orelse { l.pushNil(); return 1; };
+                    switch (i) {
+                        inline 0...E.len - 1 => |k| switch (E[k]) {
+                            .field => |fd| {
+                                // Needs pointer to userdata, not copy
+                                const self = l.toUserdata(T, 1) catch unreachable;
+                                const F = @TypeOf(@field(self.*, fd.zig));
+                                @field(self.*, fd.zig) = M.parse(F, l, 3);
 
-                    // switch (i) {
-                    //     inline 0...E.len - 1 => |k| switch (E[k]) {
-                    //         .field => |fd| { M.push(l, @field(self, fd.zig)); return 1; },
-                    //         .prop => |p| if (p.impl != null) return W.Gen(p.impl.getter, .{}).call(l) else l.raiseErrorStr("%s is write-only", .{ p.impl.name }),
-                    //         .method => |m| { l.pushFunction(W.cFn(m.impl.function, .{}), m.name); return 1; },
-                    //     },
+                                return 0;
+                            },
+                            .prop => |p| {
+                                if (!@hasDecl(p.impl, "setter"))
+                                    l.raiseErrorStr("'%s' is read-only", .{ key.ptr });
 
-                    //     else => unreachable,
-                    // }
+                                l.remove(2);
+                                return W.Gen(p.impl.setter, .{}).call(l);
+                            },
+                            
+                            .method => l.raiseErrorStr("'%s' is a method and cannot be assigned to", .{ key.ptr }),
+                        },
+                        else => unreachable,
+                    }
                 }
             }.f);
+        }
+
+        fn entryMap(comptime E: []const InstanceEntry) std.StaticStringMap(u16) {
+            comptime {
+                var kv: [E.len]struct { []const u8, u16 } = undefined;
+                for (E, 0..) |e, i| kv[i] = .{ entryName(e), i };
+
+                return .initComptime(kv);
+            }
         }
 
         fn modulePropIndexFn(comptime members: []const types.Member) zlua.CFn {

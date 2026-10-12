@@ -7,11 +7,8 @@ pub const AudioListener = struct {
     right: math.Vec3 = .new(1, 0, 0)
 };
 
-pub const Attenuation = union(enum) {
+pub const Attenuation = enum {
     linear,
     exponential,
     inverse_square,
-    custom: *const fn(f32) f32,
-
-    pub const __lua = .val;
 };

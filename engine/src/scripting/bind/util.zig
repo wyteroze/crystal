@@ -1,5 +1,6 @@
 // Copyright 2026 wyteroze. Licensed under the Apache-2.0 license.
 
+const std = @import("std");
 const types = @import("types.zig");
 const names = @import("names.zig");
 const recipes = @import("recipes.zig");
@@ -45,6 +46,15 @@ pub fn value(comptime T: type, comptime r: recipes.ValueRecipe) types.Member {
     };
 }
 
+pub fn record(comptime T: type, comptime r: recipes.RecordRecipe) types.Member {
+    comptime validateRecord(T);
+    return .{
+        .name = r.name orelse names.shortTypeName(T),
+        .kind = .record,
+        .impl = struct { pub const Type = T; pub const recipe = r; }
+    };
+}
+
 pub fn signal(comptime name: [:0]const u8, comptime get: anytype) types.Member {
     return .{ .name = name, .kind = .signal, .impl = struct {
         pub const Signal = signalType(get);
@@ -56,6 +66,12 @@ fn validateValue(comptime T: type, comptime r: recipes.ValueRecipe) void {
     inline for (r.fields) |f| if (!@hasField(T, f))
         @compileError(@typeName(T) ++ " has no field '" ++ f ++ "' (listed in .fields)");
     if (@alignOf(T) > 8) @compileError(@typeName(T) ++ ": alignment > 8 is not allowed in Lua userdata");
+}
+
+fn validateRecord(comptime T: type) void {
+    inline for (@typeInfo(T).@"struct".field_attrs) |f|
+        if (f.default_value_ptr == null) 
+            @compileError(std.fmt.comptimePrint("{s}.{s} needs a default value to be a record field", .{ @typeName(T), f.name }));
 }
 
 fn signalType(comptime get: anytype) type {
