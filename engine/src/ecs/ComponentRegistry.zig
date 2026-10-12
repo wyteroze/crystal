@@ -4,7 +4,6 @@ const std = @import("std");
 const zlua = @import("zlua");
 const ComponentId = @import("ComponentId.zig");
 const ComponentInfo = @import("ComponentInfo.zig");
-const Codec = @import("Codec.zig");
 
 pub const max_component_size = 256;
 pub const max_alignment = 16;
@@ -36,34 +35,25 @@ pub fn register(self: *ComponentRegistry, comptime T: type, name: []const u8) !C
         if (@alignOf(T) > max_alignment) @compileError(@typeName(T) ++ " exceeds max_alignment! Increase it in ComponentRegistry or reduce the alignment of your type.");
     }
 
+    return self.registerRaw(name, @typeName(T), @sizeOf(T), @alignOf(T), null);
+}
+
+pub fn registerRaw(
+    self: *ComponentRegistry, 
+    name: []const u8, 
+    type_name: []const u8, 
+    size: u32, 
+    alignment: u32, 
+    free_fn: ?ComponentInfo.FreeFn
+) !ComponentId {
+    if (size > max_component_size or alignment > max_alignment) return error.ComponentTooLarge;
+
     if (self.ids.get(name)) |existing| {
-        if (self.info(existing).size != @sizeOf(T)) return error.ComponentTypeMismatch;
+        if (!std.mem.eql(u8, self.info(existing).type_name, type_name)) return error.ComponentTypeMismatch;
         return existing;
     }
 
-    return self.add(.{ .name = "", .size = @sizeOf(T), .alignment = @alignOf(T), .codec = .of(T) }, name);
-}
-
-pub fn registerLayout(self: *ComponentRegistry, name: []const u8, fields: []const Codec.FieldDesc) !ComponentId {
-    if (self.ids.get(name)) |e| return e;
-    if (fields.len == 0) return error.NoFields;
-
-    const a = self.arena.allocator();
-    const owned = try a.dupe(Codec.FieldDesc, fields);
-    var offset: u32 = 0;
-    var max_align: u32 = 1;
-    for (owned) |*f| {
-        f.name = try a.dupe(u8, f.name);
-        offset = std.mem.alignForward(u32, offset, f.codec.alignment);
-        f.offset = offset;
-        offset += f.codec.size;
-        max_align = @max(max_align, f.codec.alignment);
-    }
-
-    const size = std.mem.alignForward(u32, offset, max_align);
-    if (size > max_component_size or max_align > max_alignment) return error.ComponentTooLarge;
-
-    return self.add(.{ .name = "", .size = size, .alignment = max_align, .codec = null, .fields = owned }, name);
+    return self.add(.{ .name = "", .type_name = type_name, .size = size, .alignment = alignment, .free_fn = free_fn }, name);
 }
 
 fn add(self: *ComponentRegistry, template: ComponentInfo, name: []const u8) !ComponentId {

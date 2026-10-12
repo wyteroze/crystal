@@ -338,7 +338,8 @@ pub fn main(init: std.process.Init) !void {
     try scheduler.init(allocator, io, &os);
 
     var platform_allocator: core.TrackedAllocator = .init(allocator, "Platform");
-    var platform: Platform = try .init(platform_allocator.allocator(), .initSdl());
+    var platform: Platform = undefined;
+    try platform.init(platform_allocator.allocator(), .initSdl());
 
     var input_allocator: core.TrackedAllocator = .init(allocator, "Input");
     var input: Input = undefined;
@@ -455,7 +456,9 @@ pub fn main(init: std.process.Init) !void {
 
     try world.set(entity, script_component, scripting.Script, script);
     const stored_script = world.getComponent(entity, script_component, scripting.Script).?;
-    try stored_script.instantiate(entity);
+    stored_script.instantiate(entity) catch |e| {
+        std.log.err("Failed to instantiate entity script: {s}", .{ @errorName(e) });
+    };
 
     // Render at logical size for 3D, while UI renders at pixel size to stay crisp.
     const view_entity = try ui.world.spawnEntity();

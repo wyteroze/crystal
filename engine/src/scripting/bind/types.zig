@@ -11,6 +11,7 @@ pub const Ops = struct {
     add: ?Op = null, sub: ?Op = null, mul: ?Op = null, div: ?Op = null,
     unm: ?Op = null, eq: ?Op = null, lt: ?Op = null, le: ?Op = null,
     len: ?Op = null, tostring: ?Op = null,
+    index: ?Op = null, newindex: ?Op = null
 };
 
 pub const Diag = struct {

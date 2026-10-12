@@ -7,22 +7,26 @@ const Platform = @import("../platform/Platform.zig");
 
 const max_usize = std.math.maxInt(usize);
 
+pub const KeyboardEvent = signal.Signal(.{ *devices.KeyboardDevice });
+pub const MouseEvent = signal.Signal(.{ *devices.MouseDevice });
+pub const GamepadEvent = signal.Signal(.{ *devices.GamepadDevice });
+
 const Input = @This();
 allocator: std.mem.Allocator,
 platform: *Platform,
 
-// this sucks.. TODO: make this not suck
-platform_event_con: signal.SignalConnection(signal.Signal(.{ Platform.desc.PlatformEvent })),
+platform_event_con: signal.Connection,
 
+dispatcher: signal.Dispatcher,
 // Keyboard events
-keyboard_connected: signal.Signal(.{ *devices.KeyboardDevice }),
-keyboard_disconnected: signal.Signal(.{ *devices.KeyboardDevice }),
+keyboard_connected: KeyboardEvent,
+keyboard_disconnected: KeyboardEvent,
 // Mouse events
-mouse_connected: signal.Signal(.{ *devices.MouseDevice }),
-mouse_disconnected: signal.Signal(.{ *devices.MouseDevice }),
+mouse_connected: MouseEvent,
+mouse_disconnected: MouseEvent,
 // Gamepad events
-gamepad_connected: signal.Signal(.{ *devices.GamepadDevice }),
-gamepad_disconected: signal.Signal(.{ *devices.GamepadDevice }),
+gamepad_connected: GamepadEvent,
+gamepad_disconected: GamepadEvent,
 
 // Unidevices (no matter what ID an event comes from,
 // it goes to the unidevice in addition to the device that the event is for)
@@ -43,11 +47,13 @@ pub fn init(self: *Input, allocator: std.mem.Allocator, platform: *Platform) !vo
     var gamepads: std.AutoHashMap(usize, devices.GamepadDevice) = .init(allocator);
     var touch_devices: std.AutoHashMap(usize, devices.TouchDevice) = .init(allocator);
 
+    self.*.dispatcher = .init(allocator);
+
     // Unidevices
-    try keyboards.put(max_usize, .init(allocator, max_usize));
-    try mice.put(max_usize, .init(allocator, max_usize));
-    try gamepads.put(max_usize, .init(allocator));
-    try touch_devices.put(max_usize, .init(allocator));
+    try keyboards.put(max_usize, .init(&self.dispatcher, allocator, max_usize));
+    try mice.put(max_usize, .init(&self.dispatcher, allocator, max_usize));
+    try gamepads.put(max_usize, .init(&self.dispatcher, allocator));
+    try touch_devices.put(max_usize, .init(&self.dispatcher, allocator));
 
     const platform_event_con = try platform.platform_event.connect(struct {
         fn c(slf: *Input, evt: Platform.desc.PlatformEvent) void {
@@ -59,16 +65,17 @@ pub fn init(self: *Input, allocator: std.mem.Allocator, platform: *Platform) !vo
         .allocator = allocator,
         .platform = platform,
         .platform_event_con = platform_event_con,
+        .dispatcher = self.dispatcher,
         .keyboards = keyboards,
         .mice = mice,
         .gamepads = gamepads,
         .touch_devices = touch_devices,
-        .keyboard_connected = .init(allocator),
-        .keyboard_disconnected = .init(allocator),
-        .mouse_connected = .init(allocator),
-        .mouse_disconnected = .init(allocator),
-        .gamepad_connected = .init(allocator),
-        .gamepad_disconected = .init(allocator),
+        .keyboard_connected = .init(allocator, &self.dispatcher),
+        .keyboard_disconnected = .init(allocator, &self.dispatcher),
+        .mouse_connected = .init(allocator, &self.dispatcher),
+        .mouse_disconnected = .init(allocator, &self.dispatcher),
+        .gamepad_connected = .init(allocator, &self.dispatcher),
+        .gamepad_disconected = .init(allocator, &self.dispatcher),
         .unikeyboard = keyboards.getPtr(max_usize).?,
         .unimouse = mice.getPtr(max_usize).?,
         .unigamepad = gamepads.getPtr(max_usize).?,
@@ -97,12 +104,13 @@ pub fn deinit(self: *Input) void {
     self.mouse_disconnected.deinit();
     self.gamepad_connected.deinit();
     self.gamepad_disconected.deinit();
+    self.dispatcher.deinit();
 }
 
 fn onPlatformEvent(self: *Input, event: Platform.desc.PlatformEvent) !void {
     switch (event) {
         .keyboard_connected => |e| { 
-            try self.keyboards.put(@intCast(e.id), .init(self.allocator, e.id));
+            try self.keyboards.put(@intCast(e.id), .init(&self.dispatcher, self.allocator, e.id));
             self.keyboard_connected.fire(.{ self.getKeyboard(e.id).? });
         },
         .keyboard_disconnected => |e| { 
@@ -120,7 +128,7 @@ fn onPlatformEvent(self: *Input, event: Platform.desc.PlatformEvent) !void {
             (self.getKeyboard(e.keyboard_id) orelse return).keyReleased(e); 
         },
         .mouse_connected => |e| {
-            try self.mice.put(@intCast(e.id), .init(self.allocator, e.id));
+            try self.mice.put(@intCast(e.id), .init(&self.dispatcher, self.allocator, e.id));
             self.mouse_connected.fire(.{ self.getMouse(e.id).? });
         },
         .mouse_disconnected => |e| {

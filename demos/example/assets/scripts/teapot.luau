@@ -7,19 +7,20 @@ local assets = require("@assets")
 local Teapot = {}
 Teapot.__index = Teapot
 
-function Teapot.new(entity)
+function Teapot.new(entity: Entity)
     local self = setmetatable({
         Multiplier = 1,
+        _entity = entity,
+        _timer = 0,
     }, Teapot)
     
     print(entity)
     local chickenPng = assets.load("assets://images/chicken.jpg")
-    local jbMono = assets.load("assets://fonts/JetBrains-Mono.ttf")
 
-    -- entity:AddComponent("Position", core.Vec3.new(0, 0, 5))
-    -- entity:AddComponent("Rotation", core.Vec3.new(0, 0, 0))
-    -- entity:AddComponent("Mesh", assets.load("assets://models/cube.fbx"))
-    -- entity:AddComponent("Image", chickenPng)
+    entity:AddComponent("Position", Vec3.new(0, 0, 5))
+    entity:AddComponent("Rotation", Vec3.new(0, 0, 0))
+    entity:AddComponent("Mesh", assets.load("assets://models/cube.fbx"))
+    entity:AddComponent("Image", chickenPng)
 
     -- local graph = audio.Graph.new()
     -- local filter = graph:AddNode(audio.GraphNode.LowPassFilter { Cutoff = 800 })
@@ -44,16 +45,16 @@ function Teapot.new(entity)
     -- track:Destroy()
 
     -- local elements = {}
-    -- entity.Events.Updated:Connect(function(dt)
-    --     self._timer = self._timer + dt
-    --     local toAdd = self.Multiplier * dt
-    --     local add = core.Vec3.new(toAdd * 5, toAdd * 10, toAdd * 20)
-        
-    --     self._entity.Components.Rotation = self._entity.Components.Rotation + add
-    --     -- print(pcall(function (...)
-    --     --     elements[1].Components.Text.Content = ("The fps is %.2f rn"):format(1/dt)
-    --     -- end))
-    -- end)
+    entity.Updated:Connect(function(dt)
+        self._timer = self._timer + dt
+        local toAdd = self.Multiplier * dt
+        local add = Vec3.new(toAdd * 5, toAdd * 10, toAdd * 20)
+
+        self._entity.Components.Rotation += add
+        -- print(pcall(function (...)
+        --     elements[1].Components.Text.Content = ("The fps is %.2f rn"):format(1/dt)
+        -- end))
+    end)
 
     -- entity.Events.Destroyed:Connect(function()
     --     print(("%s is being destroyed!"):format(self._entity.Name))

@@ -107,7 +107,6 @@ pub fn callMethod(self: *const Script, name: [:0]const u8, comptime ResultTypes:
 
 /// Param is the first value passed to the .new function.
 pub fn instantiate(self: *Script, param: anytype) !void {
-    std.log.info("instantiate: ref={d}", .{self.ref});
     if (self.ref == 0) return error.NoInstanceTable;
     const top = self.state.getTop();
     defer self.state.setTop(top);

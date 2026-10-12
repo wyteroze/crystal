@@ -1218,6 +1218,10 @@ pub const Lua = opaque {
         return c.lua_gc(@ptrCast(lua), c.LUA_GCSETSTEPSIZE, size);
     }
 
+    pub fn mainThread(lua: *Lua) *Lua {
+        return @ptrCast(c.lua_mainthread(@ptrCast(lua)));
+    }
+
     /// Changes the collector to generational mode
     /// Returns true if the previous mode was incremental
     /// See https://www.lua.org/manual/5.4/manual.html#lua_gc

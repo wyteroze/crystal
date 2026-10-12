@@ -1,5 +1,7 @@
 -- Copyright 2026 wyteroze. Licensed under the Apache-2.0 license.
 
+-- MATH --
+
 declare extern type Vec2 with
     read X: number
     read Y: number
@@ -96,7 +98,7 @@ declare extern type Transform with
     function UpVector(self): Vec3
 end
 
--- Globals
+-- Math globals
 
 --- A 3D value that has a length and direction.
 declare Vec3: {
@@ -139,3 +141,27 @@ declare Mat4: {
     --- Creates a new `Mat4` with a translation, rotation, and scale of the given values.
     read fromTRS: (translation: Vec3, rotation: Quat, scale: Vec3) -> Mat4,
 }
+
+export type SignalConnection = {
+    Disconnect: (self: SignalConnection) -> ()
+}
+
+export type Signal<T...> = {
+    Connect: (self: Signal<T...>, callback: (T...) -> ()) -> SignalConnection,
+    Fire: (self: Signal<T...>, T...) -> ()
+}
+
+-- ECS --
+
+declare extern type Entity with
+    --- Adds a pre-registered component of the given name with the given value. This does not implicitly register components.
+    --- You must register custom components using `World:RegisterComponent()` prior to using this.
+    function AddComponent(self, name: string, value: any): ()
+
+    --- Fires when this entity is destroyed.
+    Destroyed: Signal<()>
+    --- Fires when this entity is updated, with the frame delta time as the first argument.
+    Updated: Signal<number>
+    
+    Components: { [string]: any }
+end

@@ -56,6 +56,7 @@ pub const Vec3 = extern struct {
     pub const __lua = .val;
 };
 
+// TODO: Make this use the native Luau `vector` type.
 const bind = @import("../../scripting/bind/bind.zig");
 pub const api = bind.value(Vec3, .{
     .name = "Vec3",
@@ -65,7 +66,13 @@ pub const api = bind.value(Vec3, .{
         bind.constant("one", Vec3.one),
         bind.func("new", Vec3.new),
     },
-    .ops = .{ .tostring = .auto }
+    .ops = .{ 
+        .tostring = .auto, 
+        .add = .{ .member = bind.func("add", Vec3.add) },
+        .sub = .{ .member = bind.func("sub", Vec3.sub) },
+        .mul = .{ .member = bind.func("mul", Vec3.mul) },
+        .div = .{ .member = bind.func("div", Vec3.div) }
+    }
 });
 
 pub const registerLua = struct {

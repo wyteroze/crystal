@@ -7,7 +7,8 @@ const types = @import("types.zig");
 const names = @import("names.zig");
 const recipes = @import("recipes.zig");
 const Host = @import("Host.zig");
-pub const Registry = @import("registry.zig").Registry;
+const Codec = @import("../../ecs/Codec.zig");
+pub const registry = @import("registry.zig");
 pub const Marshal = @import("marshal.zig").Marshal;
 pub const Wrap = @import("wrap.zig").Wrap;
 
@@ -34,7 +35,7 @@ fn instanceEntries(comptime r: anytype) []const InstanceEntry { comptime {
 } }
 
 pub fn Binder(comptime api: anytype) type {
-    const R = Registry(api);
+    const R = registry.Registry(api);
     const M = Marshal(R);
     const W = Wrap(M);
 
@@ -43,8 +44,20 @@ pub fn Binder(comptime api: anytype) type {
         l: *zlua.Lua,
         host: *Host,
 
+        const codecs: []const Codec = blk: {
+            var out: []const Codec = &.{};
+            for (R.entries) |e| switch (e.member.kind) {
+                .value, .handle => out = out ++ &[_]Codec{ codecFor(e) },
+                else => {}
+            };
+
+            break :blk out;
+        };
+
         pub fn init(l: *zlua.Lua, host: *Host) Self {
             host.attach(l);
+            host.codecs = codecs;
+
             return .{ .l = l, .host = host };
         }
 
@@ -61,14 +74,19 @@ pub fn Binder(comptime api: anytype) type {
 
             inline for (api) |entry| if (entry.kind == .globals) {
                 l.pushGlobalTable();
+                std.log.debug("---- Registered {d} globals:", .{ entry.impl.recipe.members.len });
                 fillTable(l, entry.impl.recipe.members);
+                std.log.debug("---- Globals done", .{});
+
                 l.pop(1);
             };
 
             l.newTable();
             inline for (api) |entry| if (entry.kind == .module) {
                 l.newTable();
+                std.log.debug("---- Registered module '{s}' with entries:", .{ entry.name });
                 fillTable(l, entry.impl.recipe.members);
+                std.log.debug("---- Module entries done", .{});
                 l.setReadonly(-1, true);
 
                 // Builtin modules in Luau are prefixed by the @ symbol.
@@ -78,6 +96,27 @@ pub fn Binder(comptime api: anytype) type {
 
             l.pushClosure(zlua.wrap(require), 1, "require");
             l.setGlobal("require");
+        }
+
+        fn codecFor(comptime e: registry.Entry) Codec {
+            const T = e.T;
+            return .{
+                .type_name = @typeName(T),
+                .size = @sizeOf(T),
+                .read = struct {
+                    fn f(l: *zlua.Lua, idx: i32, out: []u8) void {
+                        const v = M.parse(T, l, idx);
+                        @memcpy(out[0..@sizeOf(T)], std.mem.asBytes(&v));
+                    }
+                }.f,
+                .push = struct {
+                    fn f(l: *zlua.Lua, bytes: []const u8) void {
+                        var v: T = undefined;
+                        @memcpy(std.mem.asBytes(&v), bytes[0..@sizeOf(T)]);
+                        M.push(l, v);
+                    }
+                }.f
+            };
         }
 
         pub fn pushValue(_: *Self, l: *zlua.Lua, val: anytype) void {
@@ -108,6 +147,8 @@ pub fn Binder(comptime api: anytype) type {
         fn buildModule(l: *zlua.Lua, comptime mod: types.Member) void {
             l.newTable();
             fillTable(l, mod);
+
+            std.log.debug("Registered module '{s}'", .{ mod.name });
         }
 
         fn fillTable(l: *zlua.Lua, comptime members: []const types.Member) void {
@@ -126,6 +167,7 @@ pub fn Binder(comptime api: anytype) type {
                     else => @compileError(std.fmt.comptimePrint("Type not allowed here: {s}", .{ m.name })),
                 }
 
+                std.log.debug("{s} '{s}'", .{ @tagName(m.kind), m.name });
                 std.debug.assert(l.getTop() == top);
             }
         }
@@ -173,12 +215,43 @@ pub fn Binder(comptime api: anytype) type {
                     switch (i) {
                         inline 0...E.len - 1 => |k| switch (E[k]) {
                             .field => |fd| { M.push(l, @field(self, fd.zig)); return 1; },
-                            .prop => |p| return W.Gen(p.impl.getter, .{}).call(l),
+                            .prop => |p| if (p.impl != @TypeOf(null)) return W.Gen(p.impl.getter, .{}).call(l) else l.raiseErrorStr("%s is write-only", .{ p.impl.name }),
                             .method => |m| { l.pushFunction(W.cFn(m.impl.function, .{}), m.name); return 1; },
                         },
 
                         else => unreachable,
                     }
+                }
+            }.f);
+        }
+
+        fn newindexFn(comptime _: type, comptime E: []const InstanceEntry) zlua.CFn {
+            _ = comptime blk: {
+                var kv: [E.len]struct { []const u8, u16 } = undefined;
+                for (E, 0..) |e, i| kv[i] = .{ entryName(e), i };
+                
+                break :blk std.StaticStringMap(u16).initComptime(kv);
+            };
+
+            return zlua.wrap(struct {
+                fn f(l: *zlua.Lua) i32 {
+                    l.raiseErrorStr("newindexFn() is unimplemented!", .{});
+
+                    // const self = M.parse(T, l, 1);
+                    // if (l.typeOf(2) != .string) { l.pushNil(); return 1; }
+
+                    // const key = l.toString(2) catch unreachable;
+                    // const i = Map.get(key) orelse { l.pushNil(); return 1; };
+
+                    // switch (i) {
+                    //     inline 0...E.len - 1 => |k| switch (E[k]) {
+                    //         .field => |fd| { M.push(l, @field(self, fd.zig)); return 1; },
+                    //         .prop => |p| if (p.impl != null) return W.Gen(p.impl.getter, .{}).call(l) else l.raiseErrorStr("%s is write-only", .{ p.impl.name }),
+                    //         .method => |m| { l.pushFunction(W.cFn(m.impl.function, .{}), m.name); return 1; },
+                    //     },
+
+                    //     else => unreachable,
+                    // }
                 }
             }.f);
         }
@@ -218,18 +291,27 @@ pub fn Binder(comptime api: anytype) type {
             defer std.debug.assert(l.getTop() == base);
             const E = comptime instanceEntries(r);
             l.newTable();
-
-            _ = l.pushStringZ(r.name orelse names.shortTypeName(T));
+            
+            const name = r.name orelse names.shortTypeName(T);
+            _ = l.pushStringZ(name);
             l.setField(-2, "__type");
 
             if (E.len > 0) {
-                l.pushFunction(indexFn(T, E), "__index");
+                l.pushFunction(indexFn(T, E), "indexFn");
                 l.setField(-2, "__index");
+
+                l.pushFunction(newindexFn(T, E), "newindexFn");
+                l.setField(-2, "__newindex");
             }
 
             pushOps(l, T, r);
 
+            l.pushValue(-1);
+            l.setField(zlua.registry_index, std.fmt.comptimePrint("__bind_meta_{s}", .{ @typeName(T) }));
+
+            refMeta(l, T);
             l.setUserdataMetatable(R.tagOf(T));
+            std.log.debug("Registered value '{s}'", .{ name });
         }
 
         fn installHandleMeta(l: *zlua.Lua, comptime T: type, comptime r: recipes.HandleRecipe) void {
@@ -238,15 +320,18 @@ pub fn Binder(comptime api: anytype) type {
 
             const E = comptime instanceEntries(r);
             const tag = R.tagOf(T);
-
             l.newTable();
 
-            _ = l.pushStringZ(r.name orelse names.shortTypeName(T));
+            const name = r.name orelse names.shortTypeName(T);
+            _ = l.pushStringZ(name);
             l.setField(-2, "__type");
 
             if (E.len > 0) {
-                l.pushFunction(indexFn(T, E), "__index");
+                l.pushFunction(indexFn(T, E), "indexFn");
                 l.setField(-2, "__index");
+
+                l.pushFunction(newindexFn(T, E), "newindexFn");
+                l.setField(-2, "__newindex");
             }
 
             pushOps(l, T, r);
@@ -255,7 +340,15 @@ pub fn Binder(comptime api: anytype) type {
                 l.setUserdataDtor(tag, handleDtorFn(T, rel.impl.function));
             }
 
+            refMeta(l, T);
             l.setUserdataMetatable(tag);
+            std.log.debug("Registered handle '{s}'", .{ name });
+        }
+
+        /// Refs the metatable at the top of the stack so that Lua never collects it.
+        fn refMeta(l: *zlua.Lua, comptime T: type) void {
+            l.pushValue(-1);
+            l.setField(zlua.registry_index, "__bind_meta_" ++ @typeName(T));
         }
 
         fn handleDtorFn(comptime T: type, comptime func: fn (T) void) zlua.CUserdataDtorFn {

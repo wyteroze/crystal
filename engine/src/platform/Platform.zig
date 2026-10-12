@@ -6,19 +6,25 @@ pub const types = @import("types.zig");
 pub const Backend = @import("Backend.zig").Backend;
 const signal = @import("../core/signal.zig");
 
+pub const PlatformEvent = signal.Signal(.{ desc.PlatformEvent });
+
 const Platform = @This();
 backend: Backend,
-platform_event: signal.Signal(.{ desc.PlatformEvent }),
+dispatcher: signal.Dispatcher,
+platform_event: PlatformEvent,
 
-pub fn init(allocator: std.mem.Allocator, b: Backend) !Platform {
+pub fn init(self: *Platform, allocator: std.mem.Allocator, b: Backend) !void {
     switch (b) { inline else => |bk| bk.init() }
 
-    return .{ .backend = b, .platform_event = .init(allocator) };
+    self.backend = b;
+    self.dispatcher = .init(allocator);
+    self.platform_event = .init(allocator, &self.dispatcher);
 }
 
 pub fn deinit(self: *Platform) void {
     switch (self.backend) { inline else => |*b| b.deinit() }
     self.platform_event.deinit();
+    self.dispatcher.deinit();
 }
 
 pub fn createSurface(self: *Platform, d: desc.SurfaceDesc) !types.SurfaceHandle {
@@ -45,6 +51,8 @@ pub fn poll(self: *Platform) void {
     while (switch (self.backend) { inline else => |*b| b.pollEvent() }) |e| {
         self.platform_event.fire(.{ e });
     }
+
+    self.dispatcher.flush();
 }
 
 pub fn showError(self: Platform, msg: [:0]const u8) void {

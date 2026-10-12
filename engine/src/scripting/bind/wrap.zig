@@ -5,6 +5,7 @@ const zlua = @import("zlua");
 const Host = @import("Host.zig");
 
 pub const WrapOpts = struct { skip_after_self: u8 = 0 };
+pub const Pushed = struct { n: i32 };
 
 pub fn Wrap(comptime Mar: type) type {
     return struct {
@@ -28,6 +29,8 @@ pub fn Wrap(comptime Mar: type) type {
                     inline for (info.param_types, 0..) |P, i| {
                         if (comptime hostField(P.?)) |name| {
                             args[i] = @field(Host.fromState(l), name);
+                        } else if (P.? == *zlua.Lua) {
+                            args[i] = l;
                         } else {
                             args[i] = Mar.parse(P.?, l, next);
                             next += 1;
@@ -42,6 +45,7 @@ pub fn Wrap(comptime Mar: type) type {
         }
 
         fn pushResult(comptime R: type, l: *zlua.Lua, r: R) i32 {
+            if (comptime R == Pushed) return r.n;
             switch (@typeInfo(R)) {
                 .void => return 0,
                 .error_union => |eu| {

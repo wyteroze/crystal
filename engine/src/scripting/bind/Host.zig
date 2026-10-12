@@ -7,17 +7,16 @@ const Assets = @import("../../assets/Assets.zig");
 const Input = @import("../../input/Input.zig");
 const Ui = @import("../../ui/Ui.zig");
 const Audio = @import("../../audio/Audio.zig");
+const Codec = @import("../../ecs/Codec.zig");
 
 var key: u8 = 0;
 const Host = @This();
-// These are singletons that need a way
-// to access themselves from Lua calls. They do
-// `Runtime.fromState(l).binder` and access themselves.
 world: *ecs.World, 
 assets: *Assets, 
 input: *Input, 
 ui: *Ui, 
 audio: *Audio,
+codecs: []const Codec = &.{},
 
 pub fn attach(self: *Host, l: *zlua.Lua) void {
     l.pushLightUserdata(self);

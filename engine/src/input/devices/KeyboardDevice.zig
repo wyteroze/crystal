@@ -4,19 +4,21 @@ const std = @import("std");
 const Platform = @import("../../platform/Platform.zig");
 const signal = @import("../../core/signal.zig");
 
+pub const KeyEvent = signal.Signal(.{ Platform.desc.Keycode });
+
 const KeyboardDevice = @This();
 allocator: std.mem.Allocator,
 keys_pressed: std.AutoHashMap(Platform.desc.Keycode, bool),
-key_pressed: signal.Signal(.{ Platform.desc.Keycode }),
-key_released: signal.Signal(.{ Platform.desc.Keycode }),
+key_pressed: KeyEvent,
+key_released: KeyEvent,
 id: usize,
 
-pub fn init(allocator: std.mem.Allocator, id: usize) KeyboardDevice {
+pub fn init(dispatcher: *signal.Dispatcher, allocator: std.mem.Allocator, id: usize) KeyboardDevice {
     return .{ 
         .allocator = allocator, 
         .keys_pressed = .init(allocator),
-        .key_pressed = .init(allocator),
-        .key_released = .init(allocator),
+        .key_pressed = .init(allocator, dispatcher),
+        .key_released = .init(allocator, dispatcher),
         .id = id
     };
 }

@@ -6,6 +6,10 @@ const core = @import("../../core/core.zig");
 const signal = core.signal;
 const math = core.math;
 
+pub const ButtonEvent = signal.Signal(.{ Platform.desc.MouseButton });
+pub const MoveEvent = signal.Signal(.{ math.Vec2, math.Vec2 });
+pub const ScrollEvent = signal.Signal(.{ math.Vec2 });
+
 const MouseDevice = @This();
 allocator: std.mem.Allocator,
 buttons_pressed: std.AutoHashMap(Platform.desc.MouseButton, bool),
@@ -18,14 +22,14 @@ frame_pos: math.Vec2 = .zero,
 frame_delta: math.Vec2 = .zero,
 scroll_delta: math.Vec2 = .zero,
 
-pub fn init(allocator: std.mem.Allocator, id: usize) MouseDevice {
+pub fn init(dispatcher: *signal.Dispatcher, allocator: std.mem.Allocator, id: usize) MouseDevice {
     return .{ 
         .allocator = allocator,
         .buttons_pressed = .init(allocator),
-        .button_pressed = .init(allocator),
-        .button_released = .init(allocator),
-        .moved_evt = .init(allocator),
-        .scrolled_evt = .init(allocator),
+        .button_pressed = .init(allocator, dispatcher),
+        .button_released = .init(allocator, dispatcher),
+        .moved_evt = .init(allocator, dispatcher),
+        .scrolled_evt = .init(allocator, dispatcher),
         .id = id
     };
 }

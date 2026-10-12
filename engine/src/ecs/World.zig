@@ -1,46 +1,24 @@
 // Copyright 2026 wyteroze. Licensed under the Apache-2.0 license.
 
 const std = @import("std");
-const zlua = @import("zlua");
 const Entity = @import("Entity.zig");
-const Codec = @import("Codec.zig");
 const ComponentId = @import("ComponentId.zig");
 const ComponentRegistry = @import("ComponentRegistry.zig");
 const SystemRegistry = @import("SystemRegistry.zig");
 const SparseSet = @import("SparseSet.zig");
 const Query = @import("Query.zig");
 const Hierarchy = @import("Hierarchy.zig");
-const Signal = @import("../core/signal.zig").Signal;
-
-const codecs: std.StaticStringMap(Codec) = blk: {
-    const core = @import("../core/core.zig");
-    const math = @import("../core/math/math.zig");
-    const assets = @import("../assets/Assets.zig");
-    const render = @import("../render/render.zig");
-    const Ui = @import("../ui/Ui.zig");
-
-    break :blk .initComptime(.{
-        .{ "boolean", Codec.of(bool) },
-        .{ "number", Codec.of(f64) },
-        .{ "integer", Codec.of(i64) },
-        .{ "string", Codec.of([]const u8) },
-        .{ "Vec3", Codec.of(math.Vec3) },
-        .{ "Quat", Codec.of(math.Quat) },
-        .{ "Mat4", Codec.of(math.Mat4) },
-        .{ "Asset", Codec.of(assets.AssetHandle) },
-        .{ "Light", Codec.of(render.types.Light) },
-        .{ "Text", Codec.of(Ui.types.Text) },
-        .{ "ComputedTextLayout", Codec.of(Ui.types.ComputedTextLayout) },
-        .{ "Color", Codec.of(core.Color) },
-        .{ "Image", Codec.of(Ui.types.Image) }
-    });
-};
+const signal = @import("../core/signal.zig");
+const lua_components = @import("lua_components.zig");
 
 pub const WriteMode = enum { add, set, upsert };
 pub const FieldTypeSpec = struct {
     name: []const u8,
     type_name: []const u8
 };
+
+pub const UpdateSignal = signal.Signal(.{ f32 });
+pub const DestroySignal = signal.Signal(.{});
 
 const World = @This();
 allocator: std.mem.Allocator,
@@ -53,8 +31,10 @@ alive: std.ArrayList(bool),
 free: std.ArrayList(u32),
 
 hierarchy: Hierarchy,
-update_signals: std.ArrayList(Signal(.{ f32 })),
-destroy_signals: std.ArrayList(Signal( .{} )),
+
+dispatcher: signal.Dispatcher,
+update_signals: std.ArrayList(?*UpdateSignal),
+destroy_signals: std.ArrayList(?*DestroySignal),
 
 pub fn init(allocator: std.mem.Allocator) World {
     return .{
@@ -65,6 +45,7 @@ pub fn init(allocator: std.mem.Allocator) World {
         .generations = .empty,
         .alive = .empty,
         .free = .empty,
+        .dispatcher = .init(allocator),
         .update_signals = .empty,
         .destroy_signals = .empty,
         .hierarchy = .init(allocator)
@@ -81,8 +62,9 @@ pub fn deinit(self: *World) void {
     self.alive.deinit(self.allocator);
     self.free.deinit(self.allocator);
 
-    for (self.destroy_signals.items) |*ds| ds.deinit();
-    for (self.update_signals.items) |*us| us.deinit();
+    for (self.destroy_signals.items) |ds| if (ds) |s| s.destroy();
+    for (self.update_signals.items) |us| if (us) |s| s.destroy();
+    self.dispatcher.deinit();
     self.destroy_signals.deinit(self.allocator);
     self.update_signals.deinit(self.allocator);
 }
@@ -96,25 +78,12 @@ pub fn registerComponent(self: *World, comptime T: type, name: []const u8) !Comp
     return id;
 }
 
-pub fn registerComponentLayout(self: *World, name: []const u8, fields: []const Codec.FieldDesc) !ComponentId {
-    const id = try self.components.registerLayout(name, fields);
+pub fn registerLuaComponent(self: *World, name: []const u8) !ComponentId {
+    const lc = lua_components;
+    const id = try self.components.registerRaw(name, lc.type_name, @sizeOf(lc.LuaValue), @alignOf(lc.LuaValue), lc.freeLuaValue);
     try self.ensureStorageFor(id);
 
     return id;
-}
-
-pub fn registerComponentFromSpecs(self: *World, comp_name: []const u8, specs: []const FieldTypeSpec) !ComponentId {
-    if (specs.len > 64) return error.TooManyFields;
-
-    var fields: std.ArrayList(Codec.FieldDesc) = .empty;
-    defer fields.deinit(self.allocator);
-
-    for (specs) |spec| {
-        const codec = codecs.get(spec.type_name) orelse return error.UnknownFieldType;
-        fields.append(self.allocator, .{ .name = spec.name, .codec = codec }) catch return error.OutOfMemory;
-    }
-
-    return self.registerComponentLayout(comp_name, fields.items) catch error.OutOfMemory;
 }
 
 fn ensureStorageFor(self: *World, id: ComponentId) !void {
@@ -131,79 +100,12 @@ pub fn set(self: *World, entity: Entity, id: ComponentId, comptime T: type, valu
     try storage.insert(entity, std.mem.asBytes(&value));
 }
 
-pub fn setFromLua(self: *World, entity: Entity, name: []const u8, lua: *zlua.Lua, idx: i32, mode: WriteMode) !void {
+pub fn setRaw(self: *World, entity: Entity, id: ComponentId, bytes: []const u8) !void {
     if (!self.isEntityAlive(entity)) return error.DeadEntity;
-    const id = self.components.id(name) orelse return error.UnknownComponent;
-    const storage = self.storageFor(id).?;
-    const exists = storage.has(entity);
-    switch (mode) {
-        .add => if (exists) return error.AlreadyHasComponent,
-        .set => if (!exists) return error.NoSuchComponent,
-        .upsert => {},
-    }
+    const storage = self.storageFor(id) orelse return error.UnknownComponent;
+    std.debug.assert(bytes.len == storage.info.size);
 
-    const info = storage.info;
-    var buf: [ComponentRegistry.max_component_size]u8 align(16) = undefined;
-    const bytes = buf[0..info.size];
-    @memset(bytes, 0);
-
-    try info.read(self.allocator, lua, idx, bytes);
-    errdefer info.free(self.allocator, bytes);
     try storage.insert(entity, bytes);
-}
-
-pub fn pushToLua(self: *World, entity: Entity, name: []const u8, lua: *zlua.Lua) !void {
-    const id = self.components.id(name) orelse return error.UnknownComponent;
-    const bytes = self.getComponentRaw(entity, id) orelse return lua.pushNil();
-
-    self.components.info(id).write(lua, bytes);
-}
-
-pub fn pushFieldToLua(self: *World, entity: Entity, id: ComponentId, key: []const u8, lua: *zlua.Lua) !void {
-    const bytes = self.getComponentRaw(entity, id) orelse return error.NoSuchComponent;
-    const f = self.components.info(id).field(key) orelse {
-        Codec.bad_field.set(key);
-        return error.UnknownField;
-    };
-
-    f.codec.write(lua, bytes[f.offset..][0..f.codec.size]);
-}
-
-pub fn setFieldFromLua(self: *World, entity: Entity, id: ComponentId, key: []const u8, lua: *zlua.Lua, idx: i32) !void {
-    const bytes = self.getComponentRaw(entity, id) orelse return error.NoSuchComponent;
-    const f = self.components.info(id).field(key) orelse {
-        Codec.bad_field.set(key);
-        return error.UnknownField;
-    };
-
-    var buf: [ComponentRegistry.max_component_size]u8 align(16) = undefined;
-    const tmp = buf[0..f.codec.size];
-    @memset(tmp, 0);
-    try f.codec.read(self.allocator, lua, idx, tmp);
-
-    const dst = bytes[f.offset..][0..f.codec.size];
-    if (f.codec.free) |fr| fr(self.allocator, dst);
-    @memcpy(dst, tmp);
-}
-
-pub fn setComponentsFromLua(
-    self: *World, entity: Entity, lua: *zlua.Lua, table_idx: i32,
-    comptime skip: []const []const u8, mode: WriteMode,
-) !void {
-    const abs = lua.absIndex(table_idx);
-    lua.pushNil();
-
-    next: while (lua.next(abs)) {
-        defer lua.pop(1);
-        if (lua.typeOf(-2) != .string) return error.NonStringKey;
-        
-        const key = try lua.toString(-2);
-        inline for (skip) |s| if (std.mem.eql(u8, key, s)) continue :next;
-        self.setFromLua(entity, key, lua, -1, mode) catch |e| {
-            Codec.bad_component.set(key);
-            return e;
-        };
-    }
 }
 
 pub fn storageFor(self: *World, id: ComponentId) ?*SparseSet {
@@ -229,8 +131,6 @@ pub fn getComponents(self: *World, entity: Entity) ![]ComponentId {
 pub fn spawnEntity(self: *World) !Entity {
     if (self.free.pop()) |idx| {
         self.alive.items[idx] = true;
-        self.update_signals.items[idx] = .init(self.allocator);
-        self.destroy_signals.items[idx] = .init(self.allocator);
 
         const e: Entity = .{
             .index = idx,
@@ -246,21 +146,16 @@ pub fn spawnEntity(self: *World) !Entity {
     try self.generations.append(self.allocator, 0);
     try self.alive.append(self.allocator, true);
 
-    if (idx >= self.update_signals.items.len) {
-        try self.update_signals.append(self.allocator, .init(self.allocator));
-        try self.destroy_signals.append(self.allocator, .init(self.allocator));
-    } else {
-        self.update_signals.items[idx] = .init(self.allocator);
-        self.destroy_signals.items[idx] = .init(self.allocator);
-    }
-
     const e: Entity = .{
         .index = idx,
         .generation = 0,
         .world = self
     };
     
+    try self.update_signals.append(self.allocator, null);
+    try self.destroy_signals.append(self.allocator, null);
     try self.hierarchy.changed.append(self.allocator, e);
+
     return e;
 }
 
@@ -275,9 +170,15 @@ pub fn destroyEntity(self: *World, entity: Entity) void {
     if (!self.isEntityAlive(entity)) return;
     for (self.storages.items) |*s| s.remove(entity);
 
-    entity.destroyed().fire(.{});
-    entity.destroyed().deinit();
-    entity.updated().deinit();
+    if (self.destroy_signals.items[entity.index]) |s| {
+        s.fire(.{});
+        s.retire();
+        self.destroy_signals.items[entity.index] = null;
+    }
+    if (self.update_signals.items[entity.index]) |s| {
+        s.retire();
+        self.update_signals.items[entity.index] = null;
+    }
     self.alive.items[entity.index] = false;
     self.generations.items[entity.index] +%= 1;
     self.free.append(self.allocator, entity.index) catch {};
@@ -332,8 +233,29 @@ pub fn unregisterSystem(self: *World, name: []const u8) void {
 }
 
 pub fn update(self: *World, dt: f32) void {
-    for (self.update_signals.items) |*s| s.fire(.{ dt });
+    for (self.update_signals.items) |sig| if (sig) |s| s.fire(.{ dt });
     self.systems.runAll(self, dt);
+    self.dispatcher.flush();
+}
+
+// Signal stuff
+
+pub fn updatedSignal(self: *World, entity: Entity) !*UpdateSignal {
+    if (!self.isEntityAlive(entity)) return error.DeadEntity;
+
+    const slot = &self.update_signals.items[entity.index];
+    if (slot.* == null) slot.* = try UpdateSignal.create(self.allocator, &self.dispatcher);
+
+    return slot.*.?;
+}
+
+pub fn destroyedSignal(self: *World, entity: Entity) !*DestroySignal {
+    if (!self.isEntityAlive(entity)) return error.DeadEntity;
+
+    const slot = &self.destroy_signals.items[entity.index];
+    if (slot.* == null) slot.* = try DestroySignal.create(self.allocator, &self.dispatcher);
+
+    return slot.*.?;
 }
 
 pub fn format(

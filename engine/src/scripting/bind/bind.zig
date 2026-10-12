@@ -2,6 +2,7 @@
 
 pub const Binder = @import("Binder.zig").Binder;
 pub const Host = @import("Host.zig");
+pub const types = @import("types.zig");
 
 const util = @import("util.zig");
 pub const api = @import("api.zig").all;

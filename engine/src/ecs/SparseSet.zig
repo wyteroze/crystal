@@ -26,7 +26,6 @@ pub fn init(allocator: std.mem.Allocator, info: *const ComponentInfo, component_
 }
 
 pub fn deinit(self: *SparseSet) void {
-    for (0..self.dense.items.len) |i| self.info.free(self.allocator, self.slot(i));
     self.sparse.deinit(self.allocator);
     self.dense.deinit(self.allocator);
     self.dense_data.deinit(self.allocator);
