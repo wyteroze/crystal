@@ -3,8 +3,11 @@
 const std = @import("std");
 const core = @import("../../core/core.zig");
 const Assets = @import("../../assets/Assets.zig");
+const StreamDecoder = @import("../streaming/StreamDecoder.zig");
 const Audio = @import("../Audio.zig");
 
+const Pull = union(enum) { frame: [2]f32, underrun, ended };
+const StreamResult = union(enum) { sample: struct { l: f32, r: f32 }, underrun, finished };
 pub const Status = packed struct { started: bool = false, looped: bool = false };
 pub const VoiceId = packed struct { index: u16, generation: u16 };
 
@@ -29,6 +32,12 @@ stream: ?Assets.AssetHandle = null,
 params: VoiceParams = .{},
 gain: f32 = 1,
 pan: f32 = 0, // Ranges from -1 to 1
+decoder: ?*StreamDecoder = null,
+// For streamed audios
+f0: [2]f32 = .{ 0, 0 },
+f1: [2]f32 = .{ 0, 0 },
+base: u64 = 0,
+loaded: u8 = 0,
 
 pub fn mixInto(self: *Voice, out: []f32, frames: usize, listener: Audio.types.AudioListener) Status {
     var status: Status = .{};
@@ -65,23 +74,42 @@ pub fn mixInto(self: *Voice, out: []f32, frames: usize, listener: Audio.types.Au
     if (total == 0) { self.finished = true; return status; }
     const ch = stream.channels;
 
-    for (0..frames) |i| {
-        if (self.cursor >= total) {
-            if (params.loops) {
-                self.cursor = @mod(self.cursor, total);
-                status.looped = true;
-            } else {
-                self.finished = true;
-                break;
-            }
+    frames: for (0..frames) |i| {
+        var l: f32 = undefined;
+        var r: f32 = undefined;
+
+        switch (stream.source) {
+            .decoded => |samples| {
+                if (self.cursor >= total) {
+                    if (params.loops) {
+                        self.cursor = @mod(self.cursor, total);
+                        status.looped = true;
+                    } else {
+                        self.finished = true;
+                        break :frames;
+                    }
+                }
+
+                const i_0: usize = @intFromFloat(self.cursor);
+                const i_1: usize = if (i_0 + 1 < frame_count) i_0 + 1 else if (params.loops) 0 else i_0;
+                const t: f32 = @floatCast(self.cursor - @floor(self.cursor));
+
+                l = std.math.lerp(samples[i_0 * ch], samples[i_1 * ch], t);
+                r = std.math.lerp(samples[i_0 * ch + ch - 1], samples[i_1 * ch + ch - 1], t);
+            },
+            .streamed => switch (self.streamFrame(ch, @intFromFloat(total), params.loops, &status)) {
+                .sample => |s| {
+                    l = s.l;
+                    r = s.r;
+                },
+                // Just output silence and don't advance. The decoder will eventually catch up to us.
+                .underrun => continue :frames,
+                .finished => {
+                    self.finished = true;
+                    break :frames;
+                },
+            },
         }
-
-        const i_0: usize = @intFromFloat(self.cursor);
-        const i_1: usize = if (i_0 + 1 < frame_count) i_0 + 1 else if (params.loops) 0 else i_0;
-        const t: f32 = @floatCast(self.cursor - @floor(self.cursor));
-
-        const l = std.math.lerp(stream.samples[i_0 * ch], stream.samples[i_1 * ch], t);
-        const r = std.math.lerp(stream.samples[i_0 * ch + ch - 1], stream.samples[i_1 * ch + ch - 1], t);
 
         var o_l: f32 = undefined;
         var o_r: f32 = undefined;
@@ -111,6 +139,7 @@ pub fn mixInto(self: *Voice, out: []f32, frames: usize, listener: Audio.types.Au
 pub fn deinit(self: *Voice) void {
     if (self.stream) |s| s.cpuRelease();
     self.stream = null;
+    self.decoder = null; // DecoderThread frees itself, not us
 }
 
 fn attenuate(kind: Audio.types.Attenuation, dist: f32, min_d: f32, max_d: f32) f32 {
@@ -121,4 +150,53 @@ fn attenuate(kind: Audio.types.Attenuation, dist: f32, min_d: f32, max_d: f32) f
         .exponential => if (max_d > min_d) std.math.pow(f32, 0.01, (d - min_d) / (max_d - min_d)) else 1.0,
         .inverse_square => if (d > 0) (min_d / d) * (min_d / d) else 1.0,
     };
+}
+
+fn pull(d: *StreamDecoder, ch: usize) Pull {
+    const ended = d.end_of_stream.load(.acquire);
+
+    if (d.ring.available() >= ch) {
+        var buf: [8]f32 = undefined;
+        _ = d.ring.read(buf[0..ch]);
+
+        return .{ .frame = .{ buf[0], buf[ch - 1] } };
+    }
+
+    return if (ended) .ended else .underrun;
+}
+
+fn streamFrame(self: *Voice, ch: usize, total: u64, loops: bool, status: *Status) StreamResult {
+    const d = self.decoder orelse return .finished;
+
+    while (self.loaded < 2) {
+        switch (pull(d, ch)) {
+            .frame => |f| {
+                self.f0 = self.f1;
+                self.f1 = f;
+                self.loaded += 1;
+            },
+            .underrun => return .underrun,
+            .ended => return .finished,
+        }
+    }
+
+    while (self.cursor >= @as(f64, @floatFromInt(self.base + 1))) {
+        switch (pull(d, ch)) {
+            .frame => |f| {
+                self.f0 = self.f1;
+                self.f1 = f;
+                self.base += 1;
+                
+                if (loops and self.base % total == 0) status.looped = true;
+            },
+            .underrun => return .underrun,
+            .ended => return .finished,
+        }
+    }
+
+    const t: f32 = @floatCast(self.cursor - @as(f64, @floatFromInt(self.base)));
+    return .{ .sample = .{
+        .l = std.math.lerp(self.f0[0], self.f1[0], t),
+        .r = std.math.lerp(self.f0[1], self.f1[1], t),
+    } };
 }

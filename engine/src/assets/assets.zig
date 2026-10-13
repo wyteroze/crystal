@@ -256,7 +256,7 @@ pub fn gpuRef(self: *Assets, id: u64) !void {
 
 pub fn gpuDeref(self: *Assets, id: u64) !void {
     std.debug.assert(self.slots.capacity() != 0);
-    (self.slots.getPtr(id).?.gpu_data_refcount orelse return error.NoGpuData) +|= 1;
+    (self.slots.getPtr(id).?.gpu_data_refcount orelse return error.NoGpuData) -|= 1;
 }
 
 pub fn getCpuData(self: *Assets, id: u64) !AssetData.CpuAssetData {

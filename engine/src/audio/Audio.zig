@@ -6,11 +6,14 @@ const signal = @import("../core/signal.zig");
 const Assets = @import("../assets/Assets.zig");
 const Platform = @import("../platform/Platform.zig");
 const RingBuffer = @import("RingBuffer.zig").RingBuffer;
+pub const streaming = @import("streaming/streaming.zig");
 pub const types = @import("types.zig");
 pub const Mixer = @import("mixer/Mixer.zig");
 pub const Speaker = @import("Speaker.zig");
 pub const track = @import("track.zig");
 
+// Pre-decode this number of frames when streaming audio, so playback starts immediately.
+pub const pre_frames = sample_rate / 4;
 pub const channels = 2;
 pub const chunk_frames = 512;
 pub const sample_rate = 48000; // 48khz.. duh
@@ -41,9 +44,9 @@ platform: *Platform,
 mixer: Mixer,
 device: Platform.types.AudioDeviceHandle,
 stream: Platform.types.AudioStreamHandle,
-
 tracks: [max_voices]track.Track,
 dispatcher: signal.Dispatcher,
+decoder_thread: streaming.DecoderThread,
 
 // For voices
 generations: [max_voices]u16,
@@ -64,6 +67,7 @@ pub fn init(self: *Audio, io: std.Io, allocator: std.mem.Allocator, platform: *P
         .stream = undefined,
         .tracks = undefined,
         .dispatcher = .init(allocator),
+        .decoder_thread = .{ .io = io, .allocator = allocator },
         .generations = @splat(0),
         .slot_state = @splat(.free),
         .free = undefined,
@@ -75,6 +79,8 @@ pub fn init(self: *Audio, io: std.Io, allocator: std.mem.Allocator, platform: *P
     errdefer platform.closeAudioDevice(self.device);
 
     self.stream = try platform.audioDeviceCreateStream(self.device, spec, Mixer, Mixer.streamCallback, &self.mixer);
+    try self.decoder_thread.start();
+
     platform.resumeAudioStream(self.stream); // Paused by default
 }
 
@@ -83,6 +89,8 @@ pub fn deinit(self: *Audio) void {
     for (0..max_voices) |i| if (self.slot_state[i] != .free) self.release(@intCast(i));
 
     self.platform.deinitStream(self.stream);
+    self.decoder_thread.deinit();
+
     self.platform.closeAudioDevice(self.device);
     self.dispatcher.deinit();
 }
@@ -108,12 +116,22 @@ pub fn start(self: *Audio, h: track.TrackHandle, params: Mixer.Voice.VoiceParams
     const t = try h.require();
     if (self.slot_state[h.id.index] != .reserved) return error.AlreadyPlaying;
 
+    const audio = try t.asset.cpuGet(.audio);
+    const decoder: ?*streaming.StreamDecoder = switch (audio.source) {
+        .decoded => null,
+        .streamed => try .init(self.allocator, audio, params.loops)
+    };
+    errdefer if (decoder) |d| d.deinit(self.allocator);
+    if (decoder) |d| d.fill(pre_frames);
+
     if (!self.mixer.mixer_commands.push(.{ .play = .{
         .voice = h.id,
         .asset = t.asset.cpuClone(),
         .params = params,
+        .decoder = decoder
     } })) return error.MixerQueueFull;
 
+    if (decoder) |d| self.decoder_thread.add(h.id.index, d);
     self.slot_state[h.id.index] = .active;
     t.playing = true;
 }
@@ -191,6 +209,8 @@ pub fn tick(self: *Audio) void {
         },
         .voice_finished => |id| {
             const index = id.index;
+            self.decoder_thread.remove(index);
+
             switch (self.slot_state[index]) {
                 // Lua called `:Destroy()`, and now the mixer has acknowledged it.
                 .dying => self.release(index),

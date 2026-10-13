@@ -5,11 +5,52 @@ const types = @import("../types.zig");
 const ImportLocation = @import("importers.zig").ImportLocation;
 const audio_dr = @import("dr_libs");
 
+/// In auto mode, anything longer than this is streamed.
+const stream_threshhold_seconds = 5.0;
+
 pub const ImportOptions = struct {
-    format: enum { mp3, wav }
+    format: types.AudioFormat,
+    mode: enum { auto, decode, stream } = .auto
 };
 
-pub fn importAudio(allocator: std.mem.Allocator, location: ImportLocation, options: ImportOptions) !types.AudioStream {
+const Info = struct {
+    frames: u64,
+    sample_rate: u32,
+    channels: u8,
+
+    fn duration(self: Info) f64 {
+        return @as(f64, @floatFromInt(self.frames)) / @as(f64, @floatFromInt(self.sample_rate));
+    }
+};
+
+fn getAudioInfo(bytes: []const u8, format: types.AudioFormat) !Info {
+    switch (format) {
+        .mp3 => {
+            var mp3: audio_dr.drmp3 = undefined;
+            if (audio_dr.drmp3_init_memory(&mp3, bytes.ptr, bytes.len, null) == 0) return error.Mp3AudioDecodeFailed;
+            defer audio_dr.drmp3_uninit(&mp3);
+            
+            return .{
+                .frames = audio_dr.drmp3_get_pcm_frame_count(&mp3),
+                .sample_rate = @intCast(mp3.sampleRate),
+                .channels = @intCast(mp3.channels),
+            };
+        },
+        .wav => {
+            var wav: audio_dr.drwav = undefined;
+            if (audio_dr.drwav_init_memory(&wav, bytes.ptr, bytes.len, null) == 0) return error.WavAudioDecodeFailed;
+            defer _ = audio_dr.drwav_uninit(&wav);
+            
+            return .{
+                .frames = wav.totalPCMFrameCount,
+                .sample_rate = @intCast(wav.sampleRate),
+                .channels = @intCast(wav.channels),
+            };
+        },
+    }
+}
+
+pub fn decodeFull(allocator: std.mem.Allocator, location: ImportLocation, options: ImportOptions) !types.AudioStream {
     var data: []f32 = undefined;
     var channels: u8 = 0;
     var sample_rate: u32 = 0;
@@ -65,10 +106,35 @@ pub fn importAudio(allocator: std.mem.Allocator, location: ImportLocation, optio
     }
 
     return .{
-        .samples = data,
+        .source = .{ .decoded = data },
         .sample_rate = sample_rate,
         .channels = channels,
         .duration = @as(f64, @floatFromInt(num_frames)) / @as(f64, @floatFromInt(sample_rate)),
-        .streaming = false
+    };
+}
+
+pub fn importAudio(allocator: std.mem.Allocator, location: ImportLocation, options: ImportOptions) !types.AudioStream {
+    const bytes = switch (location) {
+        .bytes => |b| b,
+        .path => return decodeFull(allocator, location, options),
+    };
+
+    const info = try getAudioInfo(bytes, options.format);
+    const should_stream = switch (options.mode) {
+        .decode => false,
+        .stream => true,
+        .auto => info.duration() > stream_threshhold_seconds
+    };
+    if (!should_stream) return decodeFull(allocator, location, options);
+
+    return .{
+        .source = .{ .streamed = .{
+            .format = options.format,
+            .bytes = try allocator.dupe(u8, bytes),
+            .total_frames = info.frames
+        } },
+        .sample_rate = info.sample_rate,
+        .channels = info.channels,
+        .duration = info.duration()
     };
 }

@@ -331,8 +331,9 @@ pub fn main(init: std.process.Init) !void {
     
     const os: Os = try .init(init, builtin.os.tag, boot.package_id);
 
+    var scheduler_allocator: core.TrackedAllocator = .init(allocator, "Scheduler");
     var scheduler: Scheduler = undefined;
-    try scheduler.init(allocator, io, &os);
+    try scheduler.init(scheduler_allocator.allocator(), io, &os);
 
     var platform_allocator: core.TrackedAllocator = .init(allocator, "Platform");
     var platform: Platform = undefined;
@@ -506,12 +507,22 @@ pub fn main(init: std.process.Init) !void {
 
             if (purged > 0) std.log.debug("Purged {d} assets", .{ purged });
             std.log.info("-----Allocators ({f} tracked, {f} total)-----", .{ core.SizeFormatter.fmtSize( 
+                scheduler_allocator.currentUsage() +
+                platform_allocator.currentUsage() +
+                input_allocator.currentUsage() +
+                renderer_allocator.currentUsage() +
+                ui_allocator.currentUsage() +
                 lua_allocator.currentUsage() + 
                 asset_allocator.currentUsage() + 
                 ecs_allocator.currentUsage() +
                 gpu_allocator.currentUsage()
             ), core.SizeFormatter.fmtSize(tracked.currentUsage()) });
 
+            std.log.info("{f}", .{ scheduler_allocator });
+            std.log.info("{f}", .{ platform_allocator });
+            std.log.info("{f}", .{ input_allocator });
+            std.log.info("{f}", .{ renderer_allocator });
+            std.log.info("{f}", .{ ui_allocator });
             std.log.info("{f}", .{ lua_allocator });
             std.log.info("{f}", .{ asset_allocator });
             std.log.info("{f}", .{ ecs_allocator });

@@ -4,11 +4,12 @@ const std = @import("std");
 const Assets = @import("../../assets/Assets.zig");
 const Platform = @import("../../platform/Platform.zig");
 const RingBuffer = @import("../RingBuffer.zig").RingBuffer;
+const StreamDecoder = @import("../streaming/StreamDecoder.zig");
 const Audio = @import("../Audio.zig");
 pub const Voice = @import("Voice.zig");
 
 pub const Command = union(enum) {
-    play: struct { voice: Voice.VoiceId, asset: Assets.AssetHandle, params: Voice.VoiceParams },
+    play: struct { voice: Voice.VoiceId, asset: Assets.AssetHandle, params: Voice.VoiceParams, decoder: ?*StreamDecoder = null },
     stop: Voice.VoiceId,
     destroy: Voice.VoiceId,
     set_params: struct { voice: Voice.VoiceId, params: Voice.VoiceParams },
@@ -35,7 +36,6 @@ pub fn deinit(self: *Mixer) void {
 
 pub fn streamCallback(ctx: ?*Mixer, stream: Platform.types.AudioStreamHandle, needed: usize, _: usize) void {
     const self = ctx.?; 
-    
     while (self.mixer_commands.pop()) |c| self.doCommand(c);
 
     const bytes_per_frame = Audio.channels * @sizeOf(f32);
@@ -74,7 +74,8 @@ fn doCommand(self: *Mixer, cmd: Command) void {
                 .id = .{ .index = p.voice.index, .generation = p.voice.generation },
                 .stream = p.asset,
                 .params = p.params,
-                .gain = 0
+                .gain = 0,
+                .decoder = p.decoder,
             };
         },
         .stop, .destroy => |id| {

@@ -65,19 +65,37 @@ pub const Font = struct {
     }
 };
 
+pub const AudioFormat = enum { mp3, wav };
+
 pub const AudioStream = struct {
-    samples: []const f32,
+    pub const Source = union(enum) {
+        decoded: []const f32,
+        streamed: StreamSource,
+    };
+
+    pub const StreamSource = struct {
+        format: AudioFormat,
+        bytes: []const u8,
+        total_frames: u64,
+    };
+
+    source: Source,
     sample_rate: u32,
     channels: u8,
     duration: f64,
-    streaming: bool,
 
     pub fn frameCount(self: *const AudioStream) usize {
-        return self.samples.len / self.channels;
+        return switch (self.source) {
+            .decoded => |s| s.len / self.channels,
+            .streamed => |s| @intCast(s.total_frames),
+        };
     }
 
     pub fn deinit(self: *const AudioStream, allocator: std.mem.Allocator) void {
-        allocator.free(self.samples);
+        switch (self.source) {
+            .decoded => |s| allocator.free(s),
+            .streamed => |s| allocator.free(s.bytes),
+        }
     }
 };
 
