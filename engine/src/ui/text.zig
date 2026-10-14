@@ -12,17 +12,17 @@ pub const GlyphQuad = struct {
     uv_size: [2]f32
 };
 
-pub fn lineHeight(atlas: *const FontAtlas, size: u32) f32 {
+pub fn lineHeight(atlas: *const FontAtlas, size: f32) f32 {
     const scale = atlas.calculateScale(size);
     return (atlas.ascent + atlas.descent + atlas.line_gap) * scale;
 }
 
-pub fn ascent(atlas: *const FontAtlas, size: u32) f32 {
+pub fn ascent(atlas: *const FontAtlas, size: f32) f32 {
     const scale = atlas.calculateScale(size);
     return (atlas.ascent + atlas.line_gap/2) * scale;
 }
 
-pub fn measureWidth(atlas: *const FontAtlas, txt: []const u8, size: u32) f32 {
+pub fn measureWidth(atlas: *const FontAtlas, txt: []const u8, size: f32) f32 {
     if (txt.len == 0) return 0;
     const scale = atlas.calculateScale(size);
 
@@ -37,7 +37,7 @@ pub fn measureWidth(atlas: *const FontAtlas, txt: []const u8, size: u32) f32 {
     return cur_x * scale;
 }
 
-pub fn measureText(atlas: *const FontAtlas, txt: []const u8, size : u32) math.Vec2 {
+pub fn measureText(atlas: *const FontAtlas, txt: []const u8, size : f32) math.Vec2 {
     if (txt.len == 0) return .zero;
 
     return .new(

@@ -61,10 +61,10 @@ fn measure(entity: ecs.Entity, world: *ecs.World, ids: ComponentIds, cache: *Mea
 
     var intr: math.Vec2 = .zero;
 
-    if (txt) |t| {
-        const font = t.font.ensureGpuGet(.font, .{}) catch unreachable;
+    if (txt) |t| if (t.font) |f| {
+        const font = f.ensureGpuGet(.font, .{}) catch unreachable;
         intr = text.measureText(&font, t.content, t.size);
-    }
+    };
 
     if (layout) |lay| {
         switch (lay.*) {
@@ -160,11 +160,11 @@ fn arrange(
     world.set(entity, ids.computed_position, math.Vec2, origin) catch {};
     world.set(entity, ids.computed_size, math.Vec2, final) catch {};
 
-    if (entity.getComponent(ids.text, types.Text)) |t| {
-        const font = t.font.ensureGpuGet(.font, .{}) catch unreachable;
+    if (entity.getComponent(ids.text, types.Text)) |t| if (t.font) |f| {
+        const font = f.ensureGpuGet(.font, .{}) catch unreachable;
         const quads = text.layoutGlyphs(world.allocator, &font, t.*, origin, final) catch @panic("Out of memory");
-        world.set(entity, ids.computed_text_layout, types.ComputedTextLayout, .{ .quads = quads }) catch {};
-    }
+        world.set(entity, ids.computed_text_layout, types.ComputedTextLayout, .{ .quads = quads }) catch allocator.free(quads);
+    };
 
     const layout = (entity.getComponent(ids.layout, types.Layout) orelse return).*;
     const children = entity.getChildren();

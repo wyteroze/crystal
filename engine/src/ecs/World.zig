@@ -31,6 +31,7 @@ alive: std.ArrayList(bool),
 free: std.ArrayList(u32),
 
 hierarchy: Hierarchy,
+changed_set: std.AutoHashMap(u64, void),
 
 dispatcher: signal.Dispatcher,
 update_signals: std.ArrayList(?*UpdateSignal),
@@ -48,13 +49,15 @@ pub fn init(allocator: std.mem.Allocator) World {
         .dispatcher = .init(allocator),
         .update_signals = .empty,
         .destroy_signals = .empty,
-        .hierarchy = .init(allocator)
+        .hierarchy = .init(allocator),
+        .changed_set = .init(allocator),
     };
 }
 
 pub fn deinit(self: *World) void {
     for (self.storages.items) |*s| s.deinit();
     self.hierarchy.deinit();
+    self.changed_set.deinit();
     self.storages.deinit(self.allocator);
     self.components.deinit();
     self.systems.deinit();
@@ -98,6 +101,7 @@ pub fn set(self: *World, entity: Entity, id: ComponentId, comptime T: type, valu
     std.debug.assert(@sizeOf(T) == storage.info.size);
 
     try storage.insert(entity, std.mem.asBytes(&value));
+    try self.markChanged(entity);
 }
 
 pub fn setRaw(self: *World, entity: Entity, id: ComponentId, bytes: []const u8) !void {
@@ -106,6 +110,14 @@ pub fn setRaw(self: *World, entity: Entity, id: ComponentId, bytes: []const u8) 
     std.debug.assert(bytes.len == storage.info.size);
 
     try storage.insert(entity, bytes);
+    try self.markChanged(entity);
+}
+
+pub fn markChanged(self: *World, e: Entity) !void {
+    if (self.changed_set.contains(e.toU64())) return;
+    try self.changed_set.put(e.toU64(), {});
+
+    try self.hierarchy.changed.append(self.allocator, e);
 }
 
 pub fn storageFor(self: *World, id: ComponentId) ?*SparseSet {

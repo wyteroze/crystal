@@ -122,30 +122,3 @@ pub const Quat = extern struct {
 
 const bind = @import("../../scripting/bind/bind.zig");
 pub const api = bind.value(Quat, .{});
-
-pub fn registerLua(l: anytype) void {
-    const linker = @import("../../scripting/scripting.zig").linker;
-
-    linker.value(l, Quat, .{
-        .name = .auto,
-        .scope = .{ .module = "core" },
-        .constructors = &.{
-            .named("new", Quat.new),
-            .named("fromEuler", Quat.fromEuler),
-            .named("fromAxisAngle", Quat.fromAxisAngle)
-        },
-        .methods = &.{
-            .named("ToEuler", Quat.toEuler),
-            .named("ToMat4", Quat.toMat4),
-            .named("Normalize", Quat.normalize)
-        },
-        .constants = &.{
-            .named("identity", Quat.identity)
-        },
-        .fields = &.{ "x", "y", "z", "w" },
-        .ops = .{
-            .mul = .custom(Quat.mul),
-            .eq = .identity,
-        }
-    });
-}

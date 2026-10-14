@@ -16,6 +16,6 @@ pub const all: []const types.Member = blk: {
         .globals, .module => containers = containers ++ .{ m },
         else => @compileError("unexpected top-level api member: " ++ m.name),
     };
-
+    
     break :blk &[_]types.Member{bind.globals(.{ .members = loose })} ++ containers;
 };

@@ -126,11 +126,15 @@ pub fn Binder(comptime api: anytype) type {
                         M.push(l, v);
                     }
                 }.f,
-                .push_component = if (H) |Handle| struct {
-                    fn f(l: *zlua.Lua, entity: ecs.Entity, _: []const u8) void {
-                        M.push(l, Handle.fromComponent(Host.fromState(l), entity));
+                .push_component = if (is_record) struct {
+                    fn f(l: *zlua.Lua, entity: ecs.Entity, id: ecs.ComponentId, _: []const u8) void {
+                        if (H) |Handle| {
+                            M.push(l, Handle.fromComponent(Host.fromState(l), entity));
+                        } else {
+                            M.push(l, ecs.lua_components.ComponentRef{ .entity = entity, .id = id });
+                        }
                     }
-                }.f else null
+                }.f else null,
             };
         }
 
@@ -174,7 +178,7 @@ pub fn Binder(comptime api: anytype) type {
                     .prop => if (!allow_props)
                         @compileError("props are not allowed here: " ++ m.name),
 
-                    .record => {},
+                    .record, .variant => {},
                     else => @compileError(std.fmt.comptimePrint("Type not allowed here: {s}", .{ m.name })),
                 }
 

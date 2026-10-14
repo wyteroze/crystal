@@ -102,6 +102,6 @@ pub fn bake(allocator: std.mem.Allocator, name: [:0]const u8, device: *gpu.GpuDe
     };
 }
 
-pub fn calculateScale(self: *const FontAtlas, size: u32) f32 {
-    return @as(f32, @floatFromInt(size)) / @as(f32, @floatFromInt(self.raster_size));
+pub fn calculateScale(self: *const FontAtlas, size: f32) f32 {
+    return size / @as(f32, @floatFromInt(self.raster_size));
 }

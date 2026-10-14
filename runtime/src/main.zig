@@ -41,7 +41,7 @@ fn collectUiObjects(
             else if (image != null) .fromRgbFloat(1.0, 1.0, 1.0, 1.0)
             else .fromRgbFloat(1.0, 1.0, 1.0, 0.0);
 
-        const texture = if (image) |i| blk: { break :blk (i.source.ensureGpuGet(.image, .{}) catch break :blk null).handle; } else null;
+        const texture = if (image) |i| blk: { break :blk ((i.source orelse break :blk null).ensureGpuGet(.image, .{}) catch break :blk null).handle; } else null;
         const uv_pos: math.Vec2 = if (image) |i| i.crop.min else .zero;
         const uv_size: math.Vec2 = if (image) |i| i.crop.max.sub(i.crop.min) else .one;
 
@@ -76,7 +76,7 @@ fn collectUiObjects(
 
         if (ui.world.getComponent(entity, cids.text, Ui.types.Text)) |txt| {
             if (ui.world.getComponent(entity, cids.computed_text_layout, Ui.types.ComputedTextLayout)) |ct| {
-                if (txt.font.ensureGpuGet(.font, .{}) catch null) |atlas| {
+                if (txt.font) |f| if (f.ensureGpuGet(.font, .{}) catch null) |atlas| {
                     for (ct.quads) |quad| {
                         objs.append(alloc, .{
                             .pos = quad.pos,
@@ -89,7 +89,7 @@ fn collectUiObjects(
                             .is_text = true,
                         }) catch @panic("Out of memory");
                     }
-                }
+                };
             }
         }
     }
@@ -381,12 +381,12 @@ pub fn main(init: std.process.Init) !void {
         ui.deinit();
         renderer.deinit();
         gpu_device.deinit();
-        assets.deinit();
         input.deinit();
         platform.destroySurface(surface);
         platform.deinit();
         scheduler.deinit();
         runtime.deinit();
+        assets.deinit();
     }
     
     // Register components

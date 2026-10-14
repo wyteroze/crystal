@@ -55,6 +55,15 @@ pub fn record(comptime T: type, comptime r: recipes.RecordRecipe) types.Member {
     };
 }
 
+pub fn variant(comptime T: type, comptime r: recipes.VariantRecipe) types.Member {
+    comptime validateVariant(T, r);
+    return .{
+        .name = r.name orelse names.shortTypeName(T),
+        .kind = .variant,
+        .impl = struct { pub const Type = T; pub const recipe = r; }
+    };
+}
+
 pub fn signal(comptime name: [:0]const u8, comptime get: anytype) types.Member {
     return .{ .name = name, .kind = .signal, .impl = struct {
         pub const Signal = signalType(get);
@@ -69,9 +78,10 @@ fn validateValue(comptime T: type, comptime r: recipes.ValueRecipe) void {
 }
 
 fn validateRecord(comptime T: type) void {
-    inline for (@typeInfo(T).@"struct".field_attrs) |f|
+    const info = @typeInfo(T).@"struct";
+    inline for (info.field_attrs, 0..) |f, i|
         if (f.default_value_ptr == null) 
-            @compileError(std.fmt.comptimePrint("{s}.{s} needs a default value to be a record field", .{ @typeName(T), f.name }));
+            @compileError(std.fmt.comptimePrint("{s}.{s} needs a default value to be a record field", .{ @typeName(T), info.field_names[i] }));
 }
 
 fn signalType(comptime get: anytype) type {
@@ -83,4 +93,20 @@ fn signalType(comptime get: anytype) type {
         @compileError("bind.signal getter must return `*S` or `!*S`, where `S` is a signal type!");
 
     return info.pointer.child;
+}
+
+fn validateVariant(comptime T: type, comptime r: recipes.VariantRecipe) void {
+    if (@typeInfo(T) != .@"union") 
+        @compileError(@typeName(T) ++ " must be a union to be bound as a variant");
+
+    if (r.number) |v| {
+        const nm = @tagName(v);
+        if (!@hasField(T, nm))
+            @compileError(@typeName(T) ++ " has no variant '" ++ nm ++ "' (listed in .number)");
+            
+        switch (@typeInfo(@FieldType(T, nm))) {
+            .int, .float => {},
+            else => @compileError(@typeName(T) ++ "." ++ nm ++ " must have a numeric payload to be the .number shorthand"),
+        }
+    }
 }

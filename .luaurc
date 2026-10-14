@@ -3,6 +3,7 @@
     "aliases": {
         "core": "./api/core",
         "assets": "./api/assets",
-        "input": "./api/input"
+        "input": "./api/input",
+        "ui": "./api/ui"
     }
 }

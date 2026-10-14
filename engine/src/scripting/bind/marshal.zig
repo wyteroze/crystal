@@ -15,6 +15,7 @@ pub fn Marshal(comptime Reg: type) type {
                 .value => return parseValue(T, l, idx).*,
                 .handle => return parseHandle(T, l, idx).*,
                 .record => return parseRecord(T, l, idx),
+                .variant => return parseUnion(T, shorthandOf(T), l, idx),
                 .object => @compileError("Objects are taken by pointer"),
                 else => unreachable
             };
@@ -25,6 +26,7 @@ pub fn Marshal(comptime Reg: type) type {
                 .float => { if (!l.isNumber(idx)) l.typeError(idx, "number"); return @floatCast(l.toNumber(idx) catch unreachable); },
                 .optional => |o| return if (l.isNoneOrNil(idx)) null else parse(o.child, l, idx),
                 .@"enum" => return parseEnum(T, l, idx),
+                .@"union" => return parseUnion(T, null, l, idx),
                 .pointer => return parseString(T, l, idx), 
                 .@"struct" => return parseRecord(T, l, idx),
                 else => @compileError(std.fmt.comptimePrint("Type {s} cannot be marshalled from Lua", .{ @typeName(T) }))
@@ -39,6 +41,7 @@ pub fn Marshal(comptime Reg: type) type {
                 .value => return pushValue(l, v),
                 .handle => return pushHandle(l, v),
                 .record => return pushRecord(T, l, v),
+                .variant => return pushUnion(l, v, if (Reg.recipeOf(T).push_shorthand) shorthandOf(T) else null),
                 else => unreachable,
             };
 
@@ -49,16 +52,7 @@ pub fn Marshal(comptime Reg: type) type {
                 .float, .comptime_float => l.pushNumber(@floatCast(v)),
                 .optional => if (v) |x| push(l, x) else l.pushNil(),
                 .@"enum" => switch (v) { inline else => |t| _ = l.pushStringZ(comptime names.pascal(@tagName(t))) },
-                .@"union" => switch (v) {
-                    inline else => |payload, tag| {
-                        const name = comptime names.pascal(@tagName(tag));
-                        if (@TypeOf(payload) == void) _ = l.pushStringZ(name) else {
-                            l.createTable(0, 1);
-                            push(l, payload);
-                            l.setField(-2, name);
-                        }
-                    },
-                },
+                .@"union" => return pushUnion(l, v, null),
                 .@"struct" => |s| {
                     l.createTable(0, s.field_names.len);
                     inline for (s.field_names) |nm| {
@@ -115,6 +109,50 @@ pub fn Marshal(comptime Reg: type) type {
             return map.get(s) orelse l.raiseErrorStr("arg {d}: '{s}' is not a valid {s}", .{ idx, s.ptr, @typeName(T).ptr });
         }
 
+        fn shorthandOf(comptime T: type) ?[]const u8 {
+            return if (Reg.recipeOf(T).number) |v| @tagName(v) else null;
+        }
+
+        fn parseUnion(comptime T: type, comptime number: ?[]const u8, l: *zlua.Lua, idx: i32) T {
+            const info = @typeInfo(T).@"union";
+
+            switch (l.typeOf(idx)) {
+                .number => {
+                    if (number) |nm| return @unionInit(T, nm, parse(@FieldType(T, nm), l, idx));
+                    l.raiseErrorStr("arg %d: %s does not accept a bare number", .{ idx, @typeName(T).ptr });
+                },
+                .string => {
+                    const s = l.toString(idx) catch unreachable;
+                    inline for (info.field_names, 0..) |nm, i| {
+                        if (info.field_types[i] == void and std.mem.eql(u8, s, comptime names.pascal(nm)))
+                            return @unionInit(T, nm, {});
+                    }
+
+                    l.raiseErrorStr("arg {d}: '{s}' is not a valid {s} variant", .{ idx, s.ptr, @typeName(T).ptr });
+                },
+                .table => {
+                    const abs = l.absIndex(idx);
+                    var result: ?T = null;
+
+                    inline for (info.field_names, 0..) |nm, i| {
+                        if (info.field_types[i] != void) {
+                            const name = comptime names.pascal(nm);
+                            if (l.getField(abs, name) != .nil) {
+                                if (result != null)
+                                    l.raiseErrorStr("arg {d}: {s} table must have exactly one variant key", .{ idx, @typeName(T).ptr });
+                                result = @unionInit(T, nm, parse(info.field_types[i], l, -1));
+                            }
+                            l.pop(1);
+                        }
+                    }
+
+                    return result orelse
+                        l.raiseErrorStr("arg %d: table is not a valid %s (no known variant key)", .{ idx, @typeName(T).ptr });
+                },
+                else => l.raiseErrorStr("arg %d: expected %s (string or table), got %s", .{ idx, @typeName(T).ptr, @tagName(l.typeOf(idx)).ptr }),
+            }
+        }
+
         fn parseString(comptime T: type, l: *zlua.Lua, idx: i32) T {
             comptime {
                 const p = @typeInfo(T).pointer;
@@ -165,6 +203,23 @@ pub fn Marshal(comptime Reg: type) type {
             inline for (info.field_names) |nm| {
                 push(l, @field(v, nm));
                 l.setField(-2, comptime names.pascal(nm));
+            }
+        }
+
+        fn pushUnion(l: *zlua.Lua, v: anytype, comptime number: ?[]const u8) void {
+            switch (v) {
+                inline else => |payload, tag| {
+                    const name = comptime names.pascal(@tagName(tag));
+                    if (number != null and comptime std.mem.eql(u8, @tagName(tag), number.?)) {
+                        push(l, payload);
+                    } else if (@TypeOf(payload) == void) {
+                        _ = l.pushStringZ(name);
+                    } else {
+                        l.createTable(0, 1);
+                        push(l, payload);
+                        l.setField(-2, name);
+                    }
+                },
             }
         }
 

@@ -8,6 +8,7 @@ pub const Query = @import("Query.zig");
 pub const SparseSet = @import("SparseSet.zig");
 pub const World = @import("World.zig");
 pub const Codec = @import("Codec.zig");
+pub const lua_components = @import("lua_components.zig");
 
 const bind = @import("../scripting/bind/bind.zig");
 

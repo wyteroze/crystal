@@ -17,3 +17,4 @@ pub const globals = util.globals;
 pub const handle = util.handle;
 pub const signal = util.signal;
 pub const record = util.record;
+pub const variant = util.variant;

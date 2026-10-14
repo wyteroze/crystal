@@ -5,6 +5,7 @@ const zlua = @import("zlua");
 const types = @import("types.zig");
 const signal = @import("signal.zig");
 const Marshal = @import("marshal.zig").Marshal;
+const recipes = @import("recipes.zig");
 
 pub const Entry = struct { T: type, member: types.Member };
 pub fn Registry(comptime api: anytype) type {
@@ -21,6 +22,11 @@ pub fn Registry(comptime api: anytype) type {
             inline for (entries) |e| if (e.T == T) return e.member.kind;
             return null;
         }
+        
+        pub fn recipeOf(comptime T: type) recipes.VariantRecipe {
+            inline for (entries) |e| if (e.T == T and e.member.kind == .variant) return e.member.impl.recipe;
+            @compileError(std.fmt.comptimePrint("{s} is not a registered variant!", .{ @typeName(T) }));
+        }
     };
 }
 
@@ -29,11 +35,10 @@ fn addUnique(comptime list: []const type, comptime T: type) []const type {
     return list ++ .{ T };
 }
 
-
 fn collectEntries(comptime api: anytype, comptime Reg: type) []const Entry { comptime {
     var out: []const Entry = &.{};
     for (api) |mod| for (mod.impl.recipe.members) |m| switch (m.kind) {
-        .value, .handle, .object, .record => out = out ++ .{ Entry{ .T = m.impl.Type, .member = m } },
+        .value, .handle, .object, .record, .variant => out = out ++ .{ Entry{ .T = m.impl.Type, .member = m } },
         else => {}
     };
 

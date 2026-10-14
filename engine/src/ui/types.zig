@@ -13,7 +13,12 @@ pub const RenderViewOptions = struct {
 };
 
 pub const ComputedTextLayout = struct {
-    quads: []const text.GlyphQuad
+    quads: []const text.GlyphQuad,
+
+    // Quads is heap allocated, so free it on deinit.
+    pub fn deinit(self: *ComputedTextLayout, allocator: std.mem.Allocator) void {
+        allocator.free(self.quads);
+    }
 };
 
 pub const GridFlow = enum {
@@ -35,7 +40,6 @@ pub const GridAxis = union(enum) {
     fixed: u32,
     auto,
 
-    pub const __lua = .val;
     pub fn format(
         self: @This(),
         writer: *std.Io.Writer,
@@ -57,8 +61,6 @@ pub const GridLayout = struct {
     align_items: Align = .start,
     justify: Justify = .start,
 
-    pub const __lua = .val;
-    pub const __proxy = true;
     pub fn format(
         self: @This(),
         writer: *std.Io.Writer,
@@ -126,7 +128,6 @@ pub const SizeAxis = union(enum) {
     hug, 
     fill,
 
-    pub const __lua = .val;
     pub fn format(
         self: @This(),
         writer: *std.Io.Writer,
@@ -158,8 +159,6 @@ pub const Padding = struct {
         return .{ .left = horizontal_pad, .right = horizontal_pad, .top = vertical_pad, .bottom = vertical_pad };
     }
 
-    pub const __lua = .val;
-    pub const __proxy = true;
     pub fn format(
         self: @This(),
         writer: *std.Io.Writer,
@@ -177,8 +176,6 @@ pub const CornerRadii = struct {
     bottom_left: f32 = 0,
     bottom_right: f32 = 0,
 
-    pub const __lua = .val;
-    pub const __proxy = true;
     pub fn format(
         self: @This(),
         writer: *std.Io.Writer,
@@ -197,8 +194,6 @@ pub const GenericLayout = struct {
     align_items: Align = .start,
     justify: Justify = .start,
 
-    pub const __lua = .val;
-    pub const __proxy = true;
     pub fn format(
         self: @This(),
         writer: *std.Io.Writer,
@@ -214,7 +209,6 @@ pub const Layout = union(enum) {
     generic: GenericLayout,
     grid: GridLayout,
 
-    pub const __lua = .val;
     pub fn format(
         self: @This(),
         writer: *std.Io.Writer,
@@ -234,8 +228,6 @@ pub const SizeMode = struct {
         return .{ .width = .{ .fixed = w }, .height = .{ .fixed = h } };
     }
 
-    pub const __lua = .val;
-    pub const __proxy = true;
     pub fn format(
         self: @This(),
         writer: *std.Io.Writer,
@@ -254,8 +246,6 @@ pub const Borders = struct {
     left: f32 = 0,
     right: f32 = 0,
 
-    pub const __lua = .val;
-    pub const __proxy = true;
     pub fn format(
         self: @This(),
         writer: *std.Io.Writer,
@@ -268,7 +258,7 @@ pub const Borders = struct {
 };
 
 pub const Text = struct {
-    font: Assets.AssetHandle,
+    font: ?Assets.AssetHandle = null,
     content: []const u8 = "",
 
     // Styling
@@ -276,7 +266,7 @@ pub const Text = struct {
     justify: Justify = .center,
 
     color: core.Color = .fromRgbFloat(1, 1, 1, 1),
-    size: u32 = 13,
+    size: f32 = 13,
 
     /// Since all components' strings must be heap-allocated, this frees the last
     /// string and dupes the given string. You should use the same allocator
@@ -285,17 +275,12 @@ pub const Text = struct {
         allocator.free(self.content);
         self.content = try allocator.dupe(u8, txt);
     }
-
-    pub const __lua = .val;
-    pub const __proxy = true;
 };
 
 pub const Crop = struct {
     min: math.Vec2 = .zero,
     max: math.Vec2 = .one,
 
-    pub const __lua = .val;
-    pub const __proxy = true;
     pub fn format(
         self: @This(),
         writer: *std.Io.Writer,
@@ -305,9 +290,6 @@ pub const Crop = struct {
 };
 
 pub const Image = struct {
-    source: Assets.AssetHandle,
+    source: ?Assets.AssetHandle = null,
     crop: Crop = .{},
-
-    pub const __lua = .val;
-    pub const __proxy = true;
 };

@@ -6,7 +6,7 @@ const ecs = @import("ecs.zig");
 
 pub const ReadFn = *const fn (l: *zlua.Lua, idx: i32, out: []u8) void;
 pub const PushFn = *const fn (l: *zlua.Lua, bytes: []const u8) void;
-pub const PushComponentFn = *const fn (l: *zlua.Lua, e: ecs.Entity, bytes: []const u8) void;
+pub const PushComponentFn = *const fn (*zlua.Lua, ecs.Entity, ecs.ComponentId, []const u8) void;
 
 const Codec = @This();
 type_name: []const u8,

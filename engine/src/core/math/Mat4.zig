@@ -192,30 +192,3 @@ pub const Mat4 = extern struct {
 
 const bind = @import("../../scripting/bind/bind.zig");
 pub const api = bind.value(Mat4, .{});
-
-pub fn registerLua(l: anytype) void {
-    const linker = @import("../../scripting/scripting.zig").linker;
-
-    linker.value(l, Mat4, .{ 
-        .name = .auto, 
-        .scope = .{ .module = "core" }, 
-        .constructors = &.{ 
-            .named("fromTranslation", Mat4.fromTranslation),
-            .named("fromComponents", Mat4.fromComponents), 
-            .named("fromScale", Mat4.fromScale), 
-            .named("fromTRS", Mat4.fromTRS), 
-            .named("ortho", Mat4.ortho), 
-            .named("lookAt", Mat4.lookAt), 
-            .named("perspective", Mat4.perspective) 
-        }, 
-        .methods = &.{
-            .named("Components", Mat4.components)
-        }, 
-        .constants = &.{
-            .named("identity", Mat4.identity)
-        }, 
-        .ops = .{ 
-            .mul = .custom(Mat4.mul), 
-        } 
-    });
-}

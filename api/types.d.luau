@@ -98,8 +98,31 @@ declare extern type Transform with
     function UpVector(self): Vec3
 end
 
+declare extern type Color with
+    --- The red component, ranging from 0.0-1.0
+    read R: number
+    --- The green component, ranging from 0.0-1.0
+    read G: number
+    --- The blue component, ranging from 0.0-1.0
+    read B: number
+    --- The alpha component, ranging from 0.0-1.0
+    read A: number
+
+    --- Linearly interpolates this `Color` to the target with the given alpha.
+    function Lerp(self, other: Color, alpha: number): Color
+    --- Returns the RGBA components of this `Color`, ranging from 0-255.
+    --- This is different from accessing `.R`, `.G`, `.B`, `.A`, because they range from 0.0-1.0.
+    function ToRGBA(self): (number, number, number, number)
+    --- Returns the HSVA components of this `Color`, ranging from 0.0-1.0.
+    function ToHSVA(self): (number, number, number, number)
+    --- Returns the hex code of this `Color`, formated as `RRGGBBAA`.
+    --- The returned hex code does not have any prefixes like `#` or `0x`.
+    function ToHex(self): string
+end
+
 -- Math globals
 
+--- A 2D value that has a length and direction.
 declare Vec2: {
     --- Creates a new `Vec2` from the given components.
     read new: (x: number?, y: number?) -> Vec2,
@@ -154,6 +177,54 @@ declare Mat4: {
     --- Creates a new `Mat4` with a translation, rotation, and scale of the given values.
     read fromTRS: (translation: Vec3, rotation: Quat, scale: Vec3) -> Mat4,
 }
+
+--- A color value with four components.
+declare Color: {
+    --- Creates a new `Color` from the given components, ranging from 0.0-1.0.
+    --- Alpha defaults to 1.0 if not provided.
+    read new: (r: number, g: number, b: number, a: number?) -> Color,
+    --- Creates a new `Color` from a predefined color name.
+    --- You may optionally provide an alpha, ranging from 0.0-1.0.
+    read fromName: (name: ColorName, alpha: number?) -> Color,
+    --- Creates a new `Color` from the given RGB, components, ranging from 0-255.
+    --- Decimal values are rounded down, as they must be whole numbers.
+    --- Alpha defaults to 255 if not provided.
+    read fromRgb: (r: number, g: number, b: number, a: number?) -> Color,
+    --- Creates a new `Color` from the given hex code.
+    --- The hex code can be prefixed with `#` or `0x`
+    --- The hex code can either be six-character format with an optional alpha (for a total of eight characters, `RRGGBBAA`),
+    --- or three-character format with an optional alpha (for a total of four characters, `RGBA`).
+    read fromHex: (code: string) -> Color,
+    --- Creates a new `Color` from the given HSV values, ranging from 0.0-1.0.
+    --- Alpha defaults to 1.0 if not provided.
+    read fromHSV: (h: number, s: number, v: number, a: number?) -> Color,
+}
+
+--- A list of named colors from `https://www.w3.org/TR/css-color-4/#named-colors`
+export type ColorName = 
+    "AliceBlue" | "AntiqueWhite" | "Aqua" | "Aquamarine" | "Azure" |
+    "Beige" | "Bisque" | "Black" | "BlanchedAlmond" | "Blue" | "BlueViolet" | "Brown" | "BurlyWood" |
+    "CadetBlue" | "Chartreuse" | "Chocolate" | "Coral" | "CornflowerBlue" | "Cornsilk" | "Crimson" | "Cyan" |
+    "DarkBlue" | "DarkCyan" | "DarkGoldenrod" | "DarkGray" | "DarkGreen" | "DarkGrey" | "DarkKhaki" | "DarkMagenta" | "DarkOliveGreen" | "DarkOrange" | "DarkOrchid" | "DarkRed" | "DarkSalmon" | "DarkSeaGreen" | "DarkSlateBlue" | "DarkSlateGray" | "DarkSlateGrey" | "DarkTurquoise" | "DarkViolet" | "DeepPink" | "DeepSkyBlue" | "DimGray" | "DimGrey" | "DodgerBlue" |
+    "Firebrick" | "FloralWhite" | "ForestGreen" | "Fuchsia" |
+    "Gainsboro" | "GhostWhite" | "Gold" | "Goldenrod" | "Gray" | "Green" | "GreenYellow" | "Grey" |
+    "Honeydew" | "HotPink" |
+    "IndianRed" | "Indigo" | "Ivory" |
+    "Khaki" |
+    "Lavender" | "LavenderBlush" | "LawnGreen" | "LemonChiffon" | "LightBlue" | "LightCoral" | "LightCyan" | "LightGoldenrodYellow" | "LightGray" | "LightGreen" | "LightGrey" | "LightPink" | "LightSalmon" | "LightSeaGreen" | "LightSkyBlue" | "LightSlateGray" | "LightSlateGrey" | "LightSteelBlue" | "LightYellow" | "Lime" | "LimeGreen" | "Linen" |
+    "Magenta" | "Maroon" | "MediumAquamarine" | "MediumBlue" | "MediumOrchid" | "MediumPurple" | "MediumSeaGreen" | "MediumSlateBlue" | "MediumSpringGreen" | "MediumTurquoise" | "MediumVioletRed" | "MidnightBlue" | "MintCream" | "MistyRose" | "Moccasin" | "NavajoWhite" |
+    "Navy" |
+    "OldLace" | "Olive" | "OliveDrab" | "Orange" | "OrangeRed" | "Orchid" |
+    "PaleGoldenrod" | "PaleGreen" | "PaleTurquoise" | "PaleVioletRed" | "PapayaWhip" | "PeachPuff" | "Peru" | "Pink" | "Plum" | "PowderBlue" | "Purple" |
+    "RebeccaPurple" |
+    "Red" | "RosyBrown" | "RoyalBlue" |
+    "SaddleBrown" | "Salmon" | "SandyBrown" | "SeaGreen" | "Seashell" | "Sienna" | "Silver" | "SkyBlue" | "SlateBlue" | "SlateGray" | "SlateGrey" | "Snow" | "SpringGreen" | "SteelBlue" |
+    "Tan" | "Teal" | "Thistle" | "Tomato" | "Turquoise" |
+    "Violet" |
+    "Wheat" | "White" | "WhiteSmoke" |
+    "Yellow" | "YellowGreen"
+
+-- Signal
 
 export type SignalConnection = {
     --- Disconnects this connection from the signal, meaning the callback will no longer be called by the signal.

@@ -35,7 +35,7 @@ pub fn register(self: *ComponentRegistry, comptime T: type, name: []const u8) !C
         if (@alignOf(T) > max_alignment) @compileError(@typeName(T) ++ " exceeds max_alignment! Increase it in ComponentRegistry or reduce the alignment of your type.");
     }
 
-    return self.registerRaw(name, @typeName(T), @sizeOf(T), @alignOf(T), null);
+    return self.registerRaw(name, @typeName(T), @sizeOf(T), @alignOf(T), getDtor(T));
 }
 
 pub fn registerRaw(
@@ -66,6 +66,28 @@ fn add(self: *ComponentRegistry, template: ComponentInfo, name: []const u8) !Com
     try self.infos.append(self.allocator, stored);
     try self.ids.put(stored.name, c_id);
     return c_id;
+}
+
+fn hasDtor(comptime T: type) bool {
+    return switch (@typeInfo(T)) {
+        .@"struct", .@"union", .@"enum", .@"opaque" => @hasDecl(T, "deinit"),
+        else => false,
+    };
+}
+
+fn getDtor(comptime T: type) ?ComponentInfo.FreeFn {
+    if (comptime !hasDtor(T)) return null;
+
+    return struct {
+        fn c(allocator: std.mem.Allocator, bytes: []u8) void {
+            const self: *T = @ptrCast(@alignCast(bytes.ptr));
+            switch (@typeInfo(@TypeOf(T.deinit)).@"fn".param_types.len) {
+                1 => self.deinit(),
+                2 => self.deinit(allocator),
+                else => @compileError(@typeName(T) ++ ".deinit must take (*T) or (*T, Allocator)!"),
+            }
+        }
+    }.c;
 }
 
 pub fn id(self: *ComponentRegistry, name: []const u8) ?ComponentId {

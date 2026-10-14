@@ -4353,7 +4353,7 @@ pub const Lua = opaque {
     ///
     /// See https://www.lua.org/manual/5.4/manual.html#luaL_tolstring
     pub fn toStringEx(lua: *Lua, index: i32) [:0]const u8 {
-        comptime checkSupport(.{ .lua52, .lua53, .lua54, .lua55 }, @src().fn_name);
+        comptime checkSupport(.{ .lua52, .lua53, .lua54, .lua55, .luau }, @src().fn_name);
         var length: usize = undefined;
         const ptr = c.luaL_tolstring(@ptrCast(lua), index, &length);
         return ptr[0..length :0];

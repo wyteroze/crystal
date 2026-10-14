@@ -45,6 +45,12 @@ pub const RecordRecipe = struct {
     handle: ?type = null,
 };
 
+pub const VariantRecipe = struct {
+    name: ?[:0]const u8 = null,
+    number: ?@TypeOf(.EnumLiteral) = null,
+    push_shorthand: bool = true
+};
+
 pub const ModuleRecipe = struct {
     kind: union(enum) { library, singleton: type } = .library,
     members: []const types.Member = &.{},
