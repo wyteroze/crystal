@@ -39,7 +39,10 @@ pub fn setParent(self: *Hierarchy, entity: Entity, parent: ?Entity) !void {
         if (self.isAncestorOf(entity, p)) return error.CyclicParent;
     }
 
+    const new_parent = parent orelse Entity.invalid;
     const previous_parent = self.parents.items[entity.index];
+    if (previous_parent.eql(new_parent)) return;
+
     if (!previous_parent.eql(Entity.invalid)) {
         self.removeChild(previous_parent, entity);
         try self.changed.append(self.allocator, previous_parent);
@@ -56,9 +59,10 @@ pub fn setParent(self: *Hierarchy, entity: Entity, parent: ?Entity) !void {
 }
 
 fn removeChild(self: *Hierarchy, parent: Entity, child: Entity) void {
-    for (self.children.items[parent.index].items, 0..) |e, i| {
+    const list = &self.children.items[parent.index];
+    for (list.items, 0..) |e, i| {
         if (e.eql(child)) {
-            _ = self.children.items[parent.index].swapRemove(i);
+            _ = list.orderedRemove(i);
             return;
         }
     }
@@ -84,6 +88,24 @@ pub fn getParent(self: *const Hierarchy, entity: Entity) ?Entity {
 pub fn getChildren(self: *const Hierarchy, entity: Entity) []const Entity {
     if (entity.index >= self.children.items.len) return &.{};
     return self.children.items[entity.index].items;
+}
+
+pub fn popChild(self: *Hierarchy, entity: Entity) ?Entity {
+    if (entity.index >= self.children.items.len) return null;
+    return self.children.items[entity.index].pop();
+}
+
+pub fn remove(self: *Hierarchy, entity: Entity) void {
+    if (entity.index >= self.parents.items.len) return;
+
+    const parent = self.parents.items[entity.index];
+    if (!parent.eql(Entity.invalid)) {
+        self.removeChild(parent, entity);
+        self.changed.append(self.allocator, parent) catch {};
+    }
+
+    self.parents.items[entity.index] = Entity.invalid;
+    self.children.items[entity.index].clearRetainingCapacity();
 }
 
 fn ensureCapacity(self: *Hierarchy, index: u32) !void {

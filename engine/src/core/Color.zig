@@ -81,12 +81,12 @@ pub fn toRgb(self: Color) struct { u8, u8, u8, u8 } {
     };
 }
 
-pub fn fromRgbFloat(rc: f32, gc: f32, bc: f32, ac: f32) Color {
+pub fn fromRgbFloat(rc: f32, gc: f32, bc: f32, ac: ?f32) Color {
     return .{ 
         .r = clamp(rc, 0.0, 1.0), 
         .g = clamp(gc, 0.0, 1.0), 
         .b = clamp(bc, 0.0, 1.0), 
-        .a = clamp(ac, 0.0, 1.0)
+        .a = clamp(ac orelse 1.0, 0.0, 1.0)
     };
 }
 

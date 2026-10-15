@@ -71,6 +71,11 @@ pub fn signal(comptime name: [:0]const u8, comptime get: anytype) types.Member {
     } };
 }
 
+// Sorry...
+pub fn inherit(comptime V: type, comptime r: recipes.HandleRecipe) type {
+    return struct { pub const via = V; pub const recipe = r; };
+}
+
 fn validateValue(comptime T: type, comptime r: recipes.ValueRecipe) void {
     inline for (r.fields) |f| if (!@hasField(T, f))
         @compileError(@typeName(T) ++ " has no field '" ++ f ++ "' (listed in .fields)");
@@ -109,4 +114,12 @@ fn validateVariant(comptime T: type, comptime r: recipes.VariantRecipe) void {
             else => @compileError(@typeName(T) ++ "." ++ nm ++ " must have a numeric payload to be the .number shorthand"),
         }
     }
+}
+
+pub fn Via(comptime F: type, comptime T: type, comptime proj: fn (F) T) type {
+    return struct {
+        pub const From = F;
+        pub const To = T;
+        pub fn get(f: F) T { return proj(f); }
+    };
 }

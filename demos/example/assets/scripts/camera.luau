@@ -1,4 +1,5 @@
 -- Copyright 2026 wyteroze. Licensed under the Apache-2.0 license.
+--!strict
 
 local input = require("@input")
 
@@ -39,7 +40,6 @@ end
 local function rotToForwardVector(rot: Vec3): Vec3
     local pitch = math.rad(rot.X)
     local yaw = math.rad(rot.Y)
-    local _ = math.rad(rot.Z)
 
     return Vec3.new(
         math.cos(pitch) * math.sin(yaw),
@@ -66,19 +66,19 @@ function Camera.new(entity: Entity)
 end
 
 function Camera._setup(self: Camera)
-    input.Keyboards.KeyPressed:Connect(function(key)
-        if key == "Escape" then
-            if input.IsCursorLocked() then input.SetCursorLocked(false) end
-            if not input.IsCursorVisible() then input.SetCursorVisible(true) end
-        end
-    end)
+    -- input.Keyboards.KeyPressed:Connect(function(key)
+    --     if key == "Escape" then
+    --         if input.IsCursorLocked() then input.SetCursorLocked(false) end
+    --         if not input.IsCursorVisible() then input.SetCursorVisible(true) end
+    --     end
+    -- end)
 
-    input.Mice.ButtonPressed:Connect(function(btn)
-        if btn == "Left" then
-            if not input.IsCursorLocked() then input.SetCursorLocked(true) end
-            if input.IsCursorVisible() then input.SetCursorVisible(false) end
-        end
-    end)
+    -- input.Mice.ButtonPressed:Connect(function(btn)
+    --     if btn == "Left" then
+    --         if not input.IsCursorLocked() then input.SetCursorLocked(true) end
+    --         if input.IsCursorVisible() then input.SetCursorVisible(false) end
+    --     end
+    -- end)
 
     input.Mice.Scrolled:Connect(function(delta)
         self.Speed = math.max(0, self.Speed + delta.Y)

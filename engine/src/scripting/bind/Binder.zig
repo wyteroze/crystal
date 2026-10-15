@@ -13,15 +13,20 @@ pub const registry = @import("registry.zig");
 pub const Marshal = @import("marshal.zig").Marshal;
 pub const Wrap = @import("wrap.zig").Wrap;
 
+const Bound = struct { m: types.Member, via: ?type = null };
 const InstanceEntry = union(enum) {
     field: struct { zig: []const u8, lua: [:0]const u8 },
-    prop: types.Member,
-    method: types.Member,
+    prop: Bound,
+    method: Bound,
 };
 
-
 fn entryName(comptime e: InstanceEntry) []const u8 {
-    return switch (e) { .field => |f| f.lua, .prop => |p| p.name, .method => |m| m.name };
+    return switch (e) { .field => |f| f.lua, .prop => |p| p.m.name, .method => |m| m.m.name };
+}
+
+fn hasName(comptime list: []const InstanceEntry, comptime name: []const u8) bool {
+    for (list) |e| if (std.mem.eql(u8, entryName(e), name)) return true;
+    return false;
 }
 
 fn isGetter(comptime m: types.Member) bool { return m.kind == .prop or m.kind == .signal; }
@@ -31,9 +36,16 @@ fn instanceEntries(comptime r: anytype) []const InstanceEntry { comptime {
     const T = @TypeOf(r);
 
     if (@hasField(T, "fields")) { for (r.fields) |f| out = out ++ .{ InstanceEntry{ .field = .{ .zig = f, .lua = names.pascal(f) } } }; }
-    if (@hasField(T, "props")) { for (r.props) |p| out = out ++ .{ InstanceEntry{ .prop = p } }; }
-    if (@hasField(T, "methods")) { for (r.methods) |m| out = out ++ .{ InstanceEntry{ .method = m } }; }
-    if (@hasField(T, "signals")) { for (r.signals) |s| out = out ++ .{ InstanceEntry{ .prop = s } }; }
+    if (@hasField(T, "props")) { for (r.props) |p| out = out ++ .{ InstanceEntry{ .prop = .{ .m = p } } }; }
+    if (@hasField(T, "methods")) { for (r.methods) |m| out = out ++ .{ InstanceEntry{ .method = .{ .m = m } } }; }
+    if (@hasField(T, "signals")) { for (r.signals) |s| out = out ++ .{ InstanceEntry{ .prop = .{ .m = s } } }; }
+
+    if (@hasField(T, "inherit")) if (r.inherit) |inh| {
+        const ir = inh.recipe;
+        for (ir.props) |p| if (!hasName(out, p.name)) { out = out ++ .{ InstanceEntry{ .prop = .{ .m = p, .via = inh.via } } }; };
+        for (ir.methods) |m| if (!hasName(out, m.name)) { out = out ++ .{ InstanceEntry{ .method = .{ .m = m, .via = inh.via } } }; };
+        for (ir.signals) |s| if (!hasName(out, s.name)) { out = out ++ .{ InstanceEntry{ .prop = .{ .m = s, .via = inh.via } } }; };
+    };
 
     return out;
 } }
@@ -230,8 +242,8 @@ pub fn Binder(comptime api: anytype) type {
                     switch (i) {
                         inline 0...E.len - 1 => |k| switch (E[k]) {
                             .field => |fd| { M.push(l, @field(self, fd.zig)); return 1; },
-                            .prop => |p| return W.Gen(p.impl.getter, .{}).call(l),
-                            .method => |m| { l.pushFunction(W.cFn(m.impl.function, .{}), m.name); return 1; },
+                            .prop => |p| return W.Gen(p.m.impl.getter, .{ .via = p.via }).call(l),
+                            .method => |m| { l.pushFunction(W.cFn(m.m.impl.function, .{ .via = m.via }), m.m.name); return 1; },
                         },
 
                         else => unreachable,
@@ -261,11 +273,11 @@ pub fn Binder(comptime api: anytype) type {
                                 return 0;
                             },
                             .prop => |p| {
-                                if (!@hasDecl(p.impl, "setter"))
+                                if (!@hasDecl(p.m.impl, "setter"))
                                     l.raiseErrorStr("'%s' is read-only", .{ key.ptr });
 
                                 l.remove(2);
-                                return W.Gen(p.impl.setter, .{}).call(l);
+                                return W.Gen(p.m.impl.setter, .{ .via = p.via }).call(l);
                             },
                             
                             .method => l.raiseErrorStr("'%s' is a method and cannot be assigned to", .{ key.ptr }),

@@ -103,10 +103,10 @@ pub fn Marshal(comptime Reg: type) type {
 
                 break :blk .initComptime(kv);
             };
-            if (l.typeOf(idx) != .string) l.raiseErrorStr("arg {d}: expected {s} (string), got {s}", .{ idx, @typeName(T).ptr, @tagName(l.typeOf(idx)).ptr });
+            if (l.typeOf(idx) != .string) l.raiseErrorStr("arg %d: expected %s (string), got %s", .{ idx, @typeName(T).ptr, @tagName(l.typeOf(idx)).ptr });
 
             const s = l.toString(idx) catch unreachable;
-            return map.get(s) orelse l.raiseErrorStr("arg {d}: '{s}' is not a valid {s}", .{ idx, s.ptr, @typeName(T).ptr });
+            return map.get(s) orelse l.raiseErrorStr("arg %d: '%s' is not a valid %s", .{ idx, s.ptr, @typeName(T).ptr });
         }
 
         fn shorthandOf(comptime T: type) ?[]const u8 {
@@ -128,7 +128,7 @@ pub fn Marshal(comptime Reg: type) type {
                             return @unionInit(T, nm, {});
                     }
 
-                    l.raiseErrorStr("arg {d}: '{s}' is not a valid {s} variant", .{ idx, s.ptr, @typeName(T).ptr });
+                    l.raiseErrorStr("arg %d: '%s' is not a valid %s variant", .{ idx, s.ptr, @typeName(T).ptr });
                 },
                 .table => {
                     const abs = l.absIndex(idx);
@@ -139,7 +139,7 @@ pub fn Marshal(comptime Reg: type) type {
                             const name = comptime names.pascal(nm);
                             if (l.getField(abs, name) != .nil) {
                                 if (result != null)
-                                    l.raiseErrorStr("arg {d}: {s} table must have exactly one variant key", .{ idx, @typeName(T).ptr });
+                                    l.raiseErrorStr("arg %d: %s table must have exactly one variant key", .{ idx, @typeName(T).ptr });
                                 result = @unionInit(T, nm, parse(info.field_types[i], l, -1));
                             }
                             l.pop(1);

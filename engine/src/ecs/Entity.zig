@@ -92,8 +92,7 @@ pub fn format(
 }
 
 const bind = @import("../scripting/bind/bind.zig");
-// Needs to be pub so the walker can find it.
-pub const lua_components = @import("lua_components.zig");
+const lua_components = @import("lua_components.zig");
 
 pub const sub_api = bind.handle(Entity, .{
     .alive = bind.func("isAlive", Entity.isAlive),
@@ -102,7 +101,8 @@ pub const sub_api = bind.handle(Entity, .{
         bind.func("SetComponent", lua_components.setComponent),
         bind.func("GetComponent", lua_components.getComponent),
         bind.func("HasComponent", Entity.hasComponent),
-        bind.func("RemoveComponent", Entity.removeComponent)
+        bind.func("RemoveComponent", Entity.removeComponent),
+        bind.func("Destroy", Entity.destroy),
     },
     .props = &.{
         bind.readonly("Components", struct {

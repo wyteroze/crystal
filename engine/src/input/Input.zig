@@ -5,6 +5,7 @@ const core = @import("../core/core.zig");
 const devices = @import("devices/devices.zig");
 const signal = @import("../core/signal.zig");
 const Platform = @import("../platform/Platform.zig");
+const Ui = @import("../ui/Ui.zig");
 
 const max_usize = std.math.maxInt(usize);
 
@@ -20,6 +21,7 @@ pub const TouchHandle = devices.DeviceHandle(devices.TouchDevice, "touch_devices
 const Input = @This();
 allocator: std.mem.Allocator,
 platform: *Platform,
+ui: *Ui,
 
 platform_event_con: signal.Connection,
 
@@ -47,7 +49,7 @@ mice: std.AutoHashMap(usize, *devices.MouseDevice),
 gamepads: std.AutoHashMap(usize, *devices.GamepadDevice),
 touch_devices: std.AutoHashMap(usize, *devices.TouchDevice),
 
-pub fn init(self: *Input, allocator: std.mem.Allocator, platform: *Platform) !void {
+pub fn init(self: *Input, allocator: std.mem.Allocator, platform: *Platform, ui: *Ui) !void {
     var keyboards: std.AutoHashMap(usize, *devices.KeyboardDevice) = .init(allocator);
     var mice: std.AutoHashMap(usize, *devices.MouseDevice) = .init(allocator);
     var gamepads: std.AutoHashMap(usize, *devices.GamepadDevice) = .init(allocator);
@@ -74,13 +76,14 @@ pub fn init(self: *Input, allocator: std.mem.Allocator, platform: *Platform) !vo
 
     const platform_event_con = try platform.platform_event.connect(struct {
         fn c(slf: *Input, evt: Platform.desc.PlatformEvent) void {
-            slf.onPlatformEvent(evt) catch |e| std.debug.panic("input.Input.onPlatformEvent panic: {any}", .{ e });
+            slf.onPlatformEvent(evt) catch |e| std.debug.panic("Input.onPlatformEvent panic: {any}", .{ e });
         }
     }.c, self);
 
     self.* = .{
         .allocator = allocator,
         .platform = platform,
+        .ui = ui,
         .platform_event_con = platform_event_con,
         .dispatcher = self.dispatcher,
         .keyboards = keyboards,
@@ -173,20 +176,27 @@ fn onPlatformEvent(self: *Input, event: Platform.desc.PlatformEvent) !void {
             self.allocator.destroy(kv.value);
         },
         .mouse_button_down => |e| {
-            try self.unimouse.buttonDown(e); 
-            try (self.getMouse(e.mouse_id) orelse return).buttonDown(e);
+            var ms = self.getMouse(e.mouse_id) orelse return;
+            const consumed = self.ui.pointerPressed(ms.getPosition());
+            try self.unimouse.buttonDown(e, consumed); 
+            try ms.buttonDown(e, consumed);
         },
         .mouse_button_up => |e| {
-            self.unimouse.buttonUp(e); 
-            (self.getMouse(e.mouse_id) orelse return).buttonUp(e);
+            var ms = self.getMouse(e.mouse_id) orelse return;
+            const consumed = self.ui.pointerReleased(ms.getPosition());
+            self.unimouse.buttonUp(e, consumed); 
+            ms.buttonUp(e, consumed);
         },
         .mouse_scrolled => |e| {
             self.unimouse.scrolled(e); 
             (self.getMouse(e.mouse_id) orelse return).scrolled(e);
         },
         .mouse_moved => |e| {
-            self.unimouse.moved(e); 
-            (self.getMouse(e.mouse_id) orelse return).moved(e);
+            var ms = self.getMouse(e.mouse_id) orelse return;
+            const consumed = self.ui.pointerMoved(ms.getPosition());
+
+            self.unimouse.moved(e, consumed); 
+            ms.moved(e, consumed);
         },
         else => {}
     }

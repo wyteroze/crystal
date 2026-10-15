@@ -21,6 +21,7 @@ pub const HandleRecipe = struct {
     alive: ?types.Member = null,
     /// For handles that Lua owns. This is called on garbage-collection.
     release: ?types.Member = null,
+    inherit: ?type = null,
     props: []const types.Member = &.{},
     statics: []const types.Member = &.{},
     methods: []const types.Member = &.{},

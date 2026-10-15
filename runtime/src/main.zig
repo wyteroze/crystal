@@ -339,9 +339,12 @@ pub fn main(init: std.process.Init) !void {
     var platform: Platform = undefined;
     try platform.init(platform_allocator.allocator(), .initSdl());
 
+    var ui_allocator: core.TrackedAllocator = .init(allocator, "Ui");
+    var ui: Ui = try .init(ui_allocator.allocator());
+
     var input_allocator: core.TrackedAllocator = .init(allocator, "Input");
     var input: Input = undefined;
-    try input.init(input_allocator.allocator(), &platform);
+    try input.init(input_allocator.allocator(), &platform, &ui);
 
     const surface = try platform.createSurface(.{ .title = "crystal", .width = 1280, .height = 720, .target = .primary });
     const surface_logical_size = try platform.getSurfaceLogicalSize(surface);
@@ -361,9 +364,6 @@ pub fn main(init: std.process.Init) !void {
     var renderer_allocator: core.TrackedAllocator = .init(allocator, "Renderer");
     var renderer: render.Renderer = try .init(renderer_allocator.allocator(), surface_pixel_size, surface_logical_size, surface_scale, &gpu_device, try skybox_cubemap.gpuGet(.image));
 
-    var ui_allocator: core.TrackedAllocator = .init(allocator, "Ui");
-    var ui: Ui = try .init(ui_allocator.allocator());
-
     // Create the world
     var ecs_allocator: core.TrackedAllocator = .init(allocator, "ECSWorld");
     var world: ecs.World = .init(ecs_allocator.allocator());
@@ -377,8 +377,8 @@ pub fn main(init: std.process.Init) !void {
 
     defer { 
         world.deinit();
-        audio.deinit();
         ui.deinit();
+        audio.deinit();
         renderer.deinit();
         gpu_device.deinit();
         input.deinit();
@@ -506,29 +506,29 @@ pub fn main(init: std.process.Init) !void {
             last_asset_tick = end;
 
             if (purged > 0) std.log.debug("Purged {d} assets", .{ purged });
-            std.log.info("-----Allocators ({f} tracked, {f} total)-----", .{ core.SizeFormatter.fmtSize( 
-                scheduler_allocator.currentUsage() +
-                platform_allocator.currentUsage() +
-                input_allocator.currentUsage() +
-                renderer_allocator.currentUsage() +
-                ui_allocator.currentUsage() +
-                lua_allocator.currentUsage() + 
-                asset_allocator.currentUsage() + 
-                ecs_allocator.currentUsage() +
-                gpu_allocator.currentUsage()
-            ), core.SizeFormatter.fmtSize(tracked.currentUsage()) });
+            // std.log.info("-----Allocators ({f} tracked, {f} total)-----", .{ core.SizeFormatter.fmtSize( 
+            //     scheduler_allocator.currentUsage() +
+            //     platform_allocator.currentUsage() +
+            //     input_allocator.currentUsage() +
+            //     renderer_allocator.currentUsage() +
+            //     ui_allocator.currentUsage() +
+            //     lua_allocator.currentUsage() + 
+            //     asset_allocator.currentUsage() + 
+            //     ecs_allocator.currentUsage() +
+            //     gpu_allocator.currentUsage()
+            // ), core.SizeFormatter.fmtSize(tracked.currentUsage()) });
 
-            std.log.info("{f}", .{ scheduler_allocator });
-            std.log.info("{f}", .{ platform_allocator });
-            std.log.info("{f}", .{ input_allocator });
-            std.log.info("{f}", .{ renderer_allocator });
-            std.log.info("{f}", .{ ui_allocator });
-            std.log.info("{f}", .{ lua_allocator });
-            std.log.info("{f}", .{ asset_allocator });
-            std.log.info("{f}", .{ ecs_allocator });
-            std.log.info("{f}", .{ gpu_allocator });
+            // std.log.info("{f}", .{ scheduler_allocator });
+            // std.log.info("{f}", .{ platform_allocator });
+            // std.log.info("{f}", .{ input_allocator });
+            // std.log.info("{f}", .{ renderer_allocator });
+            // std.log.info("{f}", .{ ui_allocator });
+            // std.log.info("{f}", .{ lua_allocator });
+            // std.log.info("{f}", .{ asset_allocator });
+            // std.log.info("{f}", .{ ecs_allocator });
+            // std.log.info("{f}", .{ gpu_allocator });
 
-            std.log.info("[Lua GC]: {f}", .{core.SizeFormatter.fmtSize( @as(u64, @intCast(runtime.gcCount())) * 1024) });
+            // std.log.info("[Lua GC]: {f}", .{core.SizeFormatter.fmtSize( @as(u64, @intCast(runtime.gcCount())) * 1024) });
         }
 
         const frame_time = start.durationTo(end);

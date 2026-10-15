@@ -4,6 +4,82 @@ Copyright 2026 wyteroze. Licensed under the Apache-2.0 license.
 
 local assets = require("@assets")
 local ui = require("@ui")
+local input = require("@input")
+
+-- TODO: Make `require` allow file paths
+local Modal = {}
+Modal.__index = Modal
+
+type Modal = typeof(Modal) & {
+    modal: any,
+    button: any,
+    held: boolean
+}
+
+function Modal.new(size: Vec2, color: Color, font: Asset, headerText: string, btnText: string, center: bool): Modal
+    local modalBg = ui.CreateElement {
+        Size = { Width = size.X, Height = size.Y },
+        Color = color,
+        Layout = { Generic = {
+            Direction = "Vertical",
+            Padding = { Top = 25, Bottom = 25 },
+            AlignItems = "Center",
+            Justify = "Center",
+            Gap = 25
+        } }
+    }
+
+    if center then modalBg.Components.Position = Vec2.new(640 - size.X/2, 360 - size.Y/2) end
+
+    local modalText = ui.CreateElement {
+        Parent = modalBg,
+        Color = Color.new(0, 0, 0, 0),
+        Size = { Width = "Hug", Height = "Hug" },
+        Text = {
+            Font = font,
+            Content = headerText,
+            Color = Color.new(1, 1, 1, 1),
+            Size = 16
+        },
+    }
+
+    local button = ui.CreateElement {
+        Parent = modalBg,
+        -- Make it just a lil brighter
+        Color = color:Lerp(Color.new(1, 1, 1), .1),
+        Size = { Width = "Hug", Height = "Hug" },
+        Layout = { Generic = { Padding = { Left = 10, Right = 10, Top = 5, Bottom = 5 } } },
+    }
+
+    local buttonText = ui.CreateElement {
+        Parent = button,
+        Color = Color.new(0, 0, 0, 0),
+        Size = { Width = "Hug", Height = "Hug" },
+        Text = {
+            Font = font,
+            Content = btnText,
+            Color = Color.new(1, 1, 1, 1),
+            Size = 13
+        },
+    }
+
+    local self = setmetatable({
+        modal = modalBg,
+        button = button,
+        held = false
+    }, Modal) :: Modal
+
+    self.modal.PointerDown:Connect(function() self.held = true end)
+    self.modal.PointerUp:Connect(function() self.held = false end)
+    self.modal.PointerMoved:Connect(function()
+        if self.held then modalBg.Components.Position += input.Mice:GetMoveDelta() end
+    end)
+    self.button.PointerDown:Connect(function() self.button.Components.Color = Color.new(.3, .3, .3) end)
+    self.button.PointerLeft:Connect(function() self.button.Components.Color = Color.new(.2, .2, .2) end)
+    self.button.PointerUp:Connect(function() self.button.Components.Color = Color.new(.2, .2, .2) end)
+
+    return self
+end
 
 local Teapot = {}
 Teapot.__index = Teapot
@@ -16,7 +92,7 @@ function Teapot.new(entity: Entity)
     }, Teapot)
     
     print(entity)
-    local audioStream = assets.load("assets://audios/Lifestyle - Rich Gang.mp3")
+    local didALottaShitToLiveThisHereLifestyle = assets.load("assets://audios/Lifestyle - Rich Gang.mp3")
     local chickenPng = assets.load("assets://images/chicken.jpg")
     local jbMono = assets.load("assets://fonts/JetBrains-Mono.ttf")
 
@@ -47,37 +123,28 @@ function Teapot.new(entity: Entity)
     -- track.Looped:Connect()
     -- track:Destroy()
 
-    local elem = ui.CreateElement {
-        Size = { Width = 640, Height = 640 },
-        Color = Color.new(1, 0, 1, 0.5),
-        Borders = { Top = 4, Bottom = 4, Left = 4, Right = 4 },
-        Text = {
-            Font = jbMono,
-            Content = "Yo",
-            Color = Color.new(1, 1, 1, 1),
-            Size = 13
-        },
-        Layout = { Grid = {
-            Padding = { Top = 10, Bottom = 10, Left = 10, Right = 10 },
-            Rows = "Auto",
-            Flow = "Row",
-            RowGap = 2, ColumnGap = 2,
-        } }
-    }
-    local hue = 0
+    local modal = Modal.new(Vec2.new(300, 150), Color.new(.1, .1, .1), jbMono, "You smell like updog", "What's updog")
+    modal.button.Activated:Connect(function()
+        local response = Modal.new(Vec2.new(300, 150), Color.new(.5, .5, .5), jbMono, "Nothing much hbu lol!!", "Bruh.", true)
+        response.button.Activated:Connect(function() response.modal:Destroy() end)
+    end)
+
     entity.Updated:Connect(function(dt)
         self._timer = self._timer + dt
         local toAdd = self.Multiplier * dt
         local add = Vec3.new(toAdd * 5, toAdd * 10, toAdd * 20)
-        hue = (hue + dt)%1
-
-        elem.Components.Text.Content = ("The fps is %.2f"):format(1/dt)
-        elem.Components.Text.Size = (math.sin(self._timer)+2)*7
-        elem.Components.Text.Color = Color.fromHSV(hue, 1, 1)
+        
         self._entity.Components.Rotation += add
     end)
+    
+    -- button.PointerDown:Connect(function(...) print(`Pointer down! {...}`) end)
+    -- button.PointerUp:Connect(function(...) print(`Pointer up! {...}`) end)
+    -- button.Activated:Connect(function(...) print(`Activated! {...}`) end)
+    -- button.PointerEntered:Connect(function(...) print(`Pointer entered! {...}`) end)
+    -- button.PointerMoved:Connect(function(...) print(`Pointer moved! {...}`) end)
+    -- button.PointerLeft:Connect(function(...) print(`Pointer left! {...}`) end)
 
-    -- entity.Events.Destroyed:Connect(function()
+    -- entity.Destroyed:Connect(function()
     --     print(("%s is being destroyed!"):format(self._entity.Name))
     -- end)
     

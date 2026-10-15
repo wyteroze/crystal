@@ -4,7 +4,7 @@ const std = @import("std");
 const zlua = @import("zlua");
 const Host = @import("Host.zig");
 
-pub const WrapOpts = struct { skip_after_self: u8 = 0 };
+pub const WrapOpts = struct { skip_after_self: u8 = 0, via: ?type = null };
 pub const Pushed = struct { n: i32 };
 
 pub fn Wrap(comptime Mar: type) type {
@@ -31,6 +31,12 @@ pub fn Wrap(comptime Mar: type) type {
                             args[i] = @field(Host.fromState(l), name);
                         } else if (P.? == *zlua.Lua) {
                             args[i] = l;
+                        } else if (comptime o.via != null and P.? == o.via.?.To) {
+                            const outer = Mar.parse(o.via.?.From, l, next);
+                            args[i] = o.via.?.get(outer);
+                            next += 1;
+                            
+                            if (!has_self) { has_self = true; next += o.skip_after_self; }
                         } else {
                             args[i] = Mar.parse(P.?, l, next);
                             next += 1;

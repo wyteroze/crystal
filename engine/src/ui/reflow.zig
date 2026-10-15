@@ -21,6 +21,8 @@ pub fn reflowUi(
     var dirty: std.AutoHashMap(ecs.Entity, void) = .init(frame_allocator);
 
     for (changed) |e| {
+        if (!e.isAlive()) continue;
+        
         var cur = e;
         while (cur.getParent()) |p| {
             const mode = world.getComponent(cur, ids.size, types.SizeMode) orelse {
