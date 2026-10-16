@@ -22,6 +22,10 @@ const fps_seconds: f32 = 1.0 / @as(f32, @floatCast(target_fps));
 const asset_purge_rate_seconds: std.Io.Duration = .fromMilliseconds(250);
 const clear_color: core.Color = .fromRgbFloat(0.1, 0.1, 0.1, 1.0);
 
+const Camera = struct {
+    fov: f32 = 90,
+    near_plane: f32 = 0.1,
+};
 const Scene = struct { cam: ?ecs.Entity };
 
 fn collectUiObjects(
@@ -109,6 +113,7 @@ fn submitToRenderer(w: *ecs.World, ui: *Ui, renderer: *render.Renderer) void {
     const scale_id = w.components.id("Scale").?;
     const scene_id = w.components.id("Scene").?;
     const light_id = w.components.id("Light").?;
+    const camera_id = w.components.id("Camera").?;
 
     var ui_objects: std.ArrayList(render.types.UiObject) = .empty;
     var objects: std.ArrayList(render.types.RenderObject) = .empty;
@@ -118,28 +123,32 @@ fn submitToRenderer(w: *ecs.World, ui: *Ui, renderer: *render.Renderer) void {
 
     // 3D world
 
-    const camera = blk: {
+    const camera_entity = blk: {
         var iter = w.query(&.{ scene_id }).iterator();
         break :blk if (iter.next()) |entity| if (w.getComponent(entity, scene_id, Scene)) |scene| scene.cam else null else null;
     };
+    const cam_settings: Camera = blk: {
+        const cam = camera_entity orelse break :blk .{};
+        const settings = w.getComponent(cam, camera_id, Camera) orelse break :blk .{};
+        break :blk settings.*;
+    };
     const cam_pos = blk: {
-        const cam = camera orelse break :blk math.Vec3.zero;
+        const cam = camera_entity orelse break :blk math.Vec3.zero;
         const pos = w.getComponent(cam, pos_id, math.Vec3) orelse break :blk math.Vec3.zero;
         break :blk pos.*;
     };
     const cam_rot = blk: {
-        const cam = camera orelse break :blk math.Vec3.zero;
+        const cam = camera_entity orelse break :blk math.Vec3.zero;
         const rot = w.getComponent(cam, rot_id, math.Vec3) orelse break :blk math.Vec3.zero;
         break :blk rot.*;
     };
 
     const view = math.Mat4.fromTRS(cam_pos, .fromEuler(cam_rot.toRadians()), .one).invertRT();
     const proj: math.Mat4 = .perspectiveReversedZInf(
-        90.0 * (std.math.pi / 180.0), 
+        std.math.degreesToRadians(cam_settings.fov), 
         // It doesn't matter whether we use logical/pixel size here, we just need the aspect ratio
         @as(f32, @floatFromInt(renderer.surface_logical_size[0])) / @as(f32, @floatFromInt(renderer.surface_logical_size[1])), 
-        // 10cm
-        0.1
+        cam_settings.near_plane
     );
 
     const light_query = w.query(&.{ light_id });
@@ -403,6 +412,7 @@ pub fn main(init: std.process.Init) !void {
     _ = try world.registerComponent([]const u8, "Name"); // For naming an entity (we don't use it, but lua does)
     const listener_component = try world.registerComponent(Audio.types.AudioListener, "AudioListener");
     _ = try world.registerComponent(Audio.Speaker, "Speaker");
+    const camera_component = try world.registerComponent(Camera, "Camera");
 
     // Create a scene inside of the world
     const scene = try world.spawnEntity();
@@ -413,6 +423,7 @@ pub fn main(init: std.process.Init) !void {
     try world.set(camera, rot_component, math.Vec3, .new(0, 0, 0));
     try world.set(camera, scale_component, math.Vec3, .new(1, 1, 1));
     try world.set(camera, listener_component, Audio.types.AudioListener, .{});
+    try world.set(camera, camera_component, Camera, .{});
 
     // Camera script
     {
