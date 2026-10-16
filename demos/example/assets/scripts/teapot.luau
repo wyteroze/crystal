@@ -74,9 +74,9 @@ function Modal.new(size: Vec2, color: Color, font: Asset, headerText: string, bt
     self.modal.PointerMoved:Connect(function()
         if self.held then modalBg.Components.Position += input.Mice:GetMoveDelta() end
     end)
-    self.button.PointerDown:Connect(function() self.button.Components.Color = Color.new(.3, .3, .3) end)
-    self.button.PointerLeft:Connect(function() self.button.Components.Color = Color.new(.2, .2, .2) end)
-    self.button.PointerUp:Connect(function() self.button.Components.Color = Color.new(.2, .2, .2) end)
+    self.button.PointerDown:Connect(function() self.button.Components.Color = color:Lerp(Color.new(1, 1, 1), .3) end)
+    self.button.PointerLeft:Connect(function() self.button.Components.Color = color:Lerp(Color.new(1, 1, 1), .2) end)
+    self.button.PointerUp:Connect(function() self.button.Components.Color = color:Lerp(Color.new(1, 1, 1), .2) end)
 
     return self
 end
@@ -125,7 +125,7 @@ function Teapot.new(entity: Entity)
 
     local modal = Modal.new(Vec2.new(300, 150), Color.new(.1, .1, .1), jbMono, "You smell like updog", "What's updog")
     modal.button.Activated:Connect(function()
-        local response = Modal.new(Vec2.new(300, 150), Color.new(.5, .5, .5), jbMono, "Nothing much hbu lol!!", "Bruh.", true)
+        local response = Modal.new(Vec2.new(300, 150), Color.new(.5, .5, .5), jbMono, "Not much how about you... lmao!!\ngottem!!", "Bruh.", true)
         response.button.Activated:Connect(function() response.modal:Destroy() end)
     end)
 

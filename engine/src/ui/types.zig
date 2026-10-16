@@ -264,6 +264,7 @@ pub const Text = struct {
     // Styling
     align_text: Align = .center,
     justify: Justify = .center,
+    wrap: bool = true,
 
     color: core.Color = .fromRgbFloat(1, 1, 1, 1),
     size: f32 = 13,

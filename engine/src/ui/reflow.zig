@@ -22,7 +22,7 @@ pub fn reflowUi(
 
     for (changed) |e| {
         if (!e.isAlive()) continue;
-        
+
         var cur = e;
         while (cur.getParent()) |p| {
             const mode = world.getComponent(cur, ids.size, types.SizeMode) orelse {
@@ -44,7 +44,7 @@ pub fn reflowUi(
     while (it.next()) |r| {
         cache.clearRetainingCapacity();
 
-        const measured = measure(r.*, world, ids, &cache);
+        const measured = measure(r.*, world, ids, &cache, null);
         const origin: math.Vec2 = if (r.*.getParent() == null)
             (if (world.getComponent(r.*, ids.position, math.Vec2)) |p| p.* else .zero)
         else if (world.getComponent(r.*, ids.computed_position, math.Vec2)) |p| p.* else .zero;
@@ -55,7 +55,7 @@ pub fn reflowUi(
     }
 }
 
-fn measure(entity: ecs.Entity, world: *ecs.World, ids: ComponentIds, cache: *MeasureCache) math.Vec2 {
+fn measure(entity: ecs.Entity, world: *ecs.World, ids: ComponentIds, cache: *MeasureCache, max_width: ?f32) math.Vec2 {
     const mode: types.SizeMode = if (entity.getComponent(ids.size, types.SizeMode)) |m| m.* else .{};
     const layout = entity.getComponent(ids.layout, types.Layout);
     const txt = entity.getComponent(ids.text, types.Text);
@@ -63,19 +63,52 @@ fn measure(entity: ecs.Entity, world: *ecs.World, ids: ComponentIds, cache: *Mea
 
     var intr: math.Vec2 = .zero;
 
+    const own_w: ?f32 = switch (mode.width) {
+        .fixed => |v| v,
+        else => max_width,
+    };
+
     if (txt) |t| if (t.font) |f| {
         const font = f.ensureGpuGet(.font, .{}) catch unreachable;
-        intr = text.measureText(&font, t.content, t.size);
+        intr = text.measureText(&font, t.content, t.size, if (t.wrap) own_w else null);
     };
 
     if (layout) |lay| {
         switch (lay.*) {
             .generic => |l| {
+                const horizontal = l.direction == .horizontal;
+                const inner_w: ?f32 = if (own_w) |w| @max(0, w - l.padding.left - l.padding.right) else null;
+                const gaps = l.gap * @as(f32, @floatFromInt(children.len -| 1));
+
+                const pre = horizontal and inner_w != null;
+                var child_w = inner_w;
+                if (pre) {
+                    const iw = inner_w.?;
+
+                    var used: f32 = 0;
+                    var fills: f32 = 0;
+                    for (children) |c| {
+                        const size_mode: types.SizeMode = if (c.getComponent(ids.size, types.SizeMode)) |m| m.* else .{};
+                        if (size_mode.width == .fill) {
+                            fills += 1;
+                            continue;
+                        }
+
+                        const s = measure(c, world, ids, cache, iw);
+                        cache.put(c, s) catch @panic("Out of memory");
+                        used += s.x;
+                    }
+
+                    child_w = if (fills > 0) @max(0, iw - used - gaps) / fills else iw;
+                }
+
                 var main_sum: f32 = 0;
                 var cross_max: f32 = 0;
 
                 for (children, 0..) |c, i| {
-                    const child_size = measure(c, world, ids, cache);
+                    const size_mode: types.SizeMode = if (c.getComponent(ids.size, types.SizeMode)) |m| m.* else .{};
+                    const child_size = if (pre and size_mode.width != .fill) cache.get(c).? // We just measured it above
+                        else measure(c, world, ids, cache, child_w);
                     cache.put(c, child_size) catch @panic("Out of memory");
                     
                     const main = if (l.direction == .horizontal) child_size.x else child_size.y;
@@ -95,12 +128,16 @@ fn measure(entity: ecs.Entity, world: *ecs.World, ids: ComponentIds, cache: *Mea
                 intr = intr.add(if (l.direction == .horizontal) .new(hug_main, hug_cross) else .new(hug_cross, hug_main));
             },
             .grid => |l| {
+                const dims = gridDims(l, children.len);
+                // Sorry
+                const child_w: ?f32 = if (own_w) |w| @max(0, (w - l.padding.left - l.padding.right - l.column_gap * @as(f32, @floatFromInt(dims.cols -| 1))) / @as(f32, @floatFromInt(dims.cols)))
+                    else null;
+                    
                 for (children) |c| {
-                    const sz = measure(c, world, ids, cache);
+                    const sz = measure(c, world, ids, cache, child_w);
                     cache.put(c, sz) catch @panic("Out of memory");
                 }
 
-                const dims = gridDims(l, children.len);
 
                 var col_widest: f32 = 0;
                 for (children) |c| {
