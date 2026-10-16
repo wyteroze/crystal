@@ -40,7 +40,9 @@ pub const UiObject = struct {
 pub const RenderScene = struct {
     ui_objects: []UiObject,
     objects: []RenderObject,
-    lights: []gpu.types.GpuLight
+    lights: []gpu.types.GpuLight,
+    clear_color: core.Color = .fromRgbFloat(0.1, 0.1, 0.1, 1.0),
+    ambient: core.Color = .fromRgbFloat(0.1, 0.1, 0.1, 1.0),
 };
 
 pub const RenderFrame = struct {

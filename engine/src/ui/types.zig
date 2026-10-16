@@ -7,9 +7,18 @@ const core = @import("../core/core.zig");
 const math = @import("../core/math/math.zig");
 const text = @import("text.zig");
 
+// TODO: Put these in better places.
+pub const Scene = struct { 
+    environment: Environment = .{}
+};
+pub const Environment = struct {
+    ambient: core.Color = .fromRgbFloat(0.1, 0.1, 0.1, 1.0),
+    clear_color: core.Color = .fromRgbFloat(0.1, 0.1, 0.1, 1.0),
+};
 pub const RenderViewOptions = struct {
     camera: ecs.Entity,
-    size: [2]u32
+    scene: ecs.Entity,
+    size: [2]u32,
 };
 
 pub const ComputedTextLayout = struct {

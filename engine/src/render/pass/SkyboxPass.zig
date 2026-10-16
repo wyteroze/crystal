@@ -55,7 +55,7 @@ fn execute(self: *SkyboxPass, ctx: pass.PassContext) void {
     const depth_handle = ctx.resources.get(resource.depth_buffer, .image) orelse @panic("depth_buffer resource missing!");
     const color_handle = ctx.resources.get(resource.color_target, .image);
     ctx.device.beginPass(.{
-        .clear_color = .fromRgbFloat(0.1, 0.1, 0.1, 1.0),
+        .clear_color = ctx.scene.clear_color,
         .clear_depth = 0,
         .width = ctx.view.viewport_size[0],
         .height = ctx.view.viewport_size[1],

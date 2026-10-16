@@ -42,12 +42,10 @@ pub fn init(allocator: std.mem.Allocator, surface_pixel_size: [2]u32, surface_lo
     var ui_graph: RenderGraph = .init(allocator);
     errdefer ui_graph.deinit();
 
-    const clear_color: core.Color = .fromRgbFloat(0.1, 0.1, 0.1, 1.0);
-
     const depth_shader = try gpu_device.createShader(gpu.shaders.depthPrepassShaderDesc());
     const depth_prepass = try allocator.create(pass.DepthPrepassPass);
     errdefer allocator.destroy(depth_prepass);
-    depth_prepass.* = try .init(gpu_device, depth_shader, clear_color);
+    depth_prepass.* = try .init(gpu_device, depth_shader);
 
     const skybox_shader = try gpu_device.createShader(gpu.shaders.skyboxShaderDesc());
     const skybox_pass = try allocator.create(pass.SkyboxPass);
@@ -62,7 +60,7 @@ pub fn init(allocator: std.mem.Allocator, surface_pixel_size: [2]u32, surface_lo
     const forward_shader = try gpu_device.createShader(gpu.shaders.basicShaderDesc());
     const forward_pass = try allocator.create(pass.ForwardPass);
     errdefer allocator.destroy(forward_pass);
-    forward_pass.* = try .init(gpu_device, forward_shader, clear_color);
+    forward_pass.* = try .init(gpu_device, forward_shader);
 
     const ui_shader = try gpu_device.createShader(gpu.shaders.uiShaderDesc());
     const ui_pass = try allocator.create(pass.UiPass);

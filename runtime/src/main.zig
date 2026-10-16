@@ -26,7 +26,6 @@ const Camera = struct {
     fov: f32 = 90,
     near_plane: f32 = 0.1,
 };
-const Scene = struct { cam: ?ecs.Entity };
 
 fn collectUiObjects(
     ui: *Ui,
@@ -123,34 +122,6 @@ fn submitToRenderer(w: *ecs.World, ui: *Ui, renderer: *render.Renderer) void {
 
     // 3D world
 
-    const camera_entity = blk: {
-        var iter = w.query(&.{ scene_id }).iterator();
-        break :blk if (iter.next()) |entity| if (w.getComponent(entity, scene_id, Scene)) |scene| scene.cam else null else null;
-    };
-    const cam_settings: Camera = blk: {
-        const cam = camera_entity orelse break :blk .{};
-        const settings = w.getComponent(cam, camera_id, Camera) orelse break :blk .{};
-        break :blk settings.*;
-    };
-    const cam_pos = blk: {
-        const cam = camera_entity orelse break :blk math.Vec3.zero;
-        const pos = w.getComponent(cam, pos_id, math.Vec3) orelse break :blk math.Vec3.zero;
-        break :blk pos.*;
-    };
-    const cam_rot = blk: {
-        const cam = camera_entity orelse break :blk math.Vec3.zero;
-        const rot = w.getComponent(cam, rot_id, math.Vec3) orelse break :blk math.Vec3.zero;
-        break :blk rot.*;
-    };
-
-    const view = math.Mat4.fromTRS(cam_pos, .fromEuler(cam_rot.toRadians()), .one).invertRT();
-    const proj: math.Mat4 = .perspectiveReversedZInf(
-        std.math.degreesToRadians(cam_settings.fov), 
-        // It doesn't matter whether we use logical/pixel size here, we just need the aspect ratio
-        @as(f32, @floatFromInt(renderer.surface_logical_size[0])) / @as(f32, @floatFromInt(renderer.surface_logical_size[1])), 
-        cam_settings.near_plane
-    );
-
     const light_query = w.query(&.{ light_id });
     var light_iter = light_query.iterator();
     while (light_iter.next()) |entity| {
@@ -176,7 +147,6 @@ fn submitToRenderer(w: *ecs.World, ui: *Ui, renderer: *render.Renderer) void {
         }) catch @panic("Out of memory");
     }
 
-
     // TODO: Make querying better. Quite limited right now
     const query = w.query(&.{ mesh_id, image_id });
     var iter = query.iterator();
@@ -200,7 +170,6 @@ fn submitToRenderer(w: *ecs.World, ui: *Ui, renderer: *render.Renderer) void {
         if (scale.x <= 0 or scale.y <= 0 or scale.z <= 0) continue;
         
         const model: math.Mat4 = .fromTRS(pos, .fromEuler(rot.toRadians()), scale);
-
         objects.append(allocator, .{ 
             .model = model, 
             .mesh = mesh_data, 
@@ -219,7 +188,7 @@ fn submitToRenderer(w: *ecs.World, ui: *Ui, renderer: *render.Renderer) void {
         var it = q.iterator();
         while (it.next()) |entity| {
             const rv = ui.world.getComponent(entity, ui_cids.render_view, Ui.types.RenderViewOptions).?;
-            if (!rv.camera.isAlive()) continue;
+            if (!rv.camera.isAlive() or !rv.scene.isAlive()) continue;
 
             const position = ui.world.getComponent(entity, ui_cids.computed_position, math.Vec2) orelse continue;
             const size = ui.world.getComponent(entity, ui_cids.computed_size, math.Vec2) orelse continue;
@@ -228,9 +197,22 @@ fn submitToRenderer(w: *ecs.World, ui: *Ui, renderer: *render.Renderer) void {
                 break :blk v.target;
             };
 
+            const scene = w.getComponent(rv.scene, scene_id, Ui.types.Scene) orelse continue;
+            const cam_settings = w.getComponent(rv.camera, camera_id, Camera) orelse continue;
+            const cam_pos: math.Vec3 = if (w.getComponent(rv.camera, pos_id, math.Vec3)) |p| p.* else .zero;
+            const cam_rot: math.Vec3 = if (w.getComponent(rv.camera, rot_id, math.Vec3)) |r| r.* else .zero;
+
+            const view = math.Mat4.fromTRS(cam_pos, .fromEuler(cam_rot.toRadians()), .one).invertRT();
+            const proj: math.Mat4 = .perspectiveReversedZInf(
+                std.math.degreesToRadians(cam_settings.fov), 
+                // It doesn't matter whether we use logical/pixel size here, we just need the aspect ratio
+                @as(f32, @floatFromInt(renderer.surface_logical_size[0])) / @as(f32, @floatFromInt(renderer.surface_logical_size[1])), 
+                cam_settings.near_plane
+            );
+            
             requests.append(allocator, .{
                 .frame = .{ .view_matrix = view, .proj_matrix = proj, .viewport_size = .{ rv.size[0], rv.size[1] } },
-                .scene = .{ .lights = lights.items, .objects = objects.items, .ui_objects = &.{} },
+                .scene = .{ .ambient = scene.environment.ambient, .clear_color = scene.environment.clear_color, .lights = lights.items, .objects = objects.items, .ui_objects = &.{} },
                 .target = target.handle
             }) catch @panic("Out of memory");
 
@@ -260,18 +242,18 @@ fn submitToRenderer(w: *ecs.World, ui: *Ui, renderer: *render.Renderer) void {
 
 fn submitToAudio(w: *ecs.World, audio: *Audio) void {
     const speaker_id = w.components.id("Speaker").?;
+    const listener_id = w.components.id("AudioListener").?;
     const pos_id = w.components.id("Position").?;
     const rot_id = w.components.id("Rotation").?;
-    const scene_id = w.components.id("Scene").?;
 
-    const camera = blk: {
-        var it = w.query(&.{scene_id}).iterator();
-        break :blk if (it.next()) |e| if (w.getComponent(e, scene_id, Scene)) |s| s.cam else null else null;
+    const listener = blk: {
+        var it = w.query(&.{ listener_id }).iterator();
+        break :blk if (it.next()) |e| e else null;
     };
-    const cam_pos: math.Vec3 = if (camera) |c| if (w.getComponent(c, pos_id, math.Vec3)) |p| p.* else .zero else .zero;
-    const cam_rot: math.Vec3 = if (camera) |c| if (w.getComponent(c, rot_id, math.Vec3)) |r| r.* else .zero else .zero;
-    const right = math.Quat.fromEuler(cam_rot.toRadians()).toMat4().transformDirection(.new(1, 0, 0)).normalize();
-    audio.setListener(.{ .position = cam_pos, .right = right });
+    const listener_pos: math.Vec3 = if (listener) |l| if (w.getComponent(l, pos_id, math.Vec3)) |p| p.* else .zero else .zero;
+    const listener_rot: math.Vec3 = if (listener) |l| if (w.getComponent(l, rot_id, math.Vec3)) |r| r.* else .zero else .zero;
+    const right = math.Quat.fromEuler(listener_rot.toRadians()).toMat4().transformDirection(.new(1, 0, 0)).normalize();
+    audio.setListener(.{ .position = listener_pos, .right = right });
 
     for (0..Audio.max_voices) |i| {
         const index: u16 = @intCast(i);
@@ -401,7 +383,7 @@ pub fn main(init: std.process.Init) !void {
     // Register components
     // TODO: Register these once somewhere, and access them there
     // instead of having to do world.components.id() over and over again.
-    const scene_component = try world.registerComponent(Scene, "Scene"); // For organizing collections of entities
+    const scene_component = try world.registerComponent(Ui.types.Scene, "Scene"); // For organizing collections of entities
     _ = try world.registerComponent(engine.Assets.AssetHandle, "Mesh"); // For giving an entity a mesh appearance
     _ = try world.registerComponent(engine.Assets.AssetHandle, "Image"); // For giving an entity an image appearance (or a texture, if it has a mesh)
     const pos_component = try world.registerComponent(math.Vec3, "Position"); // For moving entities
@@ -438,7 +420,7 @@ pub fn main(init: std.process.Init) !void {
         };
     }
 
-    try world.set(scene, scene_component, Scene, .{ .cam = camera });
+    try world.set(scene, scene_component, Ui.types.Scene, .{});
 
     // Spawn a new entity
     const entity = try world.spawnEntity();
@@ -473,7 +455,7 @@ pub fn main(init: std.process.Init) !void {
 
     // Render at logical size for 3D, while UI renders at pixel size to stay crisp.
     const view_entity = try ui.world.spawnEntity();
-    try ui.world.set(view_entity, ui.component_ids.render_view, Ui.types.RenderViewOptions, .{ .camera = camera, .size = surface_logical_size });
+    try ui.world.set(view_entity, ui.component_ids.render_view, Ui.types.RenderViewOptions, .{ .camera = camera, .scene = scene, .size = surface_logical_size });
     try ui.world.set(view_entity, ui.component_ids.position, math.Vec2, .new(0, 0));
     try ui.world.set(view_entity, ui.component_ids.size, Ui.types.SizeMode, .fixed(@floatFromInt(surface_logical_size[0]), @floatFromInt(surface_logical_size[1])));
     

@@ -10,9 +10,8 @@ const resource = @import("../resource.zig");
 const DepthPrepassPass = @This();
 pipeline: gpu.GpuDevice.GpuPipeline,
 vs_ubuf: gpu.GpuDevice.GpuBuffer,
-clear_color: core.Color,
 
-pub fn init(gpu_device: *gpu.GpuDevice, shader: gpu.GpuDevice.GpuShader, clear_color: core.Color) !DepthPrepassPass {
+pub fn init(gpu_device: *gpu.GpuDevice, shader: gpu.GpuDevice.GpuShader) !DepthPrepassPass {
     return .{
         .pipeline = try gpu_device.createPipeline(.{
             .name = "Depth prepass pipeline",
@@ -36,7 +35,6 @@ pub fn init(gpu_device: *gpu.GpuDevice, shader: gpu.GpuDevice.GpuShader, clear_c
             .usage = .dynamic,
             .size = @sizeOf([3]math.Mat4)
         }),
-        .clear_color = clear_color
     };
 }
 
@@ -45,7 +43,7 @@ pub fn execute(self: *DepthPrepassPass, ctx: pass.PassContext) void {
     const color_handle = ctx.resources.get(resource.color_target, .image);
     ctx.device.beginPass(.{
         .clear_depth = 0.0,
-        .clear_color = self.clear_color,
+        .clear_color = ctx.scene.clear_color,
         .width = ctx.view.viewport_size[0],
         .height = ctx.view.viewport_size[1],
         .depth_target = depth_handle,

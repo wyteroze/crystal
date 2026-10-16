@@ -12,9 +12,8 @@ const ForwardPass = @This();
 pipeline: gpu.GpuDevice.GpuPipeline,
 vs_ubuf: gpu.GpuDevice.GpuBuffer,
 light_ubuf: gpu.GpuDevice.GpuBuffer,
-clear_color: core.Color,
 
-pub fn init(gpu_device: *gpu.GpuDevice, shader: gpu.GpuDevice.GpuShader, clear_color: core.Color) !ForwardPass {
+pub fn init(gpu_device: *gpu.GpuDevice, shader: gpu.GpuDevice.GpuShader) !ForwardPass {
     return .{
         .pipeline = try gpu_device.createPipeline(.{
             .name = "Forward pass pipeline",
@@ -49,7 +48,6 @@ pub fn init(gpu_device: *gpu.GpuDevice, shader: gpu.GpuDevice.GpuShader, clear_c
             .usage = .dynamic, 
             .size = @sizeOf(gpu.types.GpuLightParams) 
         }),
-        .clear_color = clear_color
     };
 }
 
@@ -73,7 +71,7 @@ pub fn execute(self: *ForwardPass, ctx: pass.PassContext) void {
         (ctx.view.viewport_size[1] + 15) / 16
     };
     const light_params = gpu.types.GpuLightParams{
-        .ambient = .{ 0.1, 0.1, 0.1 },
+        .ambient = ctx.scene.ambient.toArr()[0..3].*,
         .screen_size = ctx.view.viewport_size,
         .tile_count = tile_count
     };
