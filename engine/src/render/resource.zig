@@ -6,26 +6,31 @@ const gpu = @import("../gpu/gpu.zig");
 // Used by passes
 pub const color_target: ResourceRef = .fromName("color_target");
 pub const depth_buffer: ResourceRef = .fromName("depth_buffer");
+pub const depth_texture: ResourceRef = .fromName("depth_texture");
 pub const lights_buffer: ResourceRef = .fromName("lights_buffer");
 pub const light_grid: ResourceRef = .fromName("light_grid");
 pub const light_index_list: ResourceRef = .fromName("light_index_list");
 pub const default_image: ResourceRef = .fromName("default_image");
 pub const default_sampler: ResourceRef = .fromName("default_sampler");
 
-pub const ResourceKind = enum { image, buffer, storage_buffer, sampler };
+pub const ResourceKind = enum { image, buffer, storage_buffer, sampler, render_target, depth_target };
 pub const ResourceHandle = union(ResourceKind) {
     image: gpu.types.ImageHandle,
     buffer: gpu.types.BufferHandle,
     storage_buffer: gpu.types.BufferHandle,
-    sampler: gpu.types.SamplerHandle
+    sampler: gpu.types.SamplerHandle,
+    render_target: gpu.types.RenderTargetHandle,
+    depth_target: gpu.types.DepthTargetHandle,
 };
+
+const hash_seed = 420;
 
 pub const ResourceRef = struct {
     id: u64,
     name: []const u8,
 
     pub fn fromName(name: []const u8) ResourceRef {
-        return .{ .id = std.hash.Wyhash.hash(420, name), .name = name };
+        return .{ .id = std.hash.Wyhash.hash(hash_seed, name), .name = name };
     }
 };
 
@@ -48,7 +53,9 @@ pub const ResourceTable = struct {
         .image => gpu.types.ImageHandle,
         .buffer => gpu.types.BufferHandle,
         .storage_buffer => gpu.types.BufferHandle,
-        .sampler => gpu.types.SamplerHandle
+        .sampler => gpu.types.SamplerHandle,
+        .render_target => gpu.types.RenderTargetHandle,
+        .depth_target => gpu.types.DepthTargetHandle
     } {
         const handle = self.map.get(ref.id) orelse return null;
         return switch (handle) {

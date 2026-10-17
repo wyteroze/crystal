@@ -8,10 +8,13 @@
 
 typedef struct { void* ptr; } CrystalBufferHandle;
 typedef struct { void* ptr; } CrystalImageHandle;
+typedef struct { void* ptr; } CrystalRenderTargetHandle;
+typedef struct { void* ptr; } CrystalDepthTargetHandle;
 typedef struct { void* ptr; } CrystalShaderHandle;
 typedef struct { void* ptr; } CrystalPipelineHandle;
 typedef struct { void* ptr; } CrystalComputePipelineHandle;
 typedef struct { void* ptr; } CrystalSamplerHandle;
+typedef struct { void* ptr; } CrystalSwapchainHandle;
 
 typedef enum {
     CRYSTAL_BACKEND_OPENGL,
@@ -177,7 +180,10 @@ typedef struct {
     CrystalColorWriteMask color_write_mask;
     bool alpha_blend_enabled;
 
+    CrystalPixelFormat depth_format;
+    bool has_depth_format;
     CrystalPixelFormat color_format;
+    bool has_color_format;
     CrystalCompareFunc comparison_func;
 } CrystalPipelineDesc;
 
@@ -194,14 +200,14 @@ typedef struct {
     float clear_color[4];
     bool has_clear_color;
 
-    float clear_depth;
     bool has_clear_depth;
+    float clear_depth;
 
-    CrystalImageHandle depth_target;
     bool has_depth_target;
+    CrystalDepthTargetHandle depth_target;
 
-    CrystalImageHandle color_target;
     bool has_color_target;
+    CrystalRenderTargetHandle color_target;
 } CrystalPassDesc;
 
 typedef struct {
@@ -231,3 +237,8 @@ typedef struct {
     const CrystalShaderStageDesc* stages;
     size_t stages_len;
 } CrystalShaderDesc;
+
+typedef struct {
+    void* surface_handle;
+    uint32_t size[2];
+} CrystalSwapchainDesc;

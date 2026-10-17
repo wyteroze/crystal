@@ -93,7 +93,10 @@ pub const PipelineDesc = struct {
     depth_write: bool = false,
     color_write_mask: ColorWriteMask = .all(),
     alpha_blend_enabled: bool = false,
-    color_format: types.PixelFormat = .bgra8,
+    /// Null = no depth attachment
+    depth_format: ?types.PixelFormat = .d32,
+    /// Null = no color attachment
+    color_format: ?types.PixelFormat = .bgra8,
     comparison_func: types.ComparisonFunc = .greater_equal
 };
 
@@ -113,8 +116,8 @@ pub const PassDesc = struct {
     width: u32, height: u32,
     clear_color: ?core.Color = null,
     clear_depth: ?f32 = null,
-    depth_target: ?types.ImageHandle = null,
-    color_target: ?types.ImageHandle = null
+    depth_target: ?types.DepthTargetHandle = null,
+    color_target: ?types.RenderTargetHandle = null
 };
 
 // TODO: The [4] (or similar in other places) is a remnant
@@ -141,4 +144,9 @@ pub const ShaderStageDesc = struct {
 
 pub const ShaderDesc = struct {
     stages: []const ShaderStageDesc
+};
+
+pub const SwapchainDesc = struct {
+    surface_handle: *anyopaque,
+    size: [2]u32,
 };

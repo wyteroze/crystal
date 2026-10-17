@@ -5,10 +5,10 @@ const pass = @import("pass.zig");
 const gpu = @import("../../gpu/gpu.zig");
 const core = @import("../../core/core.zig");
 const resource = @import("../resource.zig");
+const Renderer = @import("../Renderer.zig");
 const math = core.math;
 
-const tile_size = 16;
-const max_lights_per_tile = 256;
+const tile_size = Renderer.tile_size;
 
 const CullParams = extern struct {
     inv_proj: [4][4]f32,
@@ -22,14 +22,8 @@ const CullParams = extern struct {
 const LightCullPass = @This();
 compute_pipeline: gpu.GpuDevice.GpuComputePipeline,
 cull_ubuf: gpu.GpuDevice.GpuBuffer,
-light_grid: gpu.GpuDevice.GpuBuffer,
-light_index_list: gpu.GpuDevice.GpuBuffer,
-tile_count: [2]u32,
 
-pub fn init(gpu_device: *gpu.GpuDevice, shader: gpu.GpuDevice.GpuShader, surface_size: [2]u32) !LightCullPass {
-    const tile_count = calculateTileCount(surface_size);
-    const num_tiles = tile_count[0] * tile_count[1];
-
+pub fn init(gpu_device: *gpu.GpuDevice, shader: gpu.GpuDevice.GpuShader) !LightCullPass {
     return .{
         .compute_pipeline = try gpu_device.createComputePipeline(.{
             .name = "Light cull pipeline",
@@ -48,33 +42,25 @@ pub fn init(gpu_device: *gpu.GpuDevice, shader: gpu.GpuDevice.GpuShader, surface
             .usage = .dynamic,
             .size = @sizeOf(CullParams)
         }),
-        .light_grid = try gpu_device.createBuffer(.{
-            .name = "Light grid",
-            .type = .storage,
-            .usage = .default,
-            .size = num_tiles * @sizeOf([2]u32),
-            .stride = @sizeOf([2]u32)
-        }),
-        .light_index_list = try gpu_device.createBuffer(.{
-            .name = "Light index list",
-            .type = .storage,
-            .usage = .default,
-            .size = num_tiles * max_lights_per_tile * @sizeOf(u32),
-            .stride = @sizeOf(u32)
-        }),
-        .tile_count = tile_count
     };
 }
 
 pub fn execute(self: *LightCullPass, ctx: pass.PassContext) void {
-    const depth_handle = ctx.resources.get(resource.depth_buffer, .image) orelse @panic("depth_buffer resource is missing!");
-    const lights_handle = ctx.resources.get(resource.lights_buffer, .storage_buffer) orelse @panic("lights_buffer resource is missing!");
+    const depth_tex = ctx.resources.get(resource.depth_texture, .image) orelse @panic("depth_texture missing!");
+    const lights_handle = ctx.resources.get(resource.lights_buffer, .storage_buffer) orelse @panic("lights_buffer missing!");
+    const grid = ctx.resources.get(resource.light_grid, .storage_buffer) orelse @panic("light_grid missing!");
+    const index_list = ctx.resources.get(resource.light_index_list, .storage_buffer) orelse @panic("light_index_list missing!");
+
+    const tile_count: [2]u32 = .{
+        (ctx.view.viewport_size[0] + tile_size - 1) / tile_size,
+        (ctx.view.viewport_size[1] + tile_size - 1) / tile_size,
+    };
 
     const cull_params: CullParams = .{
         .inv_proj = ctx.view.proj_matrix.invertPerspectiveReversedZInf().m,
         .view = ctx.view.view_matrix.m,
         .screen_size = ctx.view.viewport_size,
-        .tile_count = self.tile_count,
+        .tile_count = tile_count,
         .light_count = @intCast(ctx.scene.lights.len)
     };
     self.cull_ubuf.update(std.mem.asBytes(&cull_params));
@@ -83,31 +69,25 @@ pub fn execute(self: *LightCullPass, ctx: pass.PassContext) void {
     self.compute_pipeline.applyBindings(.{
         .resources = &.{
             .{ .name = "cullParams", .handle = .{ .uniform_buffer = self.cull_ubuf.handle } },
-            .{ .name = "depthTexture", .handle = .{ .texture = depth_handle } },
+            .{ .name = "depthTexture", .handle = .{ .texture = depth_tex } },
             .{ .name = "lights", .handle = .{ .storage_buffer = lights_handle } },
-            .{ .name = "lightGrid", .handle = .{ .storage_buffer_rw = self.light_grid.handle } },
-            .{ .name = "lightIndexList", .handle = .{ .storage_buffer_rw = self.light_index_list.handle } }
+            .{ .name = "lightGrid", .handle = .{ .storage_buffer_rw = grid } },
+            .{ .name = "lightIndexList", .handle = .{ .storage_buffer_rw = index_list } },
         }
     });
-
-    self.compute_pipeline.dispatch(self.tile_count[0], self.tile_count[1], 1);
-
-    ctx.resources.put(resource.light_grid, .{ .storage_buffer = self.light_grid.handle }) catch @panic("Out of memory");
-    ctx.resources.put(resource.light_index_list, .{ .storage_buffer = self.light_index_list.handle }) catch @panic("Out of memory");
+    self.compute_pipeline.dispatch(tile_count[0], tile_count[1], 1);
 }
 
 pub fn deinit(self: *LightCullPass, allocator: std.mem.Allocator) void {
     self.compute_pipeline.deinit();
     self.cull_ubuf.deinit();
-    self.light_grid.deinit();
-    self.light_index_list.deinit();
     allocator.destroy(self);
 }
 
 pub fn node(self: *LightCullPass) pass.PassNode {
     return .{
         .name = "LightCullPass",
-        .reads = &.{ resource.depth_buffer, resource.lights_buffer },
+        .reads = &.{ resource.depth_buffer, resource.depth_texture, resource.lights_buffer },
         .writes = &.{ resource.light_grid, resource.light_index_list },
         .ptr = self,
         .execute_fn = struct {
@@ -120,12 +100,5 @@ pub fn node(self: *LightCullPass) pass.PassNode {
                 deinit(@ptrCast(@alignCast(ptr)), allocator);
             }
         }.c
-    };
-}
-
-fn calculateTileCount(surface_size: [2]u32) [2]u32 {
-    return .{
-        (surface_size[0] + tile_size - 1) / tile_size,
-        (surface_size[1] + tile_size - 1) / tile_size
     };
 }

@@ -9,8 +9,8 @@ const DiligentBackend = @import("backends/DiligentBackend.zig");
 pub const Backend = union(enum) {
     diligent: DiligentBackend,
 
-    pub fn initDiligent(surface_handle: ?*anyopaque, surface_size: [2]u32) Backend {
-        return .{ .diligent = .init(surface_handle, surface_size) };
+    pub fn initDiligent() Backend {
+        return .{ .diligent = .init() };
     }
 
     pub fn deinit(self: Backend) void {
@@ -97,12 +97,32 @@ pub const Backend = union(enum) {
         switch (self) { inline else => |b| b.dispatchCompute(h, groups_x, groups_y, groups_z) }
     }
 
-    pub fn endPass(self: Backend) void {
-        switch (self) { inline else => |b| b.endPass() }
+    pub fn createSwapchain(self: Backend, d: desc.SwapchainDesc) types.SwapchainHandle {
+        return switch (self) { inline else => |b| b.createSwapchain(d) };
     }
 
-    pub fn present(self: Backend) void {
-        switch (self) { inline else => |b| b.present() }
+    pub fn presentSwapchain(self: Backend, h: types.SwapchainHandle, vsync: bool) void {
+        switch (self) { inline else => |b| b.presentSwapchain(h, vsync) }
+    }
+
+    pub fn getSwapchainBackbuffer(self: Backend, h: types.SwapchainHandle) types.RenderTargetHandle {
+        return switch (self) { inline else => |b| b.getSwapchainBackbuffer(h) };
+    }
+
+    pub fn resizeSwapchain(self: Backend, h: types.SwapchainHandle, pixel_size: [2]u32) void {
+       switch (self) { inline else => |b| b.resizeSwapchain(h, pixel_size) }
+    }
+
+    pub fn destroySwapchain(self: Backend, h: types.SwapchainHandle) void {
+        switch (self) { inline else => |b| b.destroySwapchain(h) }
+    }
+
+    pub fn imageGetRtv(self: Backend, h: types.ImageHandle) types.RenderTargetHandle {
+        return switch (self) { inline else => |b| b.imageGetRtv(h) };
+    }
+
+    pub fn imageGetDsv(self: Backend, h: types.ImageHandle) types.DepthTargetHandle {
+        return switch (self) { inline else => |b| b.imageGetDsv(h) };
     }
 
     pub fn queryBackend(self: Backend) desc.Backend {

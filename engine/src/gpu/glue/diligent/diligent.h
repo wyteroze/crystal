@@ -12,7 +12,7 @@ struct CrystalDiligentDeviceContext;
 typedef struct CrystalDiligentDeviceContext* CrystalDiligentDeviceHandle;
 
 // Init/deinit
-CrystalDiligentDeviceHandle diligent_init(void* surfaceHandle, uint32_t surfaceSizeX, uint32_t surfaceSizeY);
+CrystalDiligentDeviceHandle diligent_init();
 void diligent_deinit(CrystalDiligentDeviceHandle handle);
 
 // Buffer
@@ -50,7 +50,16 @@ void diligent_destroy_shader(CrystalDiligentDeviceHandle handle, CrystalShaderHa
 void diligent_begin_pass(CrystalDiligentDeviceHandle handle, CrystalPassDesc desc);
 void diligent_end_pass(CrystalDiligentDeviceHandle handle);
 
+// Swapchain
+CrystalSwapchainHandle diligent_create_swapchain(CrystalDiligentDeviceHandle handle, CrystalSwapchainDesc desc);
+void diligent_resize_swapchain(CrystalDiligentDeviceHandle handle, CrystalSwapchainHandle swapH, uint32_t width, uint32_t height);
+void diligent_present_swapchain(CrystalDiligentDeviceHandle handle, CrystalSwapchainHandle swapH, uint32_t sync_interval);
+CrystalRenderTargetHandle diligent_get_swapchain_backbuffer(CrystalDiligentDeviceHandle handle, CrystalSwapchainHandle swapH);
+void diligent_destroy_swapchain(CrystalDiligentDeviceHandle handle, CrystalSwapchainHandle swapH);
+
 // Misc
+CrystalRenderTargetHandle diligent_image_get_rtv(CrystalDiligentDeviceHandle handle, CrystalImageHandle img);
+CrystalDepthTargetHandle diligent_image_get_dsv(CrystalDiligentDeviceHandle handle, CrystalImageHandle img);
 void diligent_present(CrystalDiligentDeviceHandle handle);
 CrystalBackend diligent_query_backend();
 CrystalImageHandle diligent_get_depth_buffer(CrystalDiligentDeviceHandle handle);

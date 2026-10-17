@@ -19,7 +19,8 @@ pub fn init(device: *gpu.GpuDevice, shader: gpu.GpuDevice.GpuShader, cubemap: gp
     const pipeline = try device.createPipeline(.{
         .name = "Skybox pipeline",
         .shader = shader.handle,
-        .cull_mode = .none,
+        .cull_mode = .front,
+        .depth_format = .d32,
         .depth_write = false,
         .layout = &.{},
         .resources = &.{
@@ -52,11 +53,10 @@ pub fn deinit(self: *SkyboxPass, allocator: std.mem.Allocator) void {
 }
 
 fn execute(self: *SkyboxPass, ctx: pass.PassContext) void {
-    const depth_handle = ctx.resources.get(resource.depth_buffer, .image) orelse @panic("depth_buffer resource missing!");
-    const color_handle = ctx.resources.get(resource.color_target, .image);
+    const depth_handle = ctx.resources.get(resource.depth_buffer, .depth_target) orelse @panic("depth_buffer resource missing!");
+    const color_handle = ctx.resources.get(resource.color_target, .render_target);
     ctx.device.beginPass(.{
         .clear_color = ctx.scene.clear_color,
-        .clear_depth = 0,
         .width = ctx.view.viewport_size[0],
         .height = ctx.view.viewport_size[1],
         .depth_target = depth_handle,
@@ -82,8 +82,6 @@ fn execute(self: *SkyboxPass, ctx: pass.PassContext) void {
         }
     });
     self.pipeline.draw(0, 3, 1);
-
-    ctx.device.endPass();
 }
 
 pub fn node(self: *SkyboxPass) pass.PassNode {

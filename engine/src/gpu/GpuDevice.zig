@@ -57,6 +57,14 @@ pub const GpuImage = struct {
     pub fn deinit(self: GpuImage) void {
         self.backend.deleteImage(self.handle);
     }
+
+    pub fn renderTarget(self: GpuImage) types.RenderTargetHandle { 
+        return self.backend.imageGetRtv(self.handle);
+    }
+
+    pub fn depthTarget(self: GpuImage) types.DepthTargetHandle { 
+        return self.backend.imageGetDsv(self.handle);
+    }
 };
 
 pub const GpuPipeline = struct {
@@ -147,6 +155,32 @@ pub const GpuShader = struct {
     }
 };
 
+pub const GpuSwapchain = struct {
+    backend: Backend,
+    handle: types.SwapchainHandle,
+
+    pub fn init(b: Backend, d: desc.SwapchainDesc) !GpuSwapchain {
+        const handle = b.createSwapchain(d);
+        return .{ .backend = b, .handle = handle };
+    }
+
+    pub fn present(self: GpuSwapchain, vsync: bool) void {
+        self.backend.presentSwapchain(self.handle, vsync);
+    }
+
+    pub fn getBackbuffer(self: GpuSwapchain) types.RenderTargetHandle {
+        return self.backend.getSwapchainBackbuffer(self.handle);
+    }
+
+    pub fn resize(self: GpuSwapchain, pixel_size: [2]u32) void {
+        self.backend.resizeSwapchain(self.handle, pixel_size);
+    }
+
+    pub fn deinit(self: GpuSwapchain) void {
+        self.backend.destroySwapchain(self.handle);
+    }
+};
+
 const GpuDevice = @This();
 allocator: std.mem.Allocator,
 backend: Backend,
@@ -194,16 +228,16 @@ pub fn createShader(self: GpuDevice, d: desc.ShaderDesc) !GpuShader {
     return .init(self.backend, self.compiler, d);
 }
 
+pub fn createSwapchain(self: GpuDevice, d: desc.SwapchainDesc) !GpuSwapchain {
+    return .init(self.backend, d);
+}
+
 pub fn applyBindings(self: GpuDevice, b: desc.Bindings) void {
     self.backend.applyBindings(b);
 }
 
 pub fn beginPass(self: GpuDevice, d: desc.PassDesc) void {
     self.backend.beginPass(d);
-}
-
-pub fn endPass(self: GpuDevice) void {
-    self.backend.endPass();
 }
 
 pub fn draw(self: GpuDevice, base: u32, count: u32, instances: u32) void {

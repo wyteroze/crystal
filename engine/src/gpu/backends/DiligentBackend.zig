@@ -34,9 +34,9 @@ fn buildBoundResources(buf: []c.CrystalBoundResource, resources: []const desc.Bo
 const DiligentBackend = @This();
 handle: c.CrystalDiligentDeviceHandle = undefined,
 
-pub fn init(surface_handle: ?*anyopaque, surface_size: [2]u32) DiligentBackend {
+pub fn init() DiligentBackend {
     return .{
-        .handle = c.diligent_init(surface_handle, surface_size[0], surface_size[1])
+        .handle = c.diligent_init()
     };
 }
 
@@ -54,7 +54,7 @@ pub fn createBuffer(self: DiligentBackend, d: desc.BufferDesc) types.BufferHandl
         .data = if (d.data) |data| data.ptr else @ptrFromInt(0),
     });
 
-    return .{ .ptr = buf_h.ptr }; 
+    return .{ .ptr = buf_h.ptr.? }; 
 }
 
 pub fn destroyBuffer(self: DiligentBackend, h: types.BufferHandle) void {
@@ -74,7 +74,7 @@ pub fn createSampler(self: DiligentBackend, d: desc.SamplerDesc) types.SamplerHa
         .mip_filter = @intFromEnum(d.mip_filter)
     });
 
-    return .{ .ptr = sam_h.ptr }; 
+    return .{ .ptr = sam_h.ptr.? }; 
 }
 
 pub fn createImage(self: DiligentBackend, d: desc.ImageDesc) types.ImageHandle {
@@ -88,7 +88,7 @@ pub fn createImage(self: DiligentBackend, d: desc.ImageDesc) types.ImageHandle {
         .is_render_target = d.is_render_target
     });
 
-    return .{ .ptr = img_h.ptr }; 
+    return .{ .ptr = img_h.ptr.? }; 
 }
 
 pub fn destroyImage(self: DiligentBackend, h: types.ImageHandle) void {
@@ -117,11 +117,14 @@ pub fn createPipeline(self: DiligentBackend, d: desc.PipelineDesc) types.Pipelin
             .alpha = d.color_write_mask.alpha
         },
         .alpha_blend_enabled = d.alpha_blend_enabled,
-        .color_format = @intFromEnum(d.color_format),
+        .depth_format = if (d.depth_format) |f| @intFromEnum(f) else 0,
+        .has_depth_format = d.depth_format != null,
+        .color_format = if (d.color_format) |f| @intFromEnum(f) else 0,
+        .has_color_format = d.color_format != null,
         .comparison_func = @intFromEnum(d.comparison_func)
     });
 
-    return .{ .ptr = pipe_h.ptr }; 
+    return .{ .ptr = pipe_h.ptr.? }; 
 }
 
 pub fn destroyPipeline(self: DiligentBackend, h: types.PipelineHandle) void {
@@ -148,7 +151,7 @@ pub fn createComputePipeline(self: DiligentBackend, d: desc.ComputePipelineDesc)
         .resources_len = resources.len
     });
 
-    return .{ .ptr = pipe_h.ptr };
+    return .{ .ptr = pipe_h.ptr.? };
 }
 
 pub fn destroyComputePipeline(self: DiligentBackend, h: types.ComputePipelineHandle) void {
@@ -182,7 +185,7 @@ pub fn createShader(self: DiligentBackend, d: desc.ShaderDesc) types.ShaderHandl
         .stages_len = d.stages.len
     });
 
-    return .{ .ptr = shd_h.ptr };
+    return .{ .ptr = shd_h.ptr.? };
 }
 
 pub fn beginPass(self: DiligentBackend, d: desc.PassDesc) void {
@@ -241,10 +244,44 @@ pub fn applyComputeBindings(self: DiligentBackend, h: types.ComputePipelineHandl
     });
 }
 
-pub fn endPass(self: DiligentBackend) void { c.diligent_end_pass(self.handle); }
+pub fn createSwapchain(self: DiligentBackend, d: desc.SwapchainDesc) types.SwapchainHandle {
+    const swapchain_h = c.diligent_create_swapchain(self.handle, .{
+        .surface_handle = d.surface_handle,
+        .size = d.size,
+    });
 
-pub fn present(self: DiligentBackend) void {
-    c.diligent_present(self.handle);
+    return .{ .ptr = swapchain_h.ptr.? };
+}
+
+pub fn resizeSwapchain(self: DiligentBackend, h: types.SwapchainHandle, size: [2]u32) void {
+    c.diligent_resize_swapchain(self.handle, .{ .ptr = h.ptr }, size[0], size[1]);
+}
+
+pub fn presentSwapchain(self: DiligentBackend, h: types.SwapchainHandle, vsync: bool) void {
+    c.diligent_present_swapchain(self.handle, .{ .ptr = h.ptr }, @intCast(@intFromBool(vsync)));
+}
+
+pub fn getSwapchainBackbuffer(self: DiligentBackend, h: types.SwapchainHandle) types.RenderTargetHandle {
+    const backbuffer_h = c.diligent_get_swapchain_backbuffer(self.handle, .{ .ptr = h.ptr });
+    return .{ .ptr = backbuffer_h.ptr.? };
+}
+
+pub fn destroySwapchain(self: DiligentBackend, h: types.SwapchainHandle) void {
+    c.diligent_destroy_swapchain(self.handle, .{ .ptr = h.ptr });
+}
+
+pub fn endPass(self: DiligentBackend) void { 
+    c.diligent_end_pass(self.handle);
+}
+
+pub fn imageGetRtv(self: DiligentBackend, h: types.ImageHandle) types.RenderTargetHandle {
+    const rt_h = c.diligent_image_get_rtv(self.handle, .{ .ptr = h.ptr });
+    return .{ .ptr = rt_h.ptr.? };
+}
+
+pub fn imageGetDsv(self: DiligentBackend, h: types.ImageHandle) types.DepthTargetHandle {
+    const dt_h = c.diligent_image_get_dsv(self.handle, .{ .ptr = h.ptr });
+    return .{ .ptr = dt_h.ptr.? };
 }
 
 pub fn queryBackend(_: DiligentBackend) desc.Backend {

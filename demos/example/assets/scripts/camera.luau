@@ -58,7 +58,7 @@ function Camera.new(entity: Entity)
         Speed = 1,
         _entity = entity,
     }, Camera) :: Camera
-
+        
     self:_setup()
     self._entity.Updated:Connect(function(dt) self:_step(dt) end)
 

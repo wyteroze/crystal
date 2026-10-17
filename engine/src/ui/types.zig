@@ -13,13 +13,17 @@ pub const Scene = struct {
 };
 pub const Environment = struct {
     ambient: core.Color = .fromRgbFloat(0.1, 0.1, 0.1, 1.0),
-    clear_color: core.Color = .fromRgbFloat(0.1, 0.1, 0.1, 1.0),
+    clear_color: core.Color = .fromRgbFloat(0, 0, 0, 1.0),
 };
 pub const RenderViewOptions = struct {
     camera: ecs.Entity,
     scene: ecs.Entity,
-    size: [2]u32,
+    /// If null, uses the size of the entity.
+    /// If the entity has the same size as the window,
+    /// it renders straight to the swapchain, which is ideal for performance.
+    size: ?[2]u32 = null,
 };
+pub const Window = struct { id: u64, scale: f32 };
 
 pub const ComputedTextLayout = struct {
     quads: []const text.GlyphQuad,

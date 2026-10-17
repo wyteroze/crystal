@@ -42,7 +42,7 @@ pub fn createSurface(_: SdlBackend, d: desc.SurfaceDesc) !types.SurfaceHandle {
         else if (props.x11_display) |win| win.value
         else unreachable;
     
-    return .{ .id = try w.getId(), .handle = handle };
+    return .{ .id = try w.getId(), .handle = handle.? };
 }
 
 pub fn getSurfacePixelSize(_: SdlBackend, h: types.SurfaceHandle) ![2]u32 {
@@ -67,7 +67,11 @@ pub fn getSurfaceScale(_: SdlBackend, h: types.SurfaceHandle) !f32 {
 }
 
 pub fn destroySurface(_: SdlBackend, h: types.SurfaceHandle) void {
-    const w = sdl3.video.Window.fromId(@intCast(h.id)) catch unreachable;
+    const w = sdl3.video.Window.fromId(@intCast(h.id)) catch {
+        std.log.debug("Failed to get window from id: {?s}", .{ sdl3.errors.get() });
+        return;
+    };
+
     w.deinit();
 }
 
@@ -77,6 +81,7 @@ pub fn pollEvent(_: SdlBackend) ?desc.PlatformEvent {
     return switch (event) {
         .quit => return .quit,
         .window_resized => |e| return .{ .surface_resize = .{ 
+            .id = @intCast(e.id),
             .width = @intCast(e.width), 
             .height = @intCast(e.height) 
         } },

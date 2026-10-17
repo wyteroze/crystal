@@ -152,7 +152,7 @@ pub const GamepadConnectionEvent = struct {
 
 pub const PlatformEvent = union(enum) {
     quit: void,
-    surface_resize: struct { width: u32, height: u32 },
+    surface_resize: struct { id: u32, width: u32, height: u32 },
     keyboard_connected: KeyboardConnectionEvent,
     keyboard_disconnected: KeyboardConnectionEvent,
     keyboard_key_down: KeyboardEvent,

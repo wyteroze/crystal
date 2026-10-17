@@ -1,11 +1,14 @@
 // Copyright 2026 wyteroze. Licensed under the Apache-2.0 license.
 
-pub const BufferHandle = struct { ptr: ?*anyopaque };
-pub const ImageHandle = struct { ptr: ?*anyopaque };
-pub const ShaderHandle = struct { ptr: ?*anyopaque };
-pub const PipelineHandle = struct { ptr: ?*anyopaque };
-pub const ComputePipelineHandle = struct { ptr: ?*anyopaque };
-pub const SamplerHandle = struct { ptr: ?*anyopaque };
+pub const BufferHandle = struct { ptr: *anyopaque };
+pub const ImageHandle = struct { ptr: *anyopaque };
+pub const ShaderHandle = struct { ptr: *anyopaque };
+pub const PipelineHandle = struct { ptr: *anyopaque };
+pub const ComputePipelineHandle = struct { ptr: *anyopaque };
+pub const SamplerHandle = struct { ptr: *anyopaque };
+pub const SwapchainHandle = struct { ptr: *anyopaque };
+pub const RenderTargetHandle = struct { ptr: *anyopaque };
+pub const DepthTargetHandle = struct { ptr: *anyopaque };
 
 pub const BufferUsage = enum { default, immutable, dynamic, stream };
 pub const BufferType = enum { vertex, index, uniform, storage };

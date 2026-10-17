@@ -47,7 +47,8 @@ pub const ComponentIds = struct {
     corner_radii: ecs.ComponentId,
     borders: ecs.ComponentId,
     signals: ecs.ComponentId,
-    interactable: ecs.ComponentId
+    interactable: ecs.ComponentId,
+    window: ecs.ComponentId,
 };
 
 const Ui = @This();
@@ -56,6 +57,7 @@ frame_allocator: std.heap.ArenaAllocator,
 component_ids: ComponentIds,
 world: ecs.World,
 changed: std.ArrayList(ecs.Entity),
+main_window: ?ecs.Entity = null,
 
 pressed: ?ecs.Entity = null,
 hovered: ?ecs.Entity = null,
@@ -80,6 +82,7 @@ pub fn init(allocator: std.mem.Allocator) !Ui {
     const borders = try world.registerComponent(Ui.types.Borders, "Borders");
     const signals = try world.registerComponent(ElementSignals, "ElementSignals");
     const interactable = try world.registerComponent(Interactable, "Interactable");
+    const window = try world.registerComponent(types.Window, "Window");
 
     return .{
         .allocator = allocator,
@@ -101,7 +104,8 @@ pub fn init(allocator: std.mem.Allocator) !Ui {
             .image = image,
             .borders = borders,
             .signals = signals,
-            .interactable = interactable
+            .interactable = interactable,
+            .window = window,
         },
     };
 }
@@ -132,11 +136,6 @@ pub fn update(self: *Ui) void {
     self.world.changed_set.clearRetainingCapacity();
 }
 
-fn freeTextLayout(allocator: std.mem.Allocator, bytes: []u8) void {
-    const l: *types.ComputedTextLayout = @ptrCast(@alignCast(bytes.ptr));
-    allocator.free(l.quads);
-}
-
 pub const CreateOptions = struct {
     parent: ?Element = null,
     size: ?types.SizeMode = null,
@@ -156,7 +155,7 @@ pub fn createElement(self: *Ui, options: ?CreateOptions) !Element {
     errdefer entity.destroy();
 
     const opts = options orelse return .{ .entity = entity };
-    if (opts.parent) |p| try entity.setParent(p.entity);
+    try entity.setParent(if (opts.parent) |p| p.entity else self.main_window);
     try self.world.set(entity, self.component_ids.interactable, Interactable, if (opts.interactable) |i| i else true);
     try self.world.set(entity, self.component_ids.size, types.SizeMode, if (opts.size) |s| s else .{});
     try self.world.set(entity, self.component_ids.position, math.Vec2, if (opts.position) |p| p else .zero);

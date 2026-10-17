@@ -19,7 +19,8 @@ pub fn init(gpu_device: *gpu.GpuDevice, shader: gpu.GpuDevice.GpuShader) !Forwar
             .name = "Forward pass pipeline",
             .shader = shader.handle,
             .index_type = .uint32,
-            .cull_mode = .none,
+            .depth_format = .d32,
+            .cull_mode = .back,
             .depth_write = true,
             .resources = &.{
                 .{ .name = "vsParams", .kind = .uniform_buffer, .visibility = .vertex_fragment },
@@ -52,8 +53,8 @@ pub fn init(gpu_device: *gpu.GpuDevice, shader: gpu.GpuDevice.GpuShader) !Forwar
 }
 
 pub fn execute(self: *ForwardPass, ctx: pass.PassContext) void {
-    const depth_handle = ctx.resources.get(resource.depth_buffer, .image) orelse @panic("depth_buffer resource missing!");
-    const color_handle = ctx.resources.get(resource.color_target, .image);
+    const depth_handle = ctx.resources.get(resource.depth_buffer, .depth_target) orelse @panic("depth_buffer resource missing!");
+    const color_handle = ctx.resources.get(resource.color_target, .render_target);
     ctx.device.beginPass(.{
         .width = ctx.view.viewport_size[0],
         .height = ctx.view.viewport_size[1],
@@ -101,8 +102,6 @@ pub fn execute(self: *ForwardPass, ctx: pass.PassContext) void {
 
         self.pipeline.draw(0, obj.mesh.index_count, 1);
     }
-
-    ctx.device.endPass();
 }
 
 pub fn deinit(self: *ForwardPass, allocator: std.mem.Allocator) void {

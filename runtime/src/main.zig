@@ -19,13 +19,52 @@ const Audio = engine.Audio;
 
 const target_fps = 120;
 const fps_seconds: f32 = 1.0 / @as(f32, @floatCast(target_fps));
-const asset_purge_rate_seconds: std.Io.Duration = .fromMilliseconds(250);
-const clear_color: core.Color = .fromRgbFloat(0.1, 0.1, 0.1, 1.0);
+const asset_purge_rate_seconds: std.Io.Duration = .fromMilliseconds(500);
 
+const WindowInfo = struct { surface: Platform.types.SurfaceHandle, entity: ecs.Entity };
 const Camera = struct {
     fov: f32 = 90,
     near_plane: f32 = 0.1,
 };
+
+fn openWindow(platform: *Platform, renderer: *render.Renderer, ui: *Ui, windows: *std.AutoHashMap(u64, WindowInfo), title: [:0]const u8, w: u32, h: u32) !ecs.Entity {
+    const surface = try platform.createSurface(.{ .title = title, .width = w, .height = h, .target = .primary });
+
+    const id: u64 = surface.id;
+    const pixel = try platform.getSurfacePixelSize(surface);
+    const logical = try platform.getSurfaceLogicalSize(surface);
+    const scale = try platform.getSurfaceScale(surface);
+
+    try renderer.createWindow(id, surface.handle, pixel, scale);
+
+    const entity = try ui.world.spawnEntity();
+    try ui.world.set(entity, ui.component_ids.window, Ui.types.Window, .{ .id = id, .scale = scale });
+    try ui.world.set(entity, ui.component_ids.position, math.Vec2, .new(0, 0));
+    try ui.world.set(entity, ui.component_ids.size, Ui.types.SizeMode, .fixed(@floatFromInt(logical[0]), @floatFromInt(logical[1])));
+    try windows.put(id, .{ .surface = surface, .entity = entity });
+
+    return entity;
+}
+
+fn syncWindow(platform: *Platform, renderer: *render.Renderer, ui: *Ui, windows: *std.AutoHashMap(u64, WindowInfo), id: u64) void {
+    const info = windows.get(id) orelse return;
+    const pixel = platform.getSurfacePixelSize(info.surface) catch return;
+    const logical = platform.getSurfaceLogicalSize(info.surface) catch return;
+    const scale = platform.getSurfaceScale(info.surface) catch return;
+
+    renderer.resizeWindow(id, pixel, scale) catch |e| std.log.err("Failed to resized window: {s}", .{ @errorName(e) });
+
+    if (ui.world.getComponent(info.entity, ui.component_ids.window, Ui.types.Window)) |w| w.scale = scale;
+    ui.world.set(info.entity, ui.component_ids.size, Ui.types.SizeMode,
+        .fixed(@floatFromInt(logical[0]), @floatFromInt(logical[1]))) catch {};
+}
+
+fn rootOf(e: ecs.Entity) ecs.Entity {
+    var r = e;
+    while (r.getParent()) |p| r = p;
+
+    return r;
+}
 
 fn collectUiObjects(
     ui: *Ui,
@@ -114,7 +153,6 @@ fn submitToRenderer(w: *ecs.World, ui: *Ui, renderer: *render.Renderer) void {
     const light_id = w.components.id("Light").?;
     const camera_id = w.components.id("Camera").?;
 
-    var ui_objects: std.ArrayList(render.types.UiObject) = .empty;
     var objects: std.ArrayList(render.types.RenderObject) = .empty;
     var lights: std.ArrayList(gpu.types.GpuLight) = .empty;
 
@@ -149,6 +187,7 @@ fn submitToRenderer(w: *ecs.World, ui: *Ui, renderer: *render.Renderer) void {
 
     // TODO: Make querying better. Quite limited right now
     const query = w.query(&.{ mesh_id, image_id });
+
     var iter = query.iterator();
     while (iter.next()) |entity| {
         const mesh = w.getComponent(entity, mesh_id, engine.Assets.AssetHandle);
@@ -182,19 +221,45 @@ fn submitToRenderer(w: *ecs.World, ui: *Ui, renderer: *render.Renderer) void {
 
     const ui_cids = ui.component_ids;
 
+    var window_lists: std.array_hash_map.Auto(u64, struct { id: u64, entity: ecs.Entity, objs: std.ArrayList(render.types.UiObject) }) = .{};
+    {
+        var it = ui.world.query(&.{ ui_cids.window }).iterator();
+        while (it.next()) |e| {
+            const win = ui.world.getComponent(e, ui_cids.window, Ui.types.Window).?;
+            window_lists.put(allocator, e.toU64(), .{ .id = win.id, .entity = e, .objs = .empty }) catch @panic("Out of memory");
+        }
+    }
+
     // Collect RenderViews
     {
         const q =  ui.world.query(&.{ ui_cids.render_view });
+
         var it = q.iterator();
         while (it.next()) |entity| {
             const rv = ui.world.getComponent(entity, ui_cids.render_view, Ui.types.RenderViewOptions).?;
             if (!rv.camera.isAlive() or !rv.scene.isAlive()) continue;
 
+            const root = rootOf(entity);
+            const win = ui.world.getComponent(root, ui_cids.window, Ui.types.Window) orelse continue;
+            const list = window_lists.getPtr(root.toU64()) orelse continue;
+
             const position = ui.world.getComponent(entity, ui_cids.computed_position, math.Vec2) orelse continue;
             const size = ui.world.getComponent(entity, ui_cids.computed_size, math.Vec2) orelse continue;
-            const target = if (renderer.getView(entity.toU64())) |v| v.target else blk: {
-                const v = renderer.createView(entity.toU64(), .{ @max(rv.size[0], 1), @max(rv.size[1], 1) }, rv.camera) catch @panic("Failed to create RenderView");
-                break :blk v.target;
+
+            const px: [2]u32 = .{
+                @max(1, @as(u32, @intFromFloat(@round(size.x * win.scale)))),
+                @max(1, @as(u32, @intFromFloat(@round(size.y * win.scale)))),
+            };
+
+            const view = renderer.getView(entity.toU64()) orelse
+                (renderer.createView(entity.toU64(), px, rv.camera) catch |e| {
+                    std.log.err("Failed to create view: {s}", .{ @errorName(e) });
+                    continue;
+                });
+
+            view.resize(px) catch |e| {
+                std.log.err("Failed to resize view: {s}", .{ @errorName(e) });
+                continue;
             };
 
             const scene = w.getComponent(rv.scene, scene_id, Ui.types.Scene) orelse continue;
@@ -202,42 +267,38 @@ fn submitToRenderer(w: *ecs.World, ui: *Ui, renderer: *render.Renderer) void {
             const cam_pos: math.Vec3 = if (w.getComponent(rv.camera, pos_id, math.Vec3)) |p| p.* else .zero;
             const cam_rot: math.Vec3 = if (w.getComponent(rv.camera, rot_id, math.Vec3)) |r| r.* else .zero;
 
-            const view = math.Mat4.fromTRS(cam_pos, .fromEuler(cam_rot.toRadians()), .one).invertRT();
+            const view_mat = math.Mat4.fromTRS(cam_pos, .fromEuler(cam_rot.toRadians()), .one).invertRT();
             const proj: math.Mat4 = .perspectiveReversedZInf(
-                std.math.degreesToRadians(cam_settings.fov), 
-                // It doesn't matter whether we use logical/pixel size here, we just need the aspect ratio
-                @as(f32, @floatFromInt(renderer.surface_logical_size[0])) / @as(f32, @floatFromInt(renderer.surface_logical_size[1])), 
-                cam_settings.near_plane
+                std.math.degreesToRadians(cam_settings.fov),
+                @as(f32, @floatFromInt(px[0])) / @as(f32, @floatFromInt(px[1])),
+                cam_settings.near_plane,
             );
-            
+
             requests.append(allocator, .{
-                .frame = .{ .view_matrix = view, .proj_matrix = proj, .viewport_size = .{ rv.size[0], rv.size[1] } },
-                .scene = .{ .ambient = scene.environment.ambient, .clear_color = scene.environment.clear_color, .lights = lights.items, .objects = objects.items, .ui_objects = &.{} },
-                .target = target.handle
+                .frame = .{ .view_matrix = view_mat, .proj_matrix = proj, .viewport_size = px },
+                .scene = .{ .ambient = scene.environment.ambient, .clear_color = scene.environment.clear_color,
+                            .lights = lights.items, .objects = objects.items, .ui_objects = &.{} },
+                .render_view_id = entity.toU64(),
             }) catch @panic("Out of memory");
 
-            ui_objects.append(allocator, .{
+            list.objs.append(allocator, .{
                 .pos = position.arr(),
                 .size = size.arr(),
-                .texture = target.handle,
+                .texture = view.target.handle,
                 .sampler = renderer.default_sampler.handle,
                 .uv_size = @splat(1),
-                .color = .fromRgbFloat(1, 1, 1, 1)
+                .color = .fromRgbFloat(1, 1, 1, 1),
             }) catch @panic("Out of memory");
         }
     }
 
-    // 2D world (for UI)
-    {
-        const q = ui.world.query(&.{ ui_cids.computed_position, ui_cids.computed_size });
-        var it = q.iterator();
-        while (it.next()) |entity| {
-            if (entity.getParent() != null) continue; // only recurse from roots
-            collectUiObjects(ui, entity, &ui_objects, allocator);
-        }
+    var window_requests: std.ArrayList(render.types.RenderWindowRequest) = .empty;
+    for (window_lists.values()) |*wl| {
+        collectUiObjects(ui, wl.entity, &wl.objs, allocator);
+        window_requests.append(allocator, .{ .window_id = wl.id, .ui_objects = wl.objs.items }) catch @panic("Out of memory");
     }
 
-    renderer.render(requests.items, ui_objects.items) catch |e| std.log.err("render() failed: {s}", .{ @errorName(e) });
+    renderer.render(requests.items, window_requests.items) catch |e| std.log.err("render() failed: {s}", .{ @errorName(e) });
 }
 
 fn submitToAudio(w: *ecs.World, audio: *Audio) void {
@@ -337,13 +398,8 @@ pub fn main(init: std.process.Init) !void {
     var input: Input = undefined;
     try input.init(input_allocator.allocator(), &platform, &ui);
 
-    const surface = try platform.createSurface(.{ .title = "crystal", .width = 1280, .height = 720, .target = .primary });
-    const surface_logical_size = try platform.getSurfaceLogicalSize(surface);
-    const surface_pixel_size = try platform.getSurfacePixelSize(surface);
-    const surface_scale = try platform.getSurfaceScale(surface);
-
     var gpu_allocator: core.TrackedAllocator = .init(allocator, "Gpu");
-    var gpu_device: gpu.GpuDevice = try .init(gpu_allocator.allocator(), .initDiligent(surface.handle, surface_pixel_size));
+    var gpu_device: gpu.GpuDevice = try .init(gpu_allocator.allocator(), .initDiligent());
 
     var asset_allocator: core.TrackedAllocator = .init(allocator, "Assets");
     var assets: engine.Assets = try .init(asset_allocator.allocator(), io, &gpu_device, project_path);
@@ -353,7 +409,7 @@ pub fn main(init: std.process.Init) !void {
     try skybox_cubemap.upload(.{ .is_cubemap = true });
 
     var renderer_allocator: core.TrackedAllocator = .init(allocator, "Renderer");
-    var renderer: render.Renderer = try .init(renderer_allocator.allocator(), surface_pixel_size, surface_logical_size, surface_scale, &gpu_device, try skybox_cubemap.gpuGet(.image));
+    var renderer: render.Renderer = try .init(renderer_allocator.allocator(), &gpu_device, try skybox_cubemap.gpuGet(.image));
 
     // Create the world
     var ecs_allocator: core.TrackedAllocator = .init(allocator, "ECSWorld");
@@ -366,6 +422,11 @@ pub fn main(init: std.process.Init) !void {
     var host: scripting.bind.Host = .{ .world = &world, .assets = &assets, .input = &input, .ui = &ui, .audio = &audio };
     var runtime: scripting.Runtime = try .init(lua_allocator.allocator(), &host);
 
+    var windows: std.AutoHashMap(u64, WindowInfo) = .init(allocator);
+    const window_entity = try openWindow(&platform, &renderer, &ui, &windows, "crystal", 1280, 720);
+    const window_entity_2 = try openWindow(&platform, &renderer, &ui, &windows, "crystal 2", 854, 480);
+    ui.main_window = window_entity;
+
     defer { 
         world.deinit();
         ui.deinit();
@@ -373,11 +434,14 @@ pub fn main(init: std.process.Init) !void {
         renderer.deinit();
         gpu_device.deinit();
         input.deinit();
-        platform.destroySurface(surface);
-        platform.deinit();
         scheduler.deinit();
         runtime.deinit();
         assets.deinit();
+
+        var win_iter = windows.valueIterator();
+        while (win_iter.next()) |i| platform.destroySurface(i.surface);
+        windows.deinit();
+        platform.deinit();
     }
     
     // Register components
@@ -407,6 +471,12 @@ pub fn main(init: std.process.Init) !void {
     try world.set(camera, listener_component, Audio.types.AudioListener, .{});
     try world.set(camera, camera_component, Camera, .{});
 
+    const camera_2 = try world.spawnEntity();
+    try world.set(camera_2, pos_component, math.Vec3, .new(0, 0, 0));
+    try world.set(camera_2, rot_component, math.Vec3, .new(0, 0, 0));
+    try world.set(camera_2, scale_component, math.Vec3, .new(1, 1, 1));
+    try world.set(camera_2, camera_component, Camera, .{});
+
     // Camera script
     {
         const source = try assets.load("assets://scripts/camera.luau");
@@ -424,11 +494,6 @@ pub fn main(init: std.process.Init) !void {
 
     // Spawn a new entity
     const entity = try world.spawnEntity();
-    // try world.set(entity, speaker_component, Audio.Speaker, .{ .audio = &audio });
-    // const loaded_audio = try assets.load("assets://audios/Lifestyle - Rich Gang.mp3");
-    // var speaker = entity.getComponent(speaker_component, Audio.Speaker).?;
-
-    // _ = try speaker.play(loaded_audio.cpuClone(), .{});
 
     const light = try world.spawnEntity();
     try world.set(light, light_component, render.types.Light, .{
@@ -455,25 +520,30 @@ pub fn main(init: std.process.Init) !void {
 
     // Render at logical size for 3D, while UI renders at pixel size to stay crisp.
     const view_entity = try ui.world.spawnEntity();
-    try ui.world.set(view_entity, ui.component_ids.render_view, Ui.types.RenderViewOptions, .{ .camera = camera, .scene = scene, .size = surface_logical_size });
+    try ui.world.set(view_entity, ui.component_ids.render_view, Ui.types.RenderViewOptions, .{ .camera = camera, .scene = scene });
     try ui.world.set(view_entity, ui.component_ids.position, math.Vec2, .new(0, 0));
-    try ui.world.set(view_entity, ui.component_ids.size, Ui.types.SizeMode, .fixed(@floatFromInt(surface_logical_size[0]), @floatFromInt(surface_logical_size[1])));
-    
+    try ui.world.set(view_entity, ui.component_ids.size, Ui.types.SizeMode, .{ .width = .fill, .height = .fill });
+    try view_entity.setParent(window_entity);
+
+    const view_entity_2 = try ui.world.spawnEntity();
+    try ui.world.set(view_entity_2, ui.component_ids.render_view, Ui.types.RenderViewOptions, .{ .camera = camera_2, .scene = scene });
+    try ui.world.set(view_entity_2, ui.component_ids.position, math.Vec2, .new(0, 0));
+    try ui.world.set(view_entity_2, ui.component_ids.size, Ui.types.SizeMode, .{ .width = .fill, .height = .fill });
+    try view_entity_2.setParent(window_entity_2);
+
     var running = true;
 
+    var context = .{ &running, &platform, &renderer, &ui, &windows };
     const event_con = try platform.platform_event.connect(struct {
         fn c(ctx: anytype, e: Platform.desc.PlatformEvent) void {
             switch (e) {
                 .quit => ctx[0].* = false,
-                // .surface_resize => |sz| {
-                //     ctx[1].*[0] = sz.width;
-                //     ctx[1].*[1] = sz.height;
-                // },
+                .surface_resize => |evt| syncWindow(ctx[1], ctx[2], ctx[3], ctx[4], evt.id),
 
                 else => {}
             }
         }
-    }.c, @constCast(&.{ &running }));
+    }.c, &context);
     defer event_con.disconnect();
 
     var last_time = std.Io.Clock.awake.now(io);
@@ -522,11 +592,6 @@ pub fn main(init: std.process.Init) !void {
             // std.log.info("{f}", .{ gpu_allocator });
 
             // std.log.info("[Lua GC]: {f}", .{core.SizeFormatter.fmtSize( @as(u64, @intCast(runtime.gcCount())) * 1024) });
-        }
-
-        const frame_time = start.durationTo(end);
-        if (frame_time.toNanoseconds() > 0) {
-            io.sleep(frame_time, .awake) catch {};
         }
     }
 }

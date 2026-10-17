@@ -38,15 +38,16 @@ pub const UiObject = struct {
 };
 
 pub const RenderScene = struct {
-    ui_objects: []UiObject,
-    objects: []RenderObject,
-    lights: []gpu.types.GpuLight,
-    clear_color: core.Color = .fromRgbFloat(0.1, 0.1, 0.1, 1.0),
+    ui_objects: []const UiObject,
+    objects: []const RenderObject,
+    lights: []const gpu.types.GpuLight,
+    clear_color: core.Color = .fromRgbFloat(0, 0, 0, 1.0),
     ambient: core.Color = .fromRgbFloat(0.1, 0.1, 0.1, 1.0),
 };
 
 pub const RenderFrame = struct {
     viewport_size: [2]u32,
+    scale: f32 = 1,
     view_matrix: math.Mat4,
     proj_matrix: math.Mat4,
 };
@@ -54,10 +55,32 @@ pub const RenderFrame = struct {
 pub const RenderViewRequest = struct {
     frame: RenderFrame,
     scene: RenderScene,
-    // If null, renders straight to swapchain.
-    // This is much better for performance,
-    // so use it when possible.
-    target: ?gpu.types.ImageHandle
+    render_view_id: u64,
+};
+
+pub const RenderWindowRequest = struct {
+    window_id: u64,
+    ui_objects: []const UiObject,
+};
+
+pub const RenderWindow = struct {
+    swapchain: gpu.GpuDevice.GpuSwapchain,
+    pixel_size: [2]u32,
+    scale: f32,
+    vsync: bool = true,
+
+    pub fn resize(self: *RenderWindow, pixel_size: [2]u32, scale: f32) !void {
+        // Minimized
+        self.scale = scale;
+        if (pixel_size[0] == 0 or pixel_size[1] == 0) {
+            self.pixel_size = pixel_size;
+            return;
+        }
+
+        if (std.mem.eql(u32, &self.pixel_size, &pixel_size)) return;
+        self.pixel_size = pixel_size;
+        self.swapchain.resize(pixel_size);
+    }
 };
 
 pub const LightKind = enum { point, directional };

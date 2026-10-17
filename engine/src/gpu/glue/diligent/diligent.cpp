@@ -44,7 +44,7 @@ using namespace Diligent;
 struct CrystalDiligentDeviceContext {
     IRenderDevice* device;
     IDeviceContext* context;
-    ISwapChain* swapchain;
+    IEngineFactory* factory;
 };
 
 struct CrystalDiligentShader {
@@ -163,29 +163,27 @@ static std::vector<ShaderResourceVariableDesc> buildResourceVars(const CrystalRe
 
 // Implementation
 
-CrystalDiligentDeviceHandle diligent_init(void* surfaceHandle, uint32_t surfaceSizeX, uint32_t surfaceSizeY) {
+CrystalDiligentDeviceHandle diligent_init() {
+    SetDebugMessageCallback([](DEBUG_MESSAGE_SEVERITY sev, const Char* msg, const Char*, const Char*, int) {
+        std::cerr << "[Diligent] " << msg << "\n";
+    });
+
     CrystalDiligentDeviceHandle handle = new CrystalDiligentDeviceContext();
-    SwapChainDesc SCDesc;
-    SCDesc.DepthBufferFormat = TEX_FORMAT_D32_FLOAT;
 
     IRenderDevice* device;
     IDeviceContext* context;
-    ISwapChain* swapchain;
+    IEngineFactory* factory;
 
 #ifdef CRYSTAL_D3D11_BACKEND
     EngineD3D11CreateInfo EngineCI;
-    auto *factoryD3D11 LoadAndGetEngineFactoryD3D11();
+    auto *factoryD3D11 = LoadAndGetEngineFactoryD3D11();
     factoryD3D11->CreateDeviceAndContextsD3D11(EngineCI, &device, &context);
-
-    OS_WINDOW Window{surfaceHandle};
-    factoryD3D11->CreateSwapChainD3D11(device, context, SCDesc, FullScreenModeDesc{}, Window, &swapchain);
+    factory = factoryD3D11;
 #elif CRYSTAL_D3D12_BACKEND
     EngineD3D12CreateInfo EngineCI;
-    auto *factoryD3D12 LoadAndGetEngineFactoryD3D12();
+    auto *factoryD3D12 = LoadAndGetEngineFactoryD3D12();
     factoryD3D12->CreateDeviceAndContextsD3D12(EngineCI, &device, &context);
-
-    OS_WINDOW Window{surfaceHandle};
-    factoryD3D11->CreateSwapChainD3D12(device, context, SCDesc, FullScreenModeDesc{}, Window, &swapchain);
+    factory = factoryD3D12;
 #elif CRYSTAL_OPENGL_BACKEND
     auto* factoryOpenGL = LoadAndGetEngineFactoryOpenGL();
 
@@ -193,33 +191,29 @@ CrystalDiligentDeviceHandle diligent_init(void* surfaceHandle, uint32_t surfaceS
     EngineCI.Window = OS_WINDOW{surfaceHandle};
 
     factoryOpenGL->CreateDeviceAndSwapChainGL(EngineCI, &device, &context, SCDesc, &swapchain);
+    factory = factoryOpenGL;
 #elif CRYSTAL_VULKAN_BACKEND
     EngineVkCreateInfo EngineCI;
     EngineCI.EnableValidation = true;
     EngineCI.SetValidationLevel(VALIDATION_LEVEL_2);
+
     auto* factoryVk = LoadAndGetEngineFactoryVk();
     factoryVk->CreateDeviceAndContextsVk(EngineCI, &device, &context);
-    
-    OS_WINDOW Window{surfaceHandle};
-    factoryVk->CreateSwapChainVk(device, context, SCDesc, Window, &swapchain);
-    if (!swapchain) {
-        std::cerr << "Crystal C++ [FATAL]: Failed to create swapchain \n";
-        exit(EXIT_FAILURE);
-    }
+    factory = factoryVk;
 #endif
 
     handle->device = device;
     handle->context = context;
-    handle->swapchain = swapchain;
+    handle->factory = factory;
 
     return handle;
 }
 
 void diligent_deinit(CrystalDiligentDeviceHandle handle) {
-    handle->device->Release();
     handle->context->Flush();
+    handle->context->WaitForIdle();
     handle->context->Release();
-    handle->swapchain->Release();
+    handle->device->Release();
     delete handle;
 }
 
@@ -426,10 +420,6 @@ CrystalPipelineHandle diligent_create_pipeline(CrystalDiligentDeviceHandle handl
     psoDesc.Name = desc.name;
     psoDesc.PipelineType = PIPELINE_TYPE_GRAPHICS;
 
-    graphicsPipeline.NumRenderTargets = 1;
-    graphicsPipeline.RTVFormats[0] = crystalPixelFormatToDiligent(desc.color_format);
-    graphicsPipeline.DSVFormat = TEX_FORMAT_D32_FLOAT;
-
     switch (desc.cull_mode) {
         case NONE:
             graphicsPipeline.RasterizerDesc.CullMode = CULL_MODE_NONE;
@@ -448,9 +438,25 @@ CrystalPipelineHandle diligent_create_pipeline(CrystalDiligentDeviceHandle handl
     if (desc.color_write_mask.blue) writeMask |= COLOR_MASK_BLUE;
     if (desc.color_write_mask.alpha) writeMask |= COLOR_MASK_ALPHA;
     graphicsPipeline.BlendDesc.RenderTargets[0].RenderTargetWriteMask = writeMask;
-    graphicsPipeline.DepthStencilDesc.DepthEnable = desc.depth_write;
-    graphicsPipeline.DepthStencilDesc.DepthWriteEnable = desc.depth_write;
     graphicsPipeline.DepthStencilDesc.DepthFunc = crystalComparisonFuncToDiligent(desc.comparison_func);
+
+    if (desc.has_depth_format) {
+        graphicsPipeline.DSVFormat = crystalPixelFormatToDiligent(desc.depth_format);
+        graphicsPipeline.DepthStencilDesc.DepthEnable = desc.depth_write;
+        graphicsPipeline.DepthStencilDesc.DepthWriteEnable = desc.depth_write;
+    } else {
+        graphicsPipeline.DSVFormat = TEX_FORMAT_UNKNOWN;
+        graphicsPipeline.DepthStencilDesc.DepthEnable = false;
+        graphicsPipeline.DepthStencilDesc.DepthEnable = false;
+    }
+
+    if (desc.has_color_format) {
+        graphicsPipeline.NumRenderTargets = 1;
+        graphicsPipeline.RTVFormats[0] = crystalPixelFormatToDiligent(desc.color_format);
+    } else {
+        graphicsPipeline.NumRenderTargets = 0;
+        graphicsPipeline.RTVFormats[0] = TEX_FORMAT_UNKNOWN;
+    }
 
     if (desc.alpha_blend_enabled) {
         auto& rt0 = psoCreateInfo.GraphicsPipeline.BlendDesc.RenderTargets[0];
@@ -756,36 +762,15 @@ void diligent_dispatch_compute(CrystalDiligentDeviceHandle handle, CrystalComput
 }
 
 void diligent_begin_pass(CrystalDiligentDeviceHandle handle, CrystalPassDesc desc) {
-    ITextureView* pRTV = nullptr;
-    if (desc.has_color_target) {
-        auto* tex = reinterpret_cast<ITexture*>(desc.color_target.ptr);
-        pRTV = tex->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET);
-        if (!pRTV) {
-            std::cerr << "Crystal C++ [FATAL]: color_target has no RENDER_TARGET view\n";
-            exit(EXIT_FAILURE);
-        }
-    } else {
-        pRTV = handle->swapchain->GetCurrentBackBufferRTV();
-    }
+    ITextureView* pRTV = desc.has_color_target ? reinterpret_cast<ITextureView*>(desc.color_target.ptr) : nullptr;
+    ITextureView* pDSV = desc.has_depth_target ? reinterpret_cast<ITextureView*>(desc.depth_target.ptr) : nullptr;
 
-    ITextureView* pDSV = nullptr;
-    if (desc.has_depth_target) {
-        auto* tex = reinterpret_cast<ITexture*>(desc.depth_target.ptr);
-        pDSV = tex->GetDefaultView(TEXTURE_VIEW_DEPTH_STENCIL);
-        if (!pDSV) {
-            std::cerr << "Crystal C++ [FATAL]: depth_target has no DEPTH_STENCIL view (missing BIND_DEPTH_STENCIL?)\n";
-            exit(EXIT_FAILURE);
-        }
-    } else {
-        pDSV = handle->swapchain->GetDepthBufferDSV();
-    }
+    handle->context->SetRenderTargets(pRTV ? 1 : 0, pRTV ? &pRTV : nullptr, pDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
-    handle->context->SetRenderTargets(1, &pRTV, pDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-
-    if (desc.has_clear_color) 
+    if (pRTV && desc.has_clear_color) 
         handle->context->ClearRenderTarget(pRTV, desc.clear_color, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
-    if (desc.has_clear_depth) 
+    if (pDSV && desc.has_clear_depth) 
         handle->context->ClearDepthStencil(pDSV, CLEAR_DEPTH_FLAG | CLEAR_STENCIL_FLAG, desc.clear_depth, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     
     Viewport VP;
@@ -794,12 +779,86 @@ void diligent_begin_pass(CrystalDiligentDeviceHandle handle, CrystalPassDesc des
     handle->context->SetViewports(1, &VP, desc.width, desc.height);
 }
 
-void diligent_end_pass(CrystalDiligentDeviceHandle handle) {
-    // No-op for diligent
+CrystalSwapchainHandle diligent_create_swapchain(CrystalDiligentDeviceHandle handle, CrystalSwapchainDesc desc) {
+    OS_WINDOW window{desc.surface_handle};
+    
+    ISwapChain* swapchain = nullptr;
+    SwapChainDesc SCDesc;
+    SCDesc.DepthBufferFormat = TEX_FORMAT_UNKNOWN;
+    SCDesc.Width = desc.size[0];
+    SCDesc.Height = desc.size[1];
+    
+#ifdef CRYSTAL_D3D11_BACKEND
+    auto factoryD3D11 = reinterpret_cast<IEngineFactoryD3D11*>(handle->factory);
+    factoryD3D11->CreateSwapChainD3D11(handle->device, handle->context, SCDesc, FullScreenModeDesc{}, Window, &swapchain);
+#elif CRYSTAL_D3D12_BACKEND
+    auto factoryD3D12 = reinterpret_cast<IEngineFactoryD3D12*>(handle->factory);
+    factoryD3D12->CreateSwapChainD3D12(handle->device, handle->context, SCDesc, FullScreenModeDesc{}, Window, &swapchain);
+#elif CRYSTAL_OPENGL_BACKEND
+    std::cerr << "OpenGL support is temporarily broken, sorry\n";
+    exit(EXIT_FAILURE);
+#elif CRYSTAL_VULKAN_BACKEND
+    auto factoryVk = reinterpret_cast<IEngineFactoryVk*>(handle->factory);
+    factoryVk->CreateSwapChainVk(handle->device, handle->context, SCDesc, window, &swapchain);
+#endif
+
+    if (!swapchain) {
+        std::cerr << "Failed to create swapchain\n";
+        exit(EXIT_FAILURE);
+    }
+
+    return { .ptr = swapchain };
 }
 
-void diligent_present(CrystalDiligentDeviceHandle handle) {
-    handle->swapchain->Present();
+void diligent_resize_swapchain(CrystalDiligentDeviceHandle handle, CrystalSwapchainHandle swapH, uint32_t width, uint32_t height) {
+    if (width == 0 || height == 0) return;
+    handle->context->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE);
+
+    auto swapchain = reinterpret_cast<ISwapChain*>(swapH.ptr);
+    swapchain->Resize(width, height);
+}
+
+void diligent_present_swapchain(CrystalDiligentDeviceHandle handle, CrystalSwapchainHandle swapH, uint32_t sync_interval) {
+    auto swapchain = reinterpret_cast<ISwapChain*>(swapH.ptr);
+    swapchain->Present(sync_interval);
+}
+
+CrystalRenderTargetHandle diligent_get_swapchain_backbuffer(CrystalDiligentDeviceHandle handle, CrystalSwapchainHandle swapH) {
+    auto swapchain = reinterpret_cast<ISwapChain*>(swapH.ptr);
+    auto backbuffer = swapchain->GetCurrentBackBufferRTV();
+
+    return { .ptr = backbuffer };
+}
+
+void diligent_destroy_swapchain(CrystalDiligentDeviceHandle handle, CrystalSwapchainHandle swapH) {
+    handle->context->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE);
+    handle->context->Flush();
+    handle->context->WaitForIdle();
+
+    auto swapchain = reinterpret_cast<ISwapChain*>(swapH.ptr);
+    swapchain->Release();
+}
+
+CrystalRenderTargetHandle diligent_image_get_rtv(CrystalDiligentDeviceHandle handle, CrystalImageHandle img) {
+    auto* tex = reinterpret_cast<ITexture*>(img.ptr);
+    auto* view = tex->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET);
+    if (!view) {
+        std::cerr << "[FATAL]: image was not created with is_render_target\n";
+        exit(EXIT_FAILURE);
+    }
+
+    return { .ptr = view };
+}
+
+CrystalDepthTargetHandle diligent_image_get_dsv(CrystalDiligentDeviceHandle handle, CrystalImageHandle img) {
+    auto* tex = reinterpret_cast<ITexture*>(img.ptr);
+    auto* view = tex->GetDefaultView(TEXTURE_VIEW_DEPTH_STENCIL);
+    if (!view) {
+        std::cerr << "[FATAL]: image has no DEPTH_STENCIL view\n";
+        exit(EXIT_FAILURE);
+    }
+
+    return { .ptr = view };
 }
 
 CrystalBackend diligent_query_backend() {

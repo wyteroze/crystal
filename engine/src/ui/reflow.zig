@@ -45,9 +45,18 @@ pub fn reflowUi(
         cache.clearRetainingCapacity();
 
         const measured = measure(r.*, world, ids, &cache, null);
-        const origin: math.Vec2 = if (r.*.getParent() == null)
-            (if (world.getComponent(r.*, ids.position, math.Vec2)) |p| p.* else .zero)
-        else if (world.getComponent(r.*, ids.computed_position, math.Vec2)) |p| p.* else .zero;
+        const origin: math.Vec2 = blk: {
+            const e = r.*;
+            const own: math.Vec2 = if (world.getComponent(e, ids.position, math.Vec2)) |p| p.* else .zero;
+
+            const parent = e.getParent() orelse break :blk own;
+            if (parent.getComponent(ids.layout, types.Layout) == null) {
+                const parent_origin: math.Vec2 = if (world.getComponent(parent, ids.computed_position, math.Vec2)) |p| p.* else .zero;
+                break :blk parent_origin.add(own);
+            }
+
+            break :blk if (world.getComponent(e, ids.computed_position, math.Vec2)) |p| p.* else .zero;
+        };
 
         // arrange only needs an allocator for `[]GlyphQuad`s,
         // which outlasts the frame, so it needs the non-frame allocator.
@@ -169,6 +178,16 @@ fn measure(entity: ecs.Entity, world: *ecs.World, ids: ComponentIds, cache: *Mea
                 intr = intr.add(.new(hug_w, hug_h));
             }
         }
+    } else if (children.len > 0) {
+        var extent: math.Vec2 = .zero;
+        for (children) |c| {
+            const s = measure(c, world, ids, cache, own_w);
+            cache.put(c, s) catch @panic("Out of memory");
+            const off = overlayOffset(c, world, ids);
+            extent = .new(@max(extent.x, s.x + off.x), @max(extent.y, s.y + off.y));
+        }
+
+        intr = intr.add(extent);
     }
 
     return .new(
@@ -205,7 +224,11 @@ fn arrange(
         world.set(entity, ids.computed_text_layout, types.ComputedTextLayout, .{ .quads = quads }) catch allocator.free(quads);
     };
 
-    const layout = (entity.getComponent(ids.layout, types.Layout) orelse return).*;
+    const layout_ptr = entity.getComponent(ids.layout, types.Layout) orelse {
+        arrangeOverlay(entity.getChildren(), final, origin, world, ids, cache, allocator);
+        return;
+    };
+    const layout = layout_ptr.*;
     const children = entity.getChildren();
 
     const pad = switch (layout) { inline else => |l| l.padding };
@@ -402,4 +425,30 @@ fn gridCell(g: types.GridLayout, idx: usize, dims: GridDims) GridCell {
         .column => .{ .col = idx % dims.cols, .row = idx / dims.cols },
         .row => .{ .col = idx / dims.rows, .row = idx % dims.rows }
     };
+}
+
+fn overlayOffset(c: ecs.Entity, world: *ecs.World, ids: ComponentIds) math.Vec2 {
+    return if (world.getComponent(c, ids.position, math.Vec2)) |p| p.* else .zero;
+}
+
+fn arrangeOverlay(
+    children: []const ecs.Entity,
+    final: math.Vec2,
+    origin: math.Vec2,
+    world: *ecs.World,
+    ids: ComponentIds,
+    cache: *MeasureCache,
+    allocator: std.mem.Allocator,
+) void {
+    for (children) |c| {
+        const mode: types.SizeMode = if (c.getComponent(ids.size, types.SizeMode)) |m| m.* else .{};
+        const cached: math.Vec2 = cache.get(c) orelse .zero;
+
+        const size: math.Vec2 = .new(
+            if (mode.width == .fill) final.x else cached.x,
+            if (mode.height == .fill) final.y else cached.y,
+        );
+
+        arrange(c, size, origin.add(overlayOffset(c, world, ids)), world, ids, cache, allocator);
+    }
 }

@@ -31,15 +31,13 @@ shader: gpu.GpuDevice.GpuShader,
 sampler: gpu.GpuDevice.GpuSampler,
 vs_ubuf: gpu.GpuDevice.GpuBuffer,
 ui_quad: Assets.types.GpuMesh,
-ortho_matrix: math.Mat4,
-surface_pixel_size: [2]u32,
-surface_scale: f32,
 
-pub fn init(device: *gpu.GpuDevice, shader: gpu.GpuDevice.GpuShader, surface_pixel_size: [2]u32, surface_scale: f32) !UiPass {
+pub fn init(device: *gpu.GpuDevice, shader: gpu.GpuDevice.GpuShader) !UiPass {
     const pipeline = try device.createPipeline(.{
         .name = "Ui pipeline",
         .shader = shader.handle,
-        .cull_mode = .none,
+        .cull_mode = .front,
+        .depth_format = null,
         .depth_write = false,
         .alpha_blend_enabled = true,
         .layout = &.{
@@ -59,8 +57,6 @@ pub fn init(device: *gpu.GpuDevice, shader: gpu.GpuDevice.GpuShader, surface_pix
         .pipeline = pipeline,
         .shader = shader,
         .sampler = try device.createSampler(.{}),
-        .surface_pixel_size = surface_pixel_size,
-        .surface_scale = surface_scale,
         .vs_ubuf = try device.createBuffer(.{ 
             .name = "Vs ubuf", 
             .type = .uniform, 
@@ -89,21 +85,27 @@ pub fn init(device: *gpu.GpuDevice, shader: gpu.GpuDevice.GpuShader, surface_pix
             .vertex_count = 4,
             .index_count = 6
         },
-        .ortho_matrix = .ortho(0, @floatFromInt(surface_pixel_size[0]), @floatFromInt(surface_pixel_size[1]), 0.0, -1.0, 1.0)
     };
 }
 
 pub fn deinit(self: *UiPass, allocator: std.mem.Allocator) void {
     self.pipeline.deinit();
     self.shader.deinit();
+    self.vs_ubuf.deinit();
+    self.ui_quad.deinit();
     self.sampler.deinit();
     allocator.destroy(self);
 }
 
 fn execute(self: *UiPass, ctx: pass.PassContext) void {
+    const size = ctx.view.viewport_size;
+    const scale = ctx.view.scale;
+    const ortho: math.Mat4 = .ortho(0, @floatFromInt(size[0]), @floatFromInt(size[1]), 0.0, -1.0, 1.0);
+
     ctx.device.beginPass(.{
-        .width = ctx.view.viewport_size[0],
-        .height = ctx.view.viewport_size[1]
+        .clear_color = ctx.scene.clear_color,
+        .color_target = ctx.resources.get(resource.color_target, .render_target),
+        .width = size[0], .height = size[1]
     });
     self.pipeline.apply();
 
@@ -119,9 +121,9 @@ fn execute(self: *UiPass, ctx: pass.PassContext) void {
             break :blk false;
         };
         const vs_params: GpuUiParams = .{
-            .ortho = self.ortho_matrix.m,
-            .pos = .{ ui_obj.pos[0] * self.surface_scale, ui_obj.pos[1] * self.surface_scale },
-            .size = .{ ui_obj.size[0] * self.surface_scale, ui_obj.size[1] * self.surface_scale },
+            .ortho = ortho.m,
+            .pos = .{ ui_obj.pos[0] * scale, ui_obj.pos[1] * scale },
+            .size = .{ ui_obj.size[0] * scale, ui_obj.size[1] * scale },
             .color = ui_obj.color.toArr(),
             .uv_pos = ui_obj.uv_pos,
             .uv_size = ui_obj.uv_size,
@@ -129,11 +131,11 @@ fn execute(self: *UiPass, ctx: pass.PassContext) void {
             .is_rounded = @intCast(@intFromBool(is_rounded)),
             .corner_radii = blk: {
                 const vec: @Vector(4, f32) = ui_obj.corners;
-                break :blk vec * @as(@Vector(4, f32), @splat(self.surface_scale));
+                break :blk vec * @as(@Vector(4, f32), @splat(scale));
             },
             .border_widths = blk: {
                 const vec: @Vector(4, f32) = ui_obj.borders;
-                break :blk vec * @as(@Vector(4, f32), @splat(self.surface_scale));
+                break :blk vec * @as(@Vector(4, f32), @splat(scale));
             },
             .border_color = ui_obj.border_color.toArr()
         };
@@ -154,14 +156,12 @@ fn execute(self: *UiPass, ctx: pass.PassContext) void {
         });
         self.pipeline.draw(0, self.ui_quad.index_count, 1);
     }
-
-    ctx.device.endPass();
 }
 
 pub fn node(self: *UiPass) pass.PassNode {
     return .{
         .name = "UiPass",
-        .reads = &.{ resource.default_sampler, resource.default_image },
+        .reads = &.{ resource.default_sampler, resource.default_image, resource.color_target },
         .writes = &.{},
         .after = &.{ },
         .ptr = self,

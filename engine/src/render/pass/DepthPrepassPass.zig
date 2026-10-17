@@ -17,7 +17,9 @@ pub fn init(gpu_device: *gpu.GpuDevice, shader: gpu.GpuDevice.GpuShader) !DepthP
             .name = "Depth prepass pipeline",
             .shader = shader.handle,
             .index_type = .uint32,
-            .cull_mode = .none,
+            .cull_mode = .back,
+            .depth_format = .d32,
+            .color_format = null,
             .depth_write = true,
             .color_write_mask = .none(),
             .resources = &.{
@@ -39,8 +41,8 @@ pub fn init(gpu_device: *gpu.GpuDevice, shader: gpu.GpuDevice.GpuShader) !DepthP
 }
 
 pub fn execute(self: *DepthPrepassPass, ctx: pass.PassContext) void {
-    const depth_handle = ctx.resources.get(resource.depth_buffer, .image) orelse @panic("depth_buffer resource is missing!");
-    const color_handle = ctx.resources.get(resource.color_target, .image);
+    const depth_handle = ctx.resources.get(resource.depth_buffer, .depth_target) orelse @panic("depth_buffer resource is missing!");
+    const color_handle = ctx.resources.get(resource.color_target, .render_target);
     ctx.device.beginPass(.{
         .clear_depth = 0.0,
         .clear_color = ctx.scene.clear_color,
@@ -69,8 +71,6 @@ pub fn execute(self: *DepthPrepassPass, ctx: pass.PassContext) void {
 
         self.pipeline.draw(0, obj.mesh.index_count, 1);
     }
-
-    ctx.device.endPass();
 }
 
 pub fn deinit(self: *DepthPrepassPass, allocator: std.mem.Allocator) void {

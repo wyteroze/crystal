@@ -122,14 +122,14 @@ const CompileCommands = struct {
             //  }}
 
             try writer.writeAll("{"); {
-                try writer.print("\"directory\": \"{s}\",", .{ self.b.path(".").src_path.sub_path });
-                try writer.print("\"file\": \"{s}\",", .{ self.file_path.src_path.sub_path });
+                try writer.print("\"directory\": \"{f}\",", .{ self.b.root });
+                try writer.print("\"file\": \"{f}\",", .{ self.file_path });
 
                 try writer.writeAll("\"arguments\": ["); {
                     try writer.print("\"{s}\", \"-std={s}\"", .{ self.cmd, self.std });
                     for (self.cxx_args) |a| try writer.print(", \"-D{s}\"", .{ a });
-                    for (self.include_paths) |path| try writer.print(", \"-I{s}\"", .{ path.src_path.sub_path });
-                    try writer.print(", \"-c\", \"{s}\"", .{ self.file_path.src_path.sub_path });
+                    for (self.include_paths) |path| try writer.print(", \"-I{f}\"", .{ path });
+                    try writer.print(", \"-c\", \"{f}\"", .{ self.file_path });
                 } try writer.writeAll("]");
             } try writer.writeAll("}");
         }
