@@ -21,7 +21,8 @@ pub const RenderViewOptions = struct {
     /// If null, uses the size of the entity.
     /// If the entity has the same size as the window,
     /// it renders straight to the swapchain, which is ideal for performance.
-    size: ?[2]u32 = null,
+    /// Rounded down to the nearest integer.
+    size: ?math.Vec2 = null,
 };
 pub const Window = struct { id: u64, scale: f32 };
 

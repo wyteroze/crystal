@@ -335,9 +335,9 @@ export type MouseButton =
 
 declare extern type Keyboard with
     --- Fires when a key is pressed, with the pressed keycode as the first argument of the callback.
-    read KeyPressed: Signal<Keycode>
+    read KeyPressed: Signal<Keycode, boolean, any>
     --- Fires when a key is released, with the released keycode as the first argument of the callback.
-    read KeyReleased: Signal<Keycode>
+    read KeyReleased: Signal<Keycode, boolean, any>
 
     --- Returns true if the given keycode is pressed.
     function IsKeyPressed(self, key: Keycode): boolean
@@ -345,14 +345,14 @@ end
 
 declare extern type Mouse with
     --- Fires when a button is pressed, with the pressed button as the first argument of the callback.
-    read ButtonPressed: Signal<MouseButton>
+    read ButtonPressed: Signal<MouseButton, boolean, any>
     --- Fires when a button is released, with the released button as the first argument of the callback.
-    read ButtonReleased: Signal<MouseButton>
+    read ButtonReleased: Signal<MouseButton, boolean, any>
     --- Fires when the mouse moves, with the delta as the first argument of the callback, and the position as the second argument of the callback.
-    read Moved: Signal<Vec2, Vec2>
+    read Moved: Signal<Vec2, Vec2, boolean, any>
     --- Fires when the scroll wheel moves, with the delta as the first argument of the callback.
     --- The X axis represents side-to-side scrolling, while the Y axis represents top-to-bottom-scrolling (most common).
-    read Scrolled: Signal<Vec2>
+    read Scrolled: Signal<Vec2, boolean, any>
 
     --- Returns true if the given mouse button is pressed.
     function IsButtonPressed(self, button: MouseButton): boolean

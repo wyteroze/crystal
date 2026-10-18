@@ -24,13 +24,30 @@ pub fn createSurface(_: SdlBackend, d: desc.SurfaceDesc) !types.SurfaceHandle {
     const w: sdl3.video.Window = try .init(
         d.title, 
         @intCast(d.width), 
-        @intCast(d.height), 
+        @intCast(d.height),
         .{
             .metal = true, 
-            .resizable = true,
-            .high_pixel_density = true
+            .high_pixel_density = true,
+            .minimized = d.minimized,
+            .maximized = d.maximized,
+            .fullscreen = d.fullscreen,
+            .utility = d.utility,
+            .popup_menu = d.popup,
+            .tooltip = d.tooltip,
+            .hidden = d.hidden,
+            .resizable = d.resizable,
+            .always_on_top = d.always_on_top,
+            .transparent = d.transparent,
+            .borderless = d.borderless,
         }
     );
+
+    if (d.parent) |parent| {
+        const p = try sdl3.video.Window.fromId(@intCast(parent.id));
+        try w.setParent(p);
+    }
+
+    if (d.modal) try w.setModal(true);
 
     const props = try w.getProperties();
     const handle = if (props.android_window) |win| win.value
@@ -66,6 +83,43 @@ pub fn getSurfaceScale(_: SdlBackend, h: types.SurfaceHandle) !f32 {
     return scale;
 }
 
+pub fn setSurfaceSize(_: SdlBackend, h: types.SurfaceHandle, size: [2]u32) !void {
+    const w = try sdl3.video.Window.fromId(@intCast(h.id));
+    try w.setSize(size[0], size[1]);
+}
+
+pub fn setSurfaceFullscreen(_: SdlBackend, h: types.SurfaceHandle, enabled: bool) !void {
+    const w = try sdl3.video.Window.fromId(@intCast(h.id));
+    try w.setFullscreen(enabled);
+}
+
+pub fn maximizeSurface(_: SdlBackend, h: types.SurfaceHandle) !void {
+    const w = try sdl3.video.Window.fromId(@intCast(h.id));
+    try w.maximize();
+}
+
+pub fn minimizeSurface(_: SdlBackend, h: types.SurfaceHandle) !void {
+    const w = try sdl3.video.Window.fromId(@intCast(h.id));
+    try w.minimize();
+}
+
+pub fn restoreSurface(_: SdlBackend, h: types.SurfaceHandle) !void {
+    const w = try sdl3.video.Window.fromId(@intCast(h.id));
+    try w.restore();
+}
+
+pub fn getSurfaceFocused(_: SdlBackend, h: types.SurfaceHandle) !bool {
+    const w = try sdl3.video.Window.fromId(@intCast(h.id));
+    const f = w.getFlags();
+
+    return f.input_focus;
+}
+
+pub fn focusSurface(_: SdlBackend, h: types.SurfaceHandle) !void {
+    const w = try sdl3.video.Window.fromId(@intCast(h.id));
+    try w.raise();
+}
+
 pub fn destroySurface(_: SdlBackend, h: types.SurfaceHandle) void {
     const w = sdl3.video.Window.fromId(@intCast(h.id)) catch {
         std.log.debug("Failed to get window from id: {?s}", .{ sdl3.errors.get() });
@@ -80,17 +134,15 @@ pub fn pollEvent(_: SdlBackend) ?desc.PlatformEvent {
 
     return switch (event) {
         .quit => return .quit,
-        .window_resized => |e| return .{ .surface_resize = .{ 
-            .id = @intCast(e.id),
-            .width = @intCast(e.width), 
-            .height = @intCast(e.height) 
-        } },
-        .keyboard_added => |e| return .{ .keyboard_connected = .{
-            .id = e.id.value
-        } },
-        .keyboard_removed => |e| return .{ .keyboard_disconnected = .{
-            .id = e.id.value
-        } },
+        .window_resized => |e| return .{ .surface_resize = .{  .id = @intCast(e.id), .width = @intCast(e.width),  .height = @intCast(e.height)  } },
+        .window_close_requested => |e| return .{ .surface_closed = @intCast(e.id) },
+        .window_enter_fullscreen => |e| return .{ .surface_fullscreened = @intCast(e.id) },
+        .window_leave_fullscreen => |e| return .{ .surface_fullscreen_exited = @intCast(e.id) },
+        .window_maximized => |e| return .{ .surface_maximized = @intCast(e.id) },
+        .window_minimized => |e| return .{ .surface_minimized = @intCast(e.id) },
+        .window_restored => |e| return .{ .surface_restored = @intCast(e.id) },
+        .keyboard_added => |e| return .{ .keyboard_connected = .{ .id = e.id.value } },
+        .keyboard_removed => |e| return .{ .keyboard_disconnected = .{ .id = e.id.value } },
         .key_down => |e| return .{ .keyboard_key_down = .{ 
             .window_id = e.window_id orelse 0, 
             .keyboard_id = if (e.id) |id| id.value else 0,
@@ -103,12 +155,8 @@ pub fn pollEvent(_: SdlBackend) ?desc.PlatformEvent {
             .repeat = e.repeat,
             .keycode = sdlKeycodeToPlatformKeycode(e.key)
         } },
-        .mouse_added => |e| return .{ .mouse_connected = .{
-            .id = e.id.value
-        } },
-        .mouse_removed => |e| return .{ .mouse_disconnected = .{
-            .id = e.id.value
-        } },
+        .mouse_added => |e| return .{ .mouse_connected = .{ .id = e.id.value } },
+        .mouse_removed => |e| return .{ .mouse_disconnected = .{ .id = e.id.value } },
         // We use ID 1 as the default, because 0 is treated as 
         // invalid mouse in SDL.
         .mouse_button_down => |e| return .{ .mouse_button_down = .{
@@ -132,12 +180,8 @@ pub fn pollEvent(_: SdlBackend) ?desc.PlatformEvent {
             .mouse_id = if (e.id) |id| id.value else 1,
             .delta = .{ e.scroll_x, e.scroll_y }
         } },
-        .gamepad_added => |e| return .{ .gamepad_connected = .{
-            .id = e.id.value
-        } },
-        .gamepad_removed => |e| return .{ .gamepad_disconnected = .{
-            .id = e.id.value
-        } },
+        .gamepad_added => |e| return .{ .gamepad_connected = .{ .id = e.id.value } },
+        .gamepad_removed => |e| return .{ .gamepad_disconnected = .{ .id = e.id.value } },
         .gamepad_button_down => |e| return .{ .gamepad_button_down = .{
             .gamepad_id = e.id.value,
             .button = sdlGamepadButtonToPlatformGamepadButton(e.button),
@@ -163,6 +207,7 @@ pub fn setCursorLocked(_: SdlBackend, mode: bool) void {
     const windows = sdl3.video.getWindows() catch |e| { std.log.err("Failed to get windows: {s}", .{ @errorName(e) }); return; };
     defer sdl3.free(windows);
 
+    if (windows.len == 0) return;
     sdl3.mouse.setWindowRelativeMode(windows[0], mode) catch |e| std.log.err("Failed to set cursor lock mode: {s}", .{ @errorName(e) });
 }
 
@@ -170,6 +215,7 @@ pub fn getCursorLocked(_: SdlBackend) bool {
     const windows = sdl3.video.getWindows() catch |e| { std.log.err("Failed to get windows: {s}", .{ @errorName(e) }); return false; };
     defer sdl3.free(windows);
 
+    if (windows.len == 0) return false;
     return sdl3.mouse.getWindowRelativeMode(windows[0]);
 }
 

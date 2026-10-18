@@ -40,7 +40,35 @@ pub fn getSurfaceLogicalSize(self: *Platform, h: types.SurfaceHandle) ![2]u32 {
 }
 
 pub fn getSurfaceScale(self: *Platform, h: types.SurfaceHandle) !f32 {
-    return switch (self.backend) { inline else => |*b| b.getSurfaceScale(h) };
+    return switch (self.backend) { inline else => |*b| try b.getSurfaceScale(h) };
+}
+
+pub fn setSurfaceSize(self: *Platform, h: types.SurfaceHandle, size: [2]u32) !void {
+    return switch (self.backend) { inline else => |*b| try b.setSurfaceSize(h, size) };
+}
+
+pub fn setSurfaceFullscreen(self: *Platform, h: types.SurfaceHandle, enabled: bool) !void {
+    switch (self.backend) { inline else => |*b| try b.setSurfaceFullscreen(h, enabled) }
+}
+
+pub fn maximizeSurface(self: *Platform, h: types.SurfaceHandle) !void {
+    switch (self.backend) { inline else => |*b| try b.maximizeSurface(h) }
+}
+
+pub fn minimizeSurface(self: *Platform, h: types.SurfaceHandle) !void {
+    switch (self.backend) { inline else => |*b| try b.minimizeSurface(h) }
+}
+
+pub fn restoreSurface(self: *Platform, h: types.SurfaceHandle) !void {
+    switch (self.backend) { inline else => |*b| try b.restoreSurface(h) }
+}
+
+pub fn getSurfaceFocused(self: *Platform, h: types.SurfaceHandle) !bool {
+    return switch (self.backend) { inline else => |*b| b.getSurfaceFocused(h) };
+}
+
+pub fn focusSurface(self: *Platform, h: types.SurfaceHandle) !void {
+    switch (self.backend) { inline else => |*b| try b.focusSurface(h) }
 }
 
 pub fn destroySurface(self: *Platform, h: types.SurfaceHandle) void {

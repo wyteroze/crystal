@@ -2,6 +2,7 @@
 --!strict
 
 local input = require("@input")
+local windowing = require("@windowing")
 
 -- Util --
 
@@ -66,26 +67,34 @@ function Camera.new(entity: Entity)
 end
 
 function Camera._setup(self: Camera)
-    -- input.Keyboards.KeyPressed:Connect(function(key)
-    --     if key == "Escape" then
-    --         if input.IsCursorLocked() then input.SetCursorLocked(false) end
-    --         if not input.IsCursorVisible() then input.SetCursorVisible(true) end
-    --     end
-    -- end)
+    input.Keyboards.KeyPressed:Connect(function(key, consumed, win)
+        print(consumed, win == windowing.MainWindow)
+        if consumed or win ~= windowing.MainWindow then return end
+        if key == "Escape" then
+            if input.IsCursorLocked() then input.SetCursorLocked(false) end
+            if not input.IsCursorVisible() then input.SetCursorVisible(true) end
+        end
+    end)
 
-    -- input.Mice.ButtonPressed:Connect(function(btn)
-    --     if btn == "Left" then
-    --         if not input.IsCursorLocked() then input.SetCursorLocked(true) end
-    --         if input.IsCursorVisible() then input.SetCursorVisible(false) end
-    --     end
-    -- end)
+    input.Mice.ButtonPressed:Connect(function(btn, consumed, win)
+        print(consumed, win == windowing.MainWindow)
+        if consumed or win ~= windowing.MainWindow then return end
+        if btn == "Left" then
+            if not input.IsCursorLocked() then input.SetCursorLocked(true) end
+            if input.IsCursorVisible() then input.SetCursorVisible(false) end
+        end
+    end)
 
-    input.Mice.Scrolled:Connect(function(delta)
+    input.Mice.Scrolled:Connect(function(delta, consumed, win)
+        if consumed or win ~= windowing.MainWindow then return end
         self.Speed = math.max(0, self.Speed + delta.Y)
     end)
 end
 
 function Camera._step(self: Camera, dt: number)
+    -- `not windowing.MainWindow` is temporary, will be removed when engine state is more organized.
+    if not windowing.MainWindow or not windowing.MainWindow.Focused then return end
+
     local kb = input.GetKeyboard(1) :: Keyboard
     local ms = input.GetMouse(1) :: Mouse
 

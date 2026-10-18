@@ -5,6 +5,7 @@ Copyright 2026 wyteroze. Licensed under the Apache-2.0 license.
 local assets = require("@assets")
 local ui = require("@ui")
 local input = require("@input")
+local windowing = require("@windowing")
 
 -- TODO: Make `require` allow file paths
 local Modal = {}
@@ -13,12 +14,21 @@ Modal.__index = Modal
 type Modal = typeof(Modal) & {
     modal: any,
     button: any,
-    held: boolean
+    held: boolean,
+    win: any,
 }
 
-function Modal.new(size: Vec2, color: Color, font: Asset, headerText: string, btnText: string, center: bool): Modal
+function Modal.new(size: Vec2, color: Color, font: Asset, headerText: string, btnText: string, openWindow: boolean, winName: string?): Modal
+    local win = if openWindow then windowing.CreateWindow {
+        Title = winName,
+        Parent = windowing.MainWindow,
+        Size = size,
+        Modal = true
+    } else nil;
+
     local modalBg = ui.CreateElement {
-        Size = { Width = size.X, Height = size.Y },
+        Parent = if win then win.Element else nil,
+        Size = if win then { Width = "Fill", Height = "Fill" } else { Width = size.X, Height = size.Y },
         Color = color,
         Layout = { Generic = {
             Direction = "Vertical",
@@ -28,8 +38,6 @@ function Modal.new(size: Vec2, color: Color, font: Asset, headerText: string, bt
             Gap = 25
         } }
     }
-
-    if center then modalBg.Components.Position = Vec2.new(640 - size.X/2, 360 - size.Y/2) end
 
     local modalText = ui.CreateElement {
         Parent = modalBg,
@@ -64,16 +72,19 @@ function Modal.new(size: Vec2, color: Color, font: Asset, headerText: string, bt
     }
 
     local self = setmetatable({
+        win = win,
         modal = modalBg,
         button = button,
         held = false
     }, Modal) :: Modal
 
-    self.modal.PointerDown:Connect(function() self.held = true end)
-    self.modal.PointerUp:Connect(function() self.held = false end)
-    self.modal.PointerMoved:Connect(function()
-        if self.held then modalBg.Components.Position += input.Mice:GetMoveDelta() end
-    end)
+    if not openWindow then
+        self.modal.PointerDown:Connect(function() self.held = true end)
+        self.modal.PointerUp:Connect(function() self.held = false end)
+        self.modal.PointerMoved:Connect(function()
+            if self.held then modalBg.Components.Position += input.Mice:GetMoveDelta() end
+        end)
+    end
     self.button.PointerDown:Connect(function() self.button.Components.Color = color:Lerp(Color.new(1, 1, 1), .3) end)
     self.button.PointerLeft:Connect(function() self.button.Components.Color = color:Lerp(Color.new(1, 1, 1), .2) end)
     self.button.PointerUp:Connect(function() self.button.Components.Color = color:Lerp(Color.new(1, 1, 1), .2) end)
@@ -92,7 +103,6 @@ function Teapot.new(entity: Entity)
     }, Teapot)
     
     print(entity)
-    local didALottaShitToLiveThisHereLifestyle = assets.load("assets://audios/Lifestyle - Rich Gang.mp3")
     local chickenPng = assets.load("assets://images/chicken.jpg")
     local jbMono = assets.load("assets://fonts/JetBrains-Mono.ttf")
 
@@ -123,10 +133,38 @@ function Teapot.new(entity: Entity)
     -- track.Looped:Connect()
     -- track:Destroy()
 
+    -- local win = windowing.CreateWindow {
+    --     Title = "Hi lol",
+    --     Parent = windowing.MainWindow,
+    --     Size = Vec2.new(480, 480),
+    --     State = "Normal",
+    --     Kind = "Normal",
+    --     Position = {
+    --         Anchor = Vec2.new(.5, .5),
+    --         Offset = Vec2.new(-64, -64),
+    --     },
+    --     Borderless = true,
+    --     Modal = true,
+    -- }
+
+    -- print(windowing.MainWindow)
+    -- print(win)
+    -- print(win.Element)
+
+    -- win:EnterFullscreen()
+    -- win:ExitFullscreen()
+    -- win:Maximize()
+    -- win:Minimize()
+    -- win:Restore()
+    -- win:Destroy()
+    -- win.Size
+    -- win.Position
+
+    print(windowing.MainWindow.Size)
     local modal = Modal.new(Vec2.new(300, 150), Color.new(.1, .1, .1), jbMono, "You smell like updog", "What's updog")
     modal.button.Activated:Connect(function()
-        local response = Modal.new(Vec2.new(300, 150), Color.new(.5, .5, .5), jbMono, "Not much how about you... lmao!!\ngottem!!", "Bruh.", true)
-        response.button.Activated:Connect(function() response.modal:Destroy() end)
+        local response = Modal.new(Vec2.new(300, 150), Color.new(.5, .5, .5), jbMono, "Not much how about you... lmao!!\ngottem!!", "Bruh.", true, "My hilarious joke")
+        response.button.Activated:Connect(function() response.win:Destroy() end)
     end)
 
     entity.Updated:Connect(function(dt)

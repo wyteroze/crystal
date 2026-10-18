@@ -2,13 +2,15 @@
 
 const std = @import("std");
 const Platform = @import("../../platform/Platform.zig");
+const Windowing = @import("../../windowing/Windowing.zig");
 const core = @import("../../core/core.zig");
 const signal = core.signal;
 const math = core.math;
 
-pub const ButtonEvent = signal.Signal(.{ Platform.desc.MouseButton, bool });
-pub const MoveEvent = signal.Signal(.{ math.Vec2, math.Vec2, bool });
-pub const ScrollEvent = signal.Signal(.{ math.Vec2 });
+pub const ButtonEvent = signal.Signal(.{ Platform.desc.MouseButton, bool, Windowing.WindowHandle });
+pub const MoveEvent = signal.Signal(.{ math.Vec2, math.Vec2, bool, Windowing.WindowHandle });
+// In the future, the bool is whether it got consumed by a ui element that scrolls.
+pub const ScrollEvent = signal.Signal(.{ math.Vec2, bool, Windowing.WindowHandle });
 
 const MouseDevice = @This();
 allocator: std.mem.Allocator,
@@ -42,13 +44,13 @@ pub fn deinit(self: *MouseDevice) void {
     self.scrolled_evt.deinit();
 }
 
-pub fn buttonDown(self: *MouseDevice, event: Platform.desc.MouseButtonEvent, consumed: bool) !void {
-    self.button_pressed.fire(.{ event.button, consumed });
+pub fn buttonDown(self: *MouseDevice, event: Platform.desc.MouseButtonEvent, consumed: bool, win: *Windowing.Window) !void {
+    self.button_pressed.fire(.{ event.button, consumed, win.getHandle() });
     try self.buttons_pressed.put(event.button, true);
 } 
 
-pub fn buttonUp(self: *MouseDevice, event: Platform.desc.MouseButtonEvent, consumed: bool) void {
-    self.button_released.fire(.{ event.button, consumed });
+pub fn buttonUp(self: *MouseDevice, event: Platform.desc.MouseButtonEvent, consumed: bool, win: *Windowing.Window) void {
+    self.button_released.fire(.{ event.button, consumed, win.getHandle() });
     if (!self.buttons_pressed.remove(event.button)) 
         std.log.warn("buttonUp() called on MouseDevice {d} for a button that isn't pressed", .{ self.id });
 }
@@ -74,20 +76,20 @@ pub fn resetDeltas(self: *MouseDevice) void {
     self.scroll_delta = .zero;
 }
 
-pub fn scrolled(self: *MouseDevice, event: Platform.desc.MouseScrollEvent) void {
+pub fn scrolled(self: *MouseDevice, event: Platform.desc.MouseScrollEvent, win: *Windowing.Window) void {
     const delta = math.Vec2.new(event.delta[0], event.delta[1]);
 
     self.scroll_delta = delta;
-    self.scrolled_evt.fire(.{ delta });
+    self.scrolled_evt.fire(.{ delta, false, win.getHandle() });
 }
 
-pub fn moved(self: *MouseDevice, event: Platform.desc.MouseMoveEvent, consumed: bool) void {
+pub fn moved(self: *MouseDevice, event: Platform.desc.MouseMoveEvent, consumed: bool, win: *Windowing.Window) void {
     const delta = math.Vec2.new(event.delta[0], event.delta[1]);
     const pos = math.Vec2.new(event.position[0], event.position[1]);
 
     self.frame_delta = delta;
     self.frame_pos = pos;
-    self.moved_evt.fire(.{ delta, pos, consumed });
+    self.moved_evt.fire(.{ delta, pos, consumed, win.getHandle() });
 }
 
 pub fn format(

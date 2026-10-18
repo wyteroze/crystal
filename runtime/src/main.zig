@@ -16,48 +16,16 @@ const render = engine.render;
 const Input = engine.Input;
 const Ui = engine.Ui;
 const Audio = engine.Audio;
+const Windowing = engine.Windowing;
 
 const target_fps = 120;
 const fps_seconds: f32 = 1.0 / @as(f32, @floatCast(target_fps));
 const asset_purge_rate_seconds: std.Io.Duration = .fromMilliseconds(500);
 
-const WindowInfo = struct { surface: Platform.types.SurfaceHandle, entity: ecs.Entity };
 const Camera = struct {
     fov: f32 = 90,
     near_plane: f32 = 0.1,
 };
-
-fn openWindow(platform: *Platform, renderer: *render.Renderer, ui: *Ui, windows: *std.AutoHashMap(u64, WindowInfo), title: [:0]const u8, w: u32, h: u32) !ecs.Entity {
-    const surface = try platform.createSurface(.{ .title = title, .width = w, .height = h, .target = .primary });
-
-    const id: u64 = surface.id;
-    const pixel = try platform.getSurfacePixelSize(surface);
-    const logical = try platform.getSurfaceLogicalSize(surface);
-    const scale = try platform.getSurfaceScale(surface);
-
-    try renderer.createWindow(id, surface.handle, pixel, scale);
-
-    const entity = try ui.world.spawnEntity();
-    try ui.world.set(entity, ui.component_ids.window, Ui.types.Window, .{ .id = id, .scale = scale });
-    try ui.world.set(entity, ui.component_ids.position, math.Vec2, .new(0, 0));
-    try ui.world.set(entity, ui.component_ids.size, Ui.types.SizeMode, .fixed(@floatFromInt(logical[0]), @floatFromInt(logical[1])));
-    try windows.put(id, .{ .surface = surface, .entity = entity });
-
-    return entity;
-}
-
-fn syncWindow(platform: *Platform, renderer: *render.Renderer, ui: *Ui, windows: *std.AutoHashMap(u64, WindowInfo), id: u64) void {
-    const info = windows.get(id) orelse return;
-    const pixel = platform.getSurfacePixelSize(info.surface) catch return;
-    const logical = platform.getSurfaceLogicalSize(info.surface) catch return;
-    const scale = platform.getSurfaceScale(info.surface) catch return;
-
-    renderer.resizeWindow(id, pixel, scale) catch |e| std.log.err("Failed to resized window: {s}", .{ @errorName(e) });
-
-    if (ui.world.getComponent(info.entity, ui.component_ids.window, Ui.types.Window)) |w| w.scale = scale;
-    ui.world.set(info.entity, ui.component_ids.size, Ui.types.SizeMode,
-        .fixed(@floatFromInt(logical[0]), @floatFromInt(logical[1]))) catch {};
-}
 
 fn rootOf(e: ecs.Entity) ecs.Entity {
     var r = e;
@@ -394,10 +362,6 @@ pub fn main(init: std.process.Init) !void {
     var ui_allocator: core.TrackedAllocator = .init(allocator, "Ui");
     var ui: Ui = try .init(ui_allocator.allocator());
 
-    var input_allocator: core.TrackedAllocator = .init(allocator, "Input");
-    var input: Input = undefined;
-    try input.init(input_allocator.allocator(), &platform, &ui);
-
     var gpu_allocator: core.TrackedAllocator = .init(allocator, "Gpu");
     var gpu_device: gpu.GpuDevice = try .init(gpu_allocator.allocator(), .initDiligent());
 
@@ -411,6 +375,14 @@ pub fn main(init: std.process.Init) !void {
     var renderer_allocator: core.TrackedAllocator = .init(allocator, "Renderer");
     var renderer: render.Renderer = try .init(renderer_allocator.allocator(), &gpu_device, try skybox_cubemap.gpuGet(.image));
 
+    var windowing_allocator: core.TrackedAllocator = .init(allocator, "Windowing");
+    var windowing: Windowing = undefined;
+    try windowing.init(windowing_allocator.allocator(), &platform, &renderer, &ui);
+
+    var input_allocator: core.TrackedAllocator = .init(allocator, "Input");
+    var input: Input = undefined;
+    try input.init(input_allocator.allocator(), &platform, &ui, &windowing);
+
     // Create the world
     var ecs_allocator: core.TrackedAllocator = .init(allocator, "ECSWorld");
     var world: ecs.World = .init(ecs_allocator.allocator());
@@ -418,14 +390,14 @@ pub fn main(init: std.process.Init) !void {
     var audio: Audio = undefined;
     try audio.init(io, allocator, &platform);
 
-    var lua_allocator: core.TrackedAllocator = .init(allocator, "LuaRuntime");
-    var host: scripting.bind.Host = .{ .world = &world, .assets = &assets, .input = &input, .ui = &ui, .audio = &audio };
-    var runtime: scripting.Runtime = try .init(lua_allocator.allocator(), &host);
+    const window = try windowing.createWindow(.{ .title = "crystal", .size = .new(1280, 720) });
+    const window_2 = try windowing.createWindow(.{ .title = "crystal 2", .size = .new(854, 480) });
+    windowing.main_window = window;
+    try window.focus();
 
-    var windows: std.AutoHashMap(u64, WindowInfo) = .init(allocator);
-    const window_entity = try openWindow(&platform, &renderer, &ui, &windows, "crystal", 1280, 720);
-    const window_entity_2 = try openWindow(&platform, &renderer, &ui, &windows, "crystal 2", 854, 480);
-    ui.main_window = window_entity;
+    var lua_allocator: core.TrackedAllocator = .init(allocator, "LuaRuntime");
+    var host: scripting.bind.Host = .{ .world = &world, .assets = &assets, .input = &input, .ui = &ui, .audio = &audio, .windowing = &windowing };
+    var runtime: scripting.Runtime = try .init(lua_allocator.allocator(), &host);
 
     defer { 
         world.deinit();
@@ -437,10 +409,7 @@ pub fn main(init: std.process.Init) !void {
         scheduler.deinit();
         runtime.deinit();
         assets.deinit();
-
-        var win_iter = windows.valueIterator();
-        while (win_iter.next()) |i| platform.destroySurface(i.surface);
-        windows.deinit();
+        windowing.deinit();
         platform.deinit();
     }
     
@@ -523,22 +492,21 @@ pub fn main(init: std.process.Init) !void {
     try ui.world.set(view_entity, ui.component_ids.render_view, Ui.types.RenderViewOptions, .{ .camera = camera, .scene = scene });
     try ui.world.set(view_entity, ui.component_ids.position, math.Vec2, .new(0, 0));
     try ui.world.set(view_entity, ui.component_ids.size, Ui.types.SizeMode, .{ .width = .fill, .height = .fill });
-    try view_entity.setParent(window_entity);
+    try view_entity.setParent((try window.getElement()).entity);
 
     const view_entity_2 = try ui.world.spawnEntity();
     try ui.world.set(view_entity_2, ui.component_ids.render_view, Ui.types.RenderViewOptions, .{ .camera = camera_2, .scene = scene });
     try ui.world.set(view_entity_2, ui.component_ids.position, math.Vec2, .new(0, 0));
     try ui.world.set(view_entity_2, ui.component_ids.size, Ui.types.SizeMode, .{ .width = .fill, .height = .fill });
-    try view_entity_2.setParent(window_entity_2);
+    try view_entity_2.setParent((try window_2.getElement()).entity);
 
     var running = true;
 
-    var context = .{ &running, &platform, &renderer, &ui, &windows };
+    var context = .{ &running };
     const event_con = try platform.platform_event.connect(struct {
         fn c(ctx: anytype, e: Platform.desc.PlatformEvent) void {
             switch (e) {
                 .quit => ctx[0].* = false,
-                .surface_resize => |evt| syncWindow(ctx[1], ctx[2], ctx[3], ctx[4], evt.id),
 
                 else => {}
             }
@@ -558,6 +526,7 @@ pub fn main(init: std.process.Init) !void {
         input.tick();
         platform.poll();
         world.update(dt_seconds);
+        windowing.update();
         ui.update();
         submitToRenderer(&world, &ui, &renderer);
         submitToAudio(&world, &audio);

@@ -5,13 +5,17 @@ const core = @import("../core/core.zig");
 const devices = @import("devices/devices.zig");
 const signal = @import("../core/signal.zig");
 const Platform = @import("../platform/Platform.zig");
+const Windowing = @import("../windowing/Windowing.zig");
 const Ui = @import("../ui/Ui.zig");
 
 const max_usize = std.math.maxInt(usize);
 
-pub const KeyboardEvent = signal.Signal(.{ KeyboardHandle });
-pub const MouseEvent = signal.Signal(.{ MouseHandle });
-pub const GamepadEvent = signal.Signal(.{ GamepadHandle });
+pub const KeyboardConnectionEvent = signal.Signal(.{ KeyboardHandle });
+pub const KeyboardEvent = signal.Signal(.{ KeyboardHandle, bool, Windowing.WindowHandle });
+pub const MouseConnectionEvent = signal.Signal(.{ MouseHandle });
+pub const MouseEvent = signal.Signal(.{ MouseHandle, bool, Windowing.WindowHandle });
+pub const GamepadConnectionEvent = signal.Signal(.{ GamepadHandle });
+pub const GamepadEvent = signal.Signal(.{ GamepadHandle, bool, Windowing.WindowHandle });
 
 pub const KeyboardHandle = devices.DeviceHandle(devices.KeyboardDevice, "keyboards");
 pub const MouseHandle = devices.DeviceHandle(devices.MouseDevice, "mice");
@@ -22,19 +26,20 @@ const Input = @This();
 allocator: std.mem.Allocator,
 platform: *Platform,
 ui: *Ui,
+windowing: *Windowing,
 
 platform_event_con: signal.Connection,
 
 dispatcher: signal.Dispatcher,
 // Keyboard events
-keyboard_connected: KeyboardEvent,
-keyboard_disconnected: KeyboardEvent,
+keyboard_connected: KeyboardConnectionEvent,
+keyboard_disconnected: KeyboardConnectionEvent,
 // Mouse events
-mouse_connected: MouseEvent,
-mouse_disconnected: MouseEvent,
+mouse_connected: MouseConnectionEvent,
+mouse_disconnected: MouseConnectionEvent,
 // Gamepad events
-gamepad_connected: GamepadEvent,
-gamepad_disconected: GamepadEvent,
+gamepad_connected: GamepadConnectionEvent,
+gamepad_disconected: GamepadConnectionEvent,
 
 // Unidevices (no matter what ID an event comes from,
 // it goes to the unidevice in addition to the device that the event is for)
@@ -49,7 +54,7 @@ mice: std.AutoHashMap(usize, *devices.MouseDevice),
 gamepads: std.AutoHashMap(usize, *devices.GamepadDevice),
 touch_devices: std.AutoHashMap(usize, *devices.TouchDevice),
 
-pub fn init(self: *Input, allocator: std.mem.Allocator, platform: *Platform, ui: *Ui) !void {
+pub fn init(self: *Input, allocator: std.mem.Allocator, platform: *Platform, ui: *Ui, windowing: *Windowing,) !void {
     var keyboards: std.AutoHashMap(usize, *devices.KeyboardDevice) = .init(allocator);
     var mice: std.AutoHashMap(usize, *devices.MouseDevice) = .init(allocator);
     var gamepads: std.AutoHashMap(usize, *devices.GamepadDevice) = .init(allocator);
@@ -84,6 +89,7 @@ pub fn init(self: *Input, allocator: std.mem.Allocator, platform: *Platform, ui:
         .allocator = allocator,
         .platform = platform,
         .ui = ui,
+        .windowing = windowing,
         .platform_event_con = platform_event_con,
         .dispatcher = self.dispatcher,
         .keyboards = keyboards,
@@ -149,12 +155,14 @@ fn onPlatformEvent(self: *Input, event: Platform.desc.PlatformEvent) !void {
             self.allocator.destroy(kv.value);
         },
         .keyboard_key_down => |e| { 
-            try self.unikeyboard.keyPressed(e); 
-            try (self.getKeyboard(e.keyboard_id) orelse return).keyPressed(e); 
+            const win = self.windowing.getWindowFromId(e.window_id) orelse return;
+            try self.unikeyboard.keyPressed(e, win); 
+            try (self.getKeyboard(e.keyboard_id) orelse return).keyPressed(e, win); 
         },
         .keyboard_key_up => |e| { 
-            self.unikeyboard.keyReleased(e); 
-            (self.getKeyboard(e.keyboard_id) orelse return).keyReleased(e); 
+            const win = self.windowing.getWindowFromId(e.window_id) orelse return;
+            self.unikeyboard.keyReleased(e, win); 
+            (self.getKeyboard(e.keyboard_id) orelse return).keyReleased(e, win); 
         },
         .mouse_connected => |e| {
             const ms = try self.allocator.create(devices.MouseDevice);
@@ -176,27 +184,33 @@ fn onPlatformEvent(self: *Input, event: Platform.desc.PlatformEvent) !void {
             self.allocator.destroy(kv.value);
         },
         .mouse_button_down => |e| {
+            const win = self.windowing.getWindowFromId(e.window_id) orelse return;
             var ms = self.getMouse(e.mouse_id) orelse return;
+
             const consumed = self.ui.pointerPressed(ms.getPosition());
-            try self.unimouse.buttonDown(e, consumed); 
-            try ms.buttonDown(e, consumed);
+            try self.unimouse.buttonDown(e, consumed, win); 
+            try ms.buttonDown(e, consumed, win);
         },
         .mouse_button_up => |e| {
+            const win = self.windowing.getWindowFromId(e.window_id) orelse return;
             var ms = self.getMouse(e.mouse_id) orelse return;
+
             const consumed = self.ui.pointerReleased(ms.getPosition());
-            self.unimouse.buttonUp(e, consumed); 
-            ms.buttonUp(e, consumed);
+            self.unimouse.buttonUp(e, consumed, win); 
+            ms.buttonUp(e, consumed, win);
         },
         .mouse_scrolled => |e| {
-            self.unimouse.scrolled(e); 
-            (self.getMouse(e.mouse_id) orelse return).scrolled(e);
+            const win = self.windowing.getWindowFromId(e.window_id) orelse return;
+            self.unimouse.scrolled(e, win); 
+            (self.getMouse(e.mouse_id) orelse return).scrolled(e, win);
         },
         .mouse_moved => |e| {
+            const win = self.windowing.getWindowFromId(e.window_id) orelse return;
             var ms = self.getMouse(e.mouse_id) orelse return;
             const consumed = self.ui.pointerMoved(ms.getPosition());
 
-            self.unimouse.moved(e, consumed); 
-            ms.moved(e, consumed);
+            self.unimouse.moved(e, consumed, win); 
+            ms.moved(e, consumed, win);
         },
         else => {}
     }

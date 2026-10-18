@@ -7,6 +7,7 @@ const core = @import("../core/core.zig");
 const math = @import("../core/math/math.zig");
 const render = @import("../render/render.zig");
 const reflow = @import("reflow.zig");
+const Windowing = @import("../windowing/Windowing.zig");
 pub const types = @import("types.zig");
 
 const u64_max = std.math.maxInt(u64);
@@ -57,7 +58,6 @@ frame_allocator: std.heap.ArenaAllocator,
 component_ids: ComponentIds,
 world: ecs.World,
 changed: std.ArrayList(ecs.Entity),
-main_window: ?ecs.Entity = null,
 
 pressed: ?ecs.Entity = null,
 hovered: ?ecs.Entity = null,
@@ -136,7 +136,7 @@ pub fn update(self: *Ui) void {
     self.world.changed_set.clearRetainingCapacity();
 }
 
-pub const CreateOptions = struct {
+pub const CreateElementOptions = struct {
     parent: ?Element = null,
     size: ?types.SizeMode = null,
     position: ?math.Vec2 = null,
@@ -150,12 +150,16 @@ pub const CreateOptions = struct {
     interactable: ?Interactable = null,
 };
 
-pub fn createElement(self: *Ui, options: ?CreateOptions) !Element {
+pub fn createElement(self: *Ui, windowing: *Windowing, options: ?CreateElementOptions) !Element {
     const entity = try self.world.spawnEntity();
     errdefer entity.destroy();
 
     const opts = options orelse return .{ .entity = entity };
-    try entity.setParent(if (opts.parent) |p| p.entity else self.main_window);
+    const parent = if (opts.parent) |p| p.entity 
+        else if (windowing.main_window) |w| (try w.getElement()).entity
+        else null;
+
+    try entity.setParent(parent);
     try self.world.set(entity, self.component_ids.interactable, Interactable, if (opts.interactable) |i| i else true);
     try self.world.set(entity, self.component_ids.size, types.SizeMode, if (opts.size) |s| s else .{});
     try self.world.set(entity, self.component_ids.position, math.Vec2, if (opts.position) |p| p else .zero);

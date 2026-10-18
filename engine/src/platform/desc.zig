@@ -1,12 +1,25 @@
 // Copyright 2026 wyteroze. Licensed under the Apache-2.0 license.
 
 const std = @import("std");
+const types = @import("types.zig");
 
 pub const SurfaceDesc = struct {
+    parent: ?types.SurfaceHandle,
     title: [:0]const u8,
     width: u32,
     height: u32,
-    target: enum { primary, secondary }
+    minimized: bool,
+    maximized: bool,
+    fullscreen: bool,
+    utility: bool,
+    popup: bool,
+    tooltip: bool,
+    hidden: bool,
+    resizable: bool,
+    always_on_top: bool,
+    transparent: bool,
+    borderless: bool,
+    modal: bool,
 };
 
 pub const AudioFormat = enum { f32_le };
@@ -153,6 +166,12 @@ pub const GamepadConnectionEvent = struct {
 pub const PlatformEvent = union(enum) {
     quit: void,
     surface_resize: struct { id: u32, width: u32, height: u32 },
+    surface_closed: u32,
+    surface_fullscreened: u32,
+    surface_fullscreen_exited: u32,
+    surface_maximized: u32,
+    surface_minimized: u32,
+    surface_restored: u32,
     keyboard_connected: KeyboardConnectionEvent,
     keyboard_disconnected: KeyboardConnectionEvent,
     keyboard_key_down: KeyboardEvent,
