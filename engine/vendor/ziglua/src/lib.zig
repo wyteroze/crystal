@@ -3884,14 +3884,45 @@ pub const Lua = opaque {
         }
     }
 
+    // Crystal
+
+    /// Takes a table from the top of the stack and sets it as a metatable to be used by lua_newuserdatataggedwithmetatable. 
+    /// Table is popped from the stack.
+    ///
+    /// Only available in Luau
+    ///
+    /// * Pops from Stack: `1`
+    /// * Pushes to Stack: `0`
     pub fn setUserdataMetatable(lua: *Lua, tag: i32) void {
         comptime checkSupport(.{ .luau }, @src().fn_name);
         c.lua_setuserdatametatable(@as(*LuaState, @ptrCast(lua)), tag);
     }
 
+    /// Retrieves the metatable associated with the userdata tag and places it on top of the stack. 
+    /// If a table was not associated, nil is placed instead.
+    ///
+    /// Only available in Luau
+    ///
+    /// * Pops from Stack: `0`
+    /// * Pushes to Stack: `1`
+    /// * Lua Runtime Errors: `any`
     pub fn getUserdataMetatable(lua: *Lua, tag: i32) void {
         comptime checkSupport(.{ .luau }, @src().fn_name);
         c.lua_getuserdatametatable(@as(*LuaState, @ptrCast(lua)), tag);
+    }
+
+    /// Attempts to determine the allocation rate of the VM in bytes per second.
+    /// Returns null if it cannot.
+    ///
+    /// Only available in Luau
+    ///
+    /// * Pops from Stack: `0`
+    /// * Pushes to Stack: `0`
+    /// * Lua Runtime Errors: `any`
+    pub fn allocationRate(lua: *Lua) ?i64 {
+        comptime checkSupport(.{ .luau }, @src().fn_name);
+        const ar = c.lua_allocationrate(@as(*LuaState, @ptrCast(lua)));
+        return if (ar == -1) null else ar; 
     }
 
     /// Ensures that the value `t[field]`, where `t` is the value at `index`, is a table, and pushes that table onto the stack.
@@ -4404,7 +4435,7 @@ pub const Lua = opaque {
     }
 
     fn unrefLuau(lua: *Lua, r: i32) void {
-        c.lua_unref(@ptrCast(lua), r);
+        _ = c.lua_unref(@ptrCast(lua), r);
     }
 
     /// Releases the reference `r` from the table at index `index`.
@@ -5572,6 +5603,13 @@ pub fn wrap(comptime function: anytype) TypeOfWrap(function) {
     };
 }
 
+pub const VectorPrecision = enum {
+    /// 32-bit float vector components
+    single,
+    /// 64-bit double vector components
+    double,
+};
+
 /// Zig wrapper for Luau lua_CompileOptions that uses the same defaults as Luau if
 /// no compile options is specified.
 pub const CompileOptions = struct {
@@ -5600,6 +5638,8 @@ pub const CompileOptions = struct {
     /// alternative global builtin to construct vectors, in addition to default builtin 'vector.create'
     vector_lib: ?[*:0]const u8 = null,
     vector_ctor: ?[*:0]const u8 = null,
+
+    vector_precision: VectorPrecision = .single,
 
     /// alternative vector type name for type tables, in addition to default type 'vector'
     vector_type: ?[*:0]const u8 = null,
@@ -5630,6 +5670,7 @@ pub fn compile(allocator: Allocator, source: []const u8, options: CompileOptions
         .vectorLib = options.vector_lib,
         .vectorCtor = options.vector_ctor,
         .vectorType = options.vector_type,
+        .vectorPrecision = switch (options.vector_precision) { .single => 1, .double => 2 },
         .mutableGlobals = options.mutable_globals,
         .userdataTypes = options.userdata_types,
         .librariesWithKnownMembers = options.libraries_with_known_members,

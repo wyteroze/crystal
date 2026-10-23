@@ -45,3 +45,7 @@ pub fn gcCollect(self: Runtime) void {
 pub fn gcCount(self: Runtime) i32 {
     return self.state.gcCount();
 }
+
+pub fn allocationRate(self: Runtime) ?i64 {
+    return self.state.allocationRate();
+}
