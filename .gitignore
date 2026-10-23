@@ -1,14 +1,7 @@
 .zig-cache/
 zig-out/
 zig-pkg/
-src/assets/models/utah_teapot_30x.obj
-export.json
-.venv
 .DS_Store
-chars.txt
-__pycache__/
-net.wyteroze.example/
-net.wyteroze.summit-example/
 build/
 install/
 .clangd-db/

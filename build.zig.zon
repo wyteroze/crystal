@@ -5,7 +5,7 @@
     .version = "0.0.4",
 
     .fingerprint = 0x6752a315e4b5e2b6, // Changing this has security and trust implications.
-    .minimum_zig_version = "0.16.0",
+    .minimum_zig_version = "0.17.0",
 
     .dependencies = .{
         .engine = .{ .path = "engine" },
