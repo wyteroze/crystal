@@ -8,7 +8,7 @@ export.json
 chars.txt
 __pycache__/
 net.wyteroze.example/
-net.wyteroze.crystal-example/
+net.wyteroze.summit-example/
 build/
 install/
 .clangd-db/

@@ -335,7 +335,7 @@ pub fn main(init: std.process.Init) !void {
             var parser: toml.Parser(struct { project: struct { package: []const u8, name: []const u8 } }) = .init(allocator);
             defer parser.deinit();
 
-            const toml_path = try std.Io.Dir.path.join(allocator, &.{ path, "Crystal.toml" });
+            const toml_path = try std.Io.Dir.path.join(allocator, &.{ path, "Summit.toml" });
             defer allocator.free(toml_path);
 
             var result = try parser.parseFile(init.io, toml_path);
@@ -390,8 +390,8 @@ pub fn main(init: std.process.Init) !void {
     var audio: Audio = undefined;
     try audio.init(io, allocator, &platform);
 
-    const window = try windowing.createWindow(.{ .title = "crystal", .size = .new(1280, 720) });
-    const window_2 = try windowing.createWindow(.{ .title = "crystal 2", .size = .new(854, 480) });
+    const window = try windowing.createWindow(.{ .title = "summit", .size = .new(1280, 720) });
+    const window_2 = try windowing.createWindow(.{ .title = "summit 2", .size = .new(854, 480) });
     windowing.main_window = window;
     try window.focus();
 

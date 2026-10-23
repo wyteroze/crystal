@@ -2,10 +2,10 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug Crystal",
+            "name": "Debug Summit",
             "type": "lldb",
             "request": "launch",
-            "program": "${workspaceRoot}/zig-out/bin/crystal",
+            "program": "${workspaceRoot}/zig-out/bin/summit",
             "args": [ "--", "--project=demos/example/" ],
             "cwd": "${workspaceRoot}"
         }

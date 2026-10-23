@@ -3884,7 +3884,7 @@ pub const Lua = opaque {
         }
     }
 
-    // Crystal
+    // Summit
 
     /// Takes a table from the top of the stack and sets it as a metatable to be used by lua_newuserdatataggedwithmetatable. 
     /// Table is popped from the stack.

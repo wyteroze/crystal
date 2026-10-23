@@ -8,21 +8,21 @@
 
 using Slang::ComPtr;
 
-static SlangCompileTarget toSlangFormat(CrystalSlangTargetKind kind) {
+static SlangCompileTarget toSlangFormat(SummitSlangTargetKind kind) {
     switch (kind) {
-        case CRYSTAL_SLANG_TARGET_HLSL: return SLANG_HLSL;
-        case CRYSTAL_SLANG_TARGET_GLSL: return SLANG_GLSL;
-        case CRYSTAL_SLANG_TARGET_SPIRV: return SLANG_SPIRV;
+        case SUMMIT_SLANG_TARGET_HLSL: return SLANG_HLSL;
+        case SUMMIT_SLANG_TARGET_GLSL: return SLANG_GLSL;
+        case SUMMIT_SLANG_TARGET_SPIRV: return SLANG_SPIRV;
     }
 
     return SLANG_HLSL;
 }
 
-static const char* profileForTarget(CrystalSlangTargetKind kind) {
+static const char* profileForTarget(SummitSlangTargetKind kind) {
     switch (kind) {
-        case CRYSTAL_SLANG_TARGET_HLSL: return "sm_6_0";
-        case CRYSTAL_SLANG_TARGET_GLSL: return "glsl_450";
-        case CRYSTAL_SLANG_TARGET_SPIRV: return "sm_6_0";
+        case SUMMIT_SLANG_TARGET_HLSL: return "sm_6_0";
+        case SUMMIT_SLANG_TARGET_GLSL: return "glsl_450";
+        case SUMMIT_SLANG_TARGET_SPIRV: return "sm_6_0";
     }
 
     return "sm_6_0";
@@ -30,23 +30,23 @@ static const char* profileForTarget(CrystalSlangTargetKind kind) {
 
 // Compiler
 
-struct CrystalSlangCompilerContext {
+struct SummitSlangCompilerContext {
     ComPtr<slang::IGlobalSession> globalSession;
 };
 
-CrystalSlangCompilerHandle slang_compiler_create() {
-    CrystalSlangCompilerHandle compiler = new CrystalSlangCompilerContext();
+SummitSlangCompilerHandle slang_compiler_create() {
+    SummitSlangCompilerHandle compiler = new SummitSlangCompilerContext();
     slang::createGlobalSession(compiler->globalSession.writeRef());
 
     return compiler;
 }
 
-void slang_compiler_destroy(CrystalSlangCompilerHandle compiler) {
-    delete static_cast<CrystalSlangCompilerContext*>(compiler);
+void slang_compiler_destroy(SummitSlangCompilerHandle compiler) {
+    delete static_cast<SummitSlangCompilerContext*>(compiler);
 }
 
-CrystalSlangCompileResult slang_compile_stage(CrystalSlangCompilerHandle compiler, void* vfs, const char* module_name, const char* source, const char* entry_point, CrystalSlangStageKind stage, CrystalSlangTargetKind target) {
-    CrystalSlangCompileResult result = {};
+SummitSlangCompileResult slang_compile_stage(SummitSlangCompilerHandle compiler, void* vfs, const char* module_name, const char* source, const char* entry_point, SummitSlangStageKind stage, SummitSlangTargetKind target) {
+    SummitSlangCompileResult result = {};
 
     slang::TargetDesc targetDesc = {};
     targetDesc.format = toSlangFormat(target);
@@ -104,7 +104,7 @@ CrystalSlangCompileResult slang_compile_stage(CrystalSlangCompilerHandle compile
     return result;
 }
 
-void slang_free_result(CrystalSlangCompileResult result) {
+void slang_free_result(SummitSlangCompileResult result) {
     if (result.code_data) free(const_cast<void*>(result.code_data));
     if (result.error_message) free(const_cast<char*>(const_cast<char*>(result.error_message)));
 }
@@ -143,7 +143,7 @@ private:
 
 class EmbeddedFS : public ISlangFileSystem {
 public:
-    EmbeddedFS(CrystalSlangVfsLookupFn lookupFn, void* userdata)
+    EmbeddedFS(SummitSlangVfsLookupFn lookupFn, void* userdata)
         : m_lookupFn(lookupFn), m_userdata(userdata), m_refcount(1) {}
 
     SLANG_NO_THROW SlangResult SLANG_MCALL queryInterface(SlangUUID const& uuid, void** outObject) override {
@@ -177,12 +177,12 @@ public:
         return SLANG_OK;
     }
 private:
-    CrystalSlangVfsLookupFn m_lookupFn;
+    SummitSlangVfsLookupFn m_lookupFn;
     void* m_userdata;
     uint32_t m_refcount;
 };
 
-void* slang_vfs_create(CrystalSlangVfsLookupFn lookupFn, void* userData) {
+void* slang_vfs_create(SummitSlangVfsLookupFn lookupFn, void* userData) {
     return new EmbeddedFS(lookupFn, userData);
 }
 

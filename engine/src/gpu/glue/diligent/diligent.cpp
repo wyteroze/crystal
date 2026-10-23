@@ -21,13 +21,13 @@
 #include <iostream>
 #include <vector>
 
-#ifdef CRYSTAL_D3D11_BACKEND
+#ifdef SUMMIT_D3D11_BACKEND
 #include "DiligentCore/Graphics/GraphicsEngineD3D11/interface/EngineFactoryD3D11.h"
-#elif CRYSTAL_D3D12_BACKEND
+#elif SUMMIT_D3D12_BACKEND
 #include "DiligentCore/Graphics/GraphicsEngineD3D12/interface/EngineFactoryD3D12.h"
-#elif CRYSTAL_OPENGL_BACKEND
+#elif SUMMIT_OPENGL_BACKEND
 #include "DiligentCore/Graphics/GraphicsEngineOpenGL/interface/EngineFactoryOpenGL.h"
-#elif CRYSTAL_VULKAN_BACKEND
+#elif SUMMIT_VULKAN_BACKEND
 #include "DiligentCore/Graphics/GraphicsEngineVulkan/interface/EngineFactoryVk.h"
 #endif
 
@@ -41,118 +41,118 @@
 #endif
 
 using namespace Diligent;
-struct CrystalDiligentDeviceContext {
+struct SummitDiligentDeviceContext {
     IRenderDevice* device;
     IDeviceContext* context;
     IEngineFactory* factory;
 };
 
-struct CrystalDiligentShader {
+struct SummitDiligentShader {
     IShader* vs = nullptr;
     IShader* ps = nullptr;
     IShader* cs = nullptr;
 };
 
-struct CrystalDiligentPipeline {
+struct SummitDiligentPipeline {
     IPipelineState* pso;
     IShaderResourceBinding* srb;
     VALUE_TYPE index_type;
     bool has_index_buffer = false;
 };
 
-struct CrystalDiligentComputePipeline {
+struct SummitDiligentComputePipeline {
     IPipelineState* pso;
     IShaderResourceBinding* srb;
 };
 
 // Helpers
 
-static FILTER_TYPE crystalFilterToDiligent(CrystalFilterType filter) {
+static FILTER_TYPE summitFilterToDiligent(SummitFilterType filter) {
     switch (filter) {
-        case CRYSTAL_FILTER_TYPE_LINEAR:
+        case SUMMIT_FILTER_TYPE_LINEAR:
             return FILTER_TYPE_LINEAR;
-        case CRYSTAL_FILTER_TYPE_NEAREST:
+        case SUMMIT_FILTER_TYPE_NEAREST:
             return FILTER_TYPE_POINT;
     }
 }
 
-static TEXTURE_ADDRESS_MODE crystalWrapToDiligent(CrystalWrapType wrap) {
+static TEXTURE_ADDRESS_MODE summitWrapToDiligent(SummitWrapType wrap) {
     switch (wrap) {
-        case CRYSTAL_WRAP_TYPE_CLAMP:
+        case SUMMIT_WRAP_TYPE_CLAMP:
             return TEXTURE_ADDRESS_CLAMP;
-        case CRYSTAL_WRAP_TYPE_REPEAT:
+        case SUMMIT_WRAP_TYPE_REPEAT:
             return TEXTURE_ADDRESS_WRAP;
     }
 }
 
-static SHADER_TYPE crystalShaderStageToDiligent(CrystalShaderStage stage) {
+static SHADER_TYPE summitShaderStageToDiligent(SummitShaderStage stage) {
     switch (stage) {
-        case CRYSTAL_SHADER_STAGE_VERTEX:
+        case SUMMIT_SHADER_STAGE_VERTEX:
             return SHADER_TYPE_VERTEX;
-        case CRYSTAL_SHADER_STAGE_FRAGMENT:
+        case SUMMIT_SHADER_STAGE_FRAGMENT:
             return SHADER_TYPE_PIXEL;
-        case CRYSTAL_SHADER_STAGE_COMPUTE:
+        case SUMMIT_SHADER_STAGE_COMPUTE:
             return SHADER_TYPE_COMPUTE;
     }
 }
 
-static SHADER_TYPE crystalVisibilityToDiligent(CrystalShaderVisibility visibility) {
+static SHADER_TYPE summitVisibilityToDiligent(SummitShaderVisibility visibility) {
     switch (visibility) {
-        case CRYSTAL_SHADER_VISIBILITY_VERTEX:
+        case SUMMIT_SHADER_VISIBILITY_VERTEX:
             return SHADER_TYPE_VERTEX;
-        case CRYSTAL_SHADER_VISIBILITY_FRAGMENT:
+        case SUMMIT_SHADER_VISIBILITY_FRAGMENT:
             return SHADER_TYPE_PIXEL;
-        case CRYSTAL_SHADER_VISIBILITY_COMPUTE:
+        case SUMMIT_SHADER_VISIBILITY_COMPUTE:
             return SHADER_TYPE_COMPUTE;
-        case CRYSTAL_SHADER_VISIBILITY_VERTEX_FRAGMENT:
+        case SUMMIT_SHADER_VISIBILITY_VERTEX_FRAGMENT:
             return SHADER_TYPE_VERTEX | SHADER_TYPE_PIXEL;
     }
 }
 
-static TEXTURE_FORMAT crystalPixelFormatToDiligent(CrystalPixelFormat format) {
+static TEXTURE_FORMAT summitPixelFormatToDiligent(SummitPixelFormat format) {
     switch (format) {
-        case CRYSTAL_PIXEL_FORMAT_RGBA8:
+        case SUMMIT_PIXEL_FORMAT_RGBA8:
             return TEX_FORMAT_RGBA8_UNORM_SRGB;
-        case CRYSTAL_PIXEL_FORMAT_RGBA16F:
+        case SUMMIT_PIXEL_FORMAT_RGBA16F:
             return TEX_FORMAT_RGBA16_FLOAT;
-        case CRYSTAL_PIXEL_FORMAT_D24_S8:
+        case SUMMIT_PIXEL_FORMAT_D24_S8:
             return TEX_FORMAT_D24_UNORM_S8_UINT;
-        case CRYSTAL_PIXEL_FORMAT_D32:
+        case SUMMIT_PIXEL_FORMAT_D32:
             return TEX_FORMAT_D32_FLOAT;
-        case CRYSTAL_PIXEL_FORMAT_R8_UNORM:
+        case SUMMIT_PIXEL_FORMAT_R8_UNORM:
             return TEX_FORMAT_R8_UNORM;
-        case CRYSTAL_PIXEL_FORMAT_BGRA8:
+        case SUMMIT_PIXEL_FORMAT_BGRA8:
             return TEX_FORMAT_BGRA8_UNORM_SRGB;
     }
 }
 
-static COMPARISON_FUNCTION crystalComparisonFuncToDiligent(CrystalCompareFunc func) {
+static COMPARISON_FUNCTION summitComparisonFuncToDiligent(SummitCompareFunc func) {
     switch (func) {
-        case CRYSTAL_COMPARISON_FUNC_LESS:
+        case SUMMIT_COMPARISON_FUNC_LESS:
             return COMPARISON_FUNC_LESS;
-        case CRYSTAL_COMPARISON_FUNC_LESS_EQUAL:
+        case SUMMIT_COMPARISON_FUNC_LESS_EQUAL:
             return COMPARISON_FUNC_LESS_EQUAL;
-        case CRYSTAL_COMPARISON_FUNC_GREATER:
+        case SUMMIT_COMPARISON_FUNC_GREATER:
             return COMPARISON_FUNC_GREATER;
-        case CRYSTAL_COMPARISON_FUNC_GREATER_EQUAL:
+        case SUMMIT_COMPARISON_FUNC_GREATER_EQUAL:
             return COMPARISON_FUNC_GREATER_EQUAL;
-        case CRYSTAL_COMPARISON_FUNC_ALWAYS:
+        case SUMMIT_COMPARISON_FUNC_ALWAYS:
             return COMPARISON_FUNC_ALWAYS;
-        case CRYSTAL_COMPARISON_FUNC_NEVER:
+        case SUMMIT_COMPARISON_FUNC_NEVER:
             return COMPARISON_FUNC_NEVER;
-        case CRYSTAL_COMPARISON_FUNC_EQUAL:
+        case SUMMIT_COMPARISON_FUNC_EQUAL:
             return COMPARISON_FUNC_EQUAL;
-        case CRYSTAL_COMPARISON_FUNC_NOT_EQUAL:
+        case SUMMIT_COMPARISON_FUNC_NOT_EQUAL:
             return COMPARISON_FUNC_NOT_EQUAL;
     }
 }
 
-static std::vector<ShaderResourceVariableDesc> buildResourceVars(const CrystalResourceDesc* resources, size_t count) {
+static std::vector<ShaderResourceVariableDesc> buildResourceVars(const SummitResourceDesc* resources, size_t count) {
     std::vector<ShaderResourceVariableDesc> vars;
     vars.reserve(count);
     for (size_t i = 0; i < count; i++) {
         vars.push_back({
-            crystalVisibilityToDiligent(resources[i].visibility), 
+            summitVisibilityToDiligent(resources[i].visibility), 
             resources[i].name, 
             SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC
         });
@@ -163,28 +163,28 @@ static std::vector<ShaderResourceVariableDesc> buildResourceVars(const CrystalRe
 
 // Implementation
 
-CrystalDiligentDeviceHandle diligent_init() {
+SummitDiligentDeviceHandle diligent_init() {
     SetDebugMessageCallback([](DEBUG_MESSAGE_SEVERITY sev, const Char* msg, const Char*, const Char*, int) {
         std::cerr << "[Diligent] " << msg << "\n";
     });
 
-    CrystalDiligentDeviceHandle handle = new CrystalDiligentDeviceContext();
+    SummitDiligentDeviceHandle handle = new SummitDiligentDeviceContext();
 
     IRenderDevice* device;
     IDeviceContext* context;
     IEngineFactory* factory;
 
-#ifdef CRYSTAL_D3D11_BACKEND
+#ifdef SUMMIT_D3D11_BACKEND
     EngineD3D11CreateInfo EngineCI;
     auto *factoryD3D11 = LoadAndGetEngineFactoryD3D11();
     factoryD3D11->CreateDeviceAndContextsD3D11(EngineCI, &device, &context);
     factory = factoryD3D11;
-#elif CRYSTAL_D3D12_BACKEND
+#elif SUMMIT_D3D12_BACKEND
     EngineD3D12CreateInfo EngineCI;
     auto *factoryD3D12 = LoadAndGetEngineFactoryD3D12();
     factoryD3D12->CreateDeviceAndContextsD3D12(EngineCI, &device, &context);
     factory = factoryD3D12;
-#elif CRYSTAL_OPENGL_BACKEND
+#elif SUMMIT_OPENGL_BACKEND
     auto* factoryOpenGL = LoadAndGetEngineFactoryOpenGL();
 
     EngineGLCreateInfo EngineCI;
@@ -192,7 +192,7 @@ CrystalDiligentDeviceHandle diligent_init() {
 
     factoryOpenGL->CreateDeviceAndSwapChainGL(EngineCI, &device, &context, SCDesc, &swapchain);
     factory = factoryOpenGL;
-#elif CRYSTAL_VULKAN_BACKEND
+#elif SUMMIT_VULKAN_BACKEND
     EngineVkCreateInfo EngineCI;
     EngineCI.EnableValidation = true;
     EngineCI.SetValidationLevel(VALIDATION_LEVEL_2);
@@ -209,7 +209,7 @@ CrystalDiligentDeviceHandle diligent_init() {
     return handle;
 }
 
-void diligent_deinit(CrystalDiligentDeviceHandle handle) {
+void diligent_deinit(SummitDiligentDeviceHandle handle) {
     handle->context->Flush();
     handle->context->WaitForIdle();
     handle->context->Release();
@@ -217,24 +217,24 @@ void diligent_deinit(CrystalDiligentDeviceHandle handle) {
     delete handle;
 }
 
-CrystalBufferHandle diligent_create_buffer(CrystalDiligentDeviceHandle handle, CrystalBufferDesc desc) {
+SummitBufferHandle diligent_create_buffer(SummitDiligentDeviceHandle handle, SummitBufferDesc desc) {
     BufferDesc BufDesc;
     BufDesc.Name = desc.name;
     switch (desc.type) {
-        case CRYSTAL_BUFFER_TYPE_INDEX:
+        case SUMMIT_BUFFER_TYPE_INDEX:
             BufDesc.BindFlags = BIND_INDEX_BUFFER;
             break;
-        case CRYSTAL_BUFFER_TYPE_VERTEX:
+        case SUMMIT_BUFFER_TYPE_VERTEX:
             BufDesc.BindFlags = BIND_VERTEX_BUFFER;
             break;
-        case CRYSTAL_BUFFER_TYPE_UNIFORM:
+        case SUMMIT_BUFFER_TYPE_UNIFORM:
             BufDesc.BindFlags = BIND_UNIFORM_BUFFER;
             break;
-        case CRYSTAL_BUFFER_TYPE_STORAGE:
+        case SUMMIT_BUFFER_TYPE_STORAGE:
             BufDesc.BindFlags = BIND_SHADER_RESOURCE | BIND_UNORDERED_ACCESS;
             BufDesc.Mode = BUFFER_MODE_STRUCTURED;
             if (desc.stride == 0) {
-                std::cerr << "Crystal C++ [FATAL]: Invalid stride for buffer of type CRYSTAL_BUFFER_TYPE_STORAGE";
+                std::cerr << "Summit C++ [FATAL]: Invalid stride for buffer of type SUMMIT_BUFFER_TYPE_STORAGE";
                 exit(EXIT_FAILURE);
             }
             BufDesc.ElementByteStride = desc.stride;
@@ -242,17 +242,17 @@ CrystalBufferHandle diligent_create_buffer(CrystalDiligentDeviceHandle handle, C
             break;
     }
     switch (desc.usage) {
-        case CRYSTAL_BUFFER_USAGE_DEFAULT:
+        case SUMMIT_BUFFER_USAGE_DEFAULT:
             BufDesc.Usage = USAGE_DEFAULT;
             break;
-        case CRYSTAL_BUFFER_USAGE_IMMUTABLE:
+        case SUMMIT_BUFFER_USAGE_IMMUTABLE:
             BufDesc.Usage = USAGE_IMMUTABLE;
             break;
-        case CRYSTAL_BUFFER_USAGE_DYNAMIC:
+        case SUMMIT_BUFFER_USAGE_DYNAMIC:
             BufDesc.Usage = USAGE_DYNAMIC;
             BufDesc.CPUAccessFlags = CPU_ACCESS_WRITE;
             break;
-        case CRYSTAL_BUFFER_USAGE_STREAM:
+        case SUMMIT_BUFFER_USAGE_STREAM:
             BufDesc.Usage = USAGE_STAGING;
             BufDesc.CPUAccessFlags = CPU_ACCESS_READ;
             break;
@@ -269,7 +269,7 @@ CrystalBufferHandle diligent_create_buffer(CrystalDiligentDeviceHandle handle, C
     return { .ptr = buffer };
 }
 
-void diligent_update_buffer(CrystalDiligentDeviceHandle handle, CrystalBufferHandle bufH, const char* data, size_t size) {
+void diligent_update_buffer(SummitDiligentDeviceHandle handle, SummitBufferHandle bufH, const char* data, size_t size) {
     auto buffer = static_cast<IBuffer*>(bufH.ptr);
     auto desc = buffer->GetDesc();
 
@@ -285,28 +285,28 @@ void diligent_update_buffer(CrystalDiligentDeviceHandle handle, CrystalBufferHan
             break;
         }
         case USAGE_IMMUTABLE:
-            std::cerr << "Crystal C++: Unable to update immutable buffer\n";
+            std::cerr << "Summit C++: Unable to update immutable buffer\n";
             return;
         default: 
-            std::cerr << "Crystal C++ [FATAL]: Unknown buffer usage type\n";
+            std::cerr << "Summit C++ [FATAL]: Unknown buffer usage type\n";
             exit(EXIT_FAILURE); 
     }
 }
 
-void diligent_destroy_buffer(CrystalDiligentDeviceHandle handle, CrystalBufferHandle bufH) {
+void diligent_destroy_buffer(SummitDiligentDeviceHandle handle, SummitBufferHandle bufH) {
     auto buffer = static_cast<IBuffer*>(bufH.ptr);
     buffer->Release();
 }
 
-CrystalSamplerHandle diligent_create_sampler(CrystalDiligentDeviceHandle handle, CrystalSamplerDesc desc) {
+SummitSamplerHandle diligent_create_sampler(SummitDiligentDeviceHandle handle, SummitSamplerDesc desc) {
     SamplerDesc SamDesc;
 
-    SamDesc.MinFilter = crystalFilterToDiligent(desc.min_filter);
-    SamDesc.MagFilter = crystalFilterToDiligent(desc.mag_filter);
-    SamDesc.MipFilter = crystalFilterToDiligent(desc.mip_filter);
+    SamDesc.MinFilter = summitFilterToDiligent(desc.min_filter);
+    SamDesc.MagFilter = summitFilterToDiligent(desc.mag_filter);
+    SamDesc.MipFilter = summitFilterToDiligent(desc.mip_filter);
 
-    SamDesc.AddressU = crystalWrapToDiligent(desc.wrap_u);
-    SamDesc.AddressV = crystalWrapToDiligent(desc.wrap_v);
+    SamDesc.AddressU = summitWrapToDiligent(desc.wrap_u);
+    SamDesc.AddressV = summitWrapToDiligent(desc.wrap_v);
 
     ISampler* sampler = nullptr;
     handle->device->CreateSampler(SamDesc, &sampler);
@@ -314,12 +314,12 @@ CrystalSamplerHandle diligent_create_sampler(CrystalDiligentDeviceHandle handle,
     return { .ptr = sampler };
 }
 
-void diligent_destroy_sampler(CrystalDiligentDeviceHandle handle, CrystalSamplerHandle samH) {
+void diligent_destroy_sampler(SummitDiligentDeviceHandle handle, SummitSamplerHandle samH) {
     auto sampler = static_cast<ISampler*>(samH.ptr);
     sampler->Release();
 }
 
-CrystalImageHandle diligent_create_image(CrystalDiligentDeviceHandle handle, CrystalImageDesc desc) {
+SummitImageHandle diligent_create_image(SummitDiligentDeviceHandle handle, SummitImageDesc desc) {
     TextureDesc TexDesc;
     TexDesc.Name = desc.name;
     TexDesc.Type = desc.is_cubemap ? RESOURCE_DIM_TEX_CUBE : RESOURCE_DIM_TEX_2D;
@@ -327,36 +327,36 @@ CrystalImageHandle diligent_create_image(CrystalDiligentDeviceHandle handle, Cry
     TexDesc.Width = desc.width;
     TexDesc.Height = desc.height;
     TexDesc.MipLevels = 1;
-    TexDesc.Format = crystalPixelFormatToDiligent(desc.format);
+    TexDesc.Format = summitPixelFormatToDiligent(desc.format);
     
     std::cerr << "is_cubemap=" << desc.is_cubemap << " width=" << desc.width << "\n";
 
     size_t stride = 0;
     bool isDepth = false;
     switch (desc.format) {
-        case CRYSTAL_PIXEL_FORMAT_BGRA8:
-        case CRYSTAL_PIXEL_FORMAT_RGBA8:
+        case SUMMIT_PIXEL_FORMAT_BGRA8:
+        case SUMMIT_PIXEL_FORMAT_RGBA8:
             TexDesc.BindFlags = BIND_SHADER_RESOURCE;
             stride = 4;
             
             break;
-        case CRYSTAL_PIXEL_FORMAT_RGBA16F:
+        case SUMMIT_PIXEL_FORMAT_RGBA16F:
             TexDesc.BindFlags = BIND_SHADER_RESOURCE;
             stride = 8;
 
             break;
-        case CRYSTAL_PIXEL_FORMAT_D24_S8:
+        case SUMMIT_PIXEL_FORMAT_D24_S8:
             TexDesc.BindFlags = BIND_DEPTH_STENCIL | BIND_SHADER_RESOURCE;
             stride = 4;
             isDepth = true;
 
             break;
-        case CRYSTAL_PIXEL_FORMAT_D32:
+        case SUMMIT_PIXEL_FORMAT_D32:
             TexDesc.BindFlags = BIND_DEPTH_STENCIL | BIND_SHADER_RESOURCE;
             stride = 4;
             isDepth = true;
             break;
-        case CRYSTAL_PIXEL_FORMAT_R8_UNORM:
+        case SUMMIT_PIXEL_FORMAT_R8_UNORM:
             TexDesc.BindFlags = BIND_SHADER_RESOURCE;
             stride = 1;
             break;
@@ -398,20 +398,20 @@ CrystalImageHandle diligent_create_image(CrystalDiligentDeviceHandle handle, Cry
     }
 
     if (!tex) {
-        std::cerr << "Crystal C++ [FATAL]: Texture creation failed for '" << desc.name << "'\n";
+        std::cerr << "Summit C++ [FATAL]: Texture creation failed for '" << desc.name << "'\n";
         exit(EXIT_FAILURE);
     }
     
     return { .ptr = tex };
 }
 
-void diligent_destroy_image(CrystalDiligentDeviceHandle handle, CrystalImageHandle imgH) {
+void diligent_destroy_image(SummitDiligentDeviceHandle handle, SummitImageHandle imgH) {
     auto image = static_cast<ITexture*>(imgH.ptr);
     image->Release();
 }
 
-CrystalPipelineHandle diligent_create_pipeline(CrystalDiligentDeviceHandle handle, CrystalPipelineDesc desc) {
-    auto* shaderSet = reinterpret_cast<CrystalDiligentShader*>(desc.shader.ptr);
+SummitPipelineHandle diligent_create_pipeline(SummitDiligentDeviceHandle handle, SummitPipelineDesc desc) {
+    auto* shaderSet = reinterpret_cast<SummitDiligentShader*>(desc.shader.ptr);
 
     GraphicsPipelineStateCreateInfo psoCreateInfo;
     auto& psoDesc = psoCreateInfo.PSODesc;
@@ -438,10 +438,10 @@ CrystalPipelineHandle diligent_create_pipeline(CrystalDiligentDeviceHandle handl
     if (desc.color_write_mask.blue) writeMask |= COLOR_MASK_BLUE;
     if (desc.color_write_mask.alpha) writeMask |= COLOR_MASK_ALPHA;
     graphicsPipeline.BlendDesc.RenderTargets[0].RenderTargetWriteMask = writeMask;
-    graphicsPipeline.DepthStencilDesc.DepthFunc = crystalComparisonFuncToDiligent(desc.comparison_func);
+    graphicsPipeline.DepthStencilDesc.DepthFunc = summitComparisonFuncToDiligent(desc.comparison_func);
 
     if (desc.has_depth_format) {
-        graphicsPipeline.DSVFormat = crystalPixelFormatToDiligent(desc.depth_format);
+        graphicsPipeline.DSVFormat = summitPixelFormatToDiligent(desc.depth_format);
         graphicsPipeline.DepthStencilDesc.DepthEnable = desc.depth_write;
         graphicsPipeline.DepthStencilDesc.DepthWriteEnable = desc.depth_write;
     } else {
@@ -452,7 +452,7 @@ CrystalPipelineHandle diligent_create_pipeline(CrystalDiligentDeviceHandle handl
 
     if (desc.has_color_format) {
         graphicsPipeline.NumRenderTargets = 1;
-        graphicsPipeline.RTVFormats[0] = crystalPixelFormatToDiligent(desc.color_format);
+        graphicsPipeline.RTVFormats[0] = summitPixelFormatToDiligent(desc.color_format);
     } else {
         graphicsPipeline.NumRenderTargets = 0;
         graphicsPipeline.RTVFormats[0] = TEX_FORMAT_UNKNOWN;
@@ -470,7 +470,7 @@ CrystalPipelineHandle diligent_create_pipeline(CrystalDiligentDeviceHandle handl
     std::vector<LayoutElement> layoutElems;
     layoutElems.reserve(desc.layout_len);
     for (size_t i = 0; i < desc.layout_len; i++) {
-        const CrystalVertexAttr& attr = desc.layout[i];
+        const SummitVertexAttr& attr = desc.layout[i];
         Uint8 numComponents = 0;
         switch (attr.format) {
             case FLOAT2:
@@ -506,21 +506,21 @@ CrystalPipelineHandle diligent_create_pipeline(CrystalDiligentDeviceHandle handl
     IPipelineState* pso = nullptr;
     handle->device->CreateGraphicsPipelineState(psoCreateInfo, &pso);
     if (!pso) {
-        std::cerr << "Crystal C++ [FATAL]: Pipeline creation failed for '" << desc.name << "'\n";
+        std::cerr << "Summit C++ [FATAL]: Pipeline creation failed for '" << desc.name << "'\n";
         exit(EXIT_FAILURE);
     }
 
-    auto* pipeline = new CrystalDiligentPipeline;
+    auto* pipeline = new SummitDiligentPipeline;
     pipeline->pso = pso;
     switch (desc.index_type) {
-        case CRYSTAL_INDEX_TYPE_UINT16:
+        case SUMMIT_INDEX_TYPE_UINT16:
             pipeline->index_type = VT_INT16;
             break;
-        case CRYSTAL_INDEX_TYPE_UINT32:
+        case SUMMIT_INDEX_TYPE_UINT32:
             pipeline->index_type = VT_UINT32;
             break;
-        case CRYSTAL_INDEX_TYPE_NONE:
-            std::cerr << "Crystal C++ [FATAL]: Creating a pipeline with index type of CRYSTAL_INDEX_TYPE_NONE is forbidden\n";
+        case SUMMIT_INDEX_TYPE_NONE:
+            std::cerr << "Summit C++ [FATAL]: Creating a pipeline with index type of SUMMIT_INDEX_TYPE_NONE is forbidden\n";
             exit(EXIT_FAILURE);
     }
     pso->CreateShaderResourceBinding(&pipeline->srb, true);
@@ -528,20 +528,20 @@ CrystalPipelineHandle diligent_create_pipeline(CrystalDiligentDeviceHandle handl
     return { .ptr = pipeline };
 }
 
-void diligent_destroy_pipeline(CrystalDiligentDeviceHandle handle, CrystalPipelineHandle pipeH) {
-    auto pipeline = static_cast<CrystalDiligentPipeline*>(pipeH.ptr);
+void diligent_destroy_pipeline(SummitDiligentDeviceHandle handle, SummitPipelineHandle pipeH) {
+    auto pipeline = static_cast<SummitDiligentPipeline*>(pipeH.ptr);
     pipeline->srb->Release();
     pipeline->pso->Release();
     delete pipeline;
 }
 
-void diligent_apply_pipeline(CrystalDiligentDeviceHandle handle, CrystalPipelineHandle pipeH) {
-    auto pipeline = static_cast<CrystalDiligentPipeline*>(pipeH.ptr);
+void diligent_apply_pipeline(SummitDiligentDeviceHandle handle, SummitPipelineHandle pipeH) {
+    auto pipeline = static_cast<SummitDiligentPipeline*>(pipeH.ptr);
     handle->context->SetPipelineState(pipeline->pso);
 }
 
-void diligent_draw_pipeline(CrystalDiligentDeviceHandle handle, CrystalShaderHandle pipeH, uint32_t base, uint32_t count, uint32_t instances) {
-    auto pipeline = static_cast<CrystalDiligentPipeline*>(pipeH.ptr);
+void diligent_draw_pipeline(SummitDiligentDeviceHandle handle, SummitShaderHandle pipeH, uint32_t base, uint32_t count, uint32_t instances) {
+    auto pipeline = static_cast<SummitDiligentPipeline*>(pipeH.ptr);
 
     if (pipeline->has_index_buffer) {
         DrawIndexedAttribs drawAttrs;
@@ -563,8 +563,8 @@ void diligent_draw_pipeline(CrystalDiligentDeviceHandle handle, CrystalShaderHan
     }
 }
 
-void diligent_pipeline_apply_bindings(CrystalDiligentDeviceHandle handle, CrystalPipelineHandle pipeH, CrystalBindings bindings) {
-    auto pipeline = static_cast<CrystalDiligentPipeline*>(pipeH.ptr);
+void diligent_pipeline_apply_bindings(SummitDiligentDeviceHandle handle, SummitPipelineHandle pipeH, SummitBindings bindings) {
+    auto pipeline = static_cast<SummitDiligentPipeline*>(pipeH.ptr);
 
     IBuffer* vbufs[4] = {};
     Uint64 offsets[4] = {};
@@ -589,30 +589,30 @@ void diligent_pipeline_apply_bindings(CrystalDiligentDeviceHandle handle, Crysta
         auto* var = pipeline->srb->GetVariableByName(SHADER_TYPE_VERTEX, res.name);
         if (!var) var = pipeline->srb->GetVariableByName(SHADER_TYPE_PIXEL, res.name);
         if (!var) {
-            std::cerr << "Crystal C++: No variable named '" << res.name << "'\n";
+            std::cerr << "Summit C++: No variable named '" << res.name << "'\n";
             continue;
         }
 
         switch (res.kind) {
-            case CRYSTAL_RESOURCE_KIND_UNIFORM_BUFFER:
+            case SUMMIT_RESOURCE_KIND_UNIFORM_BUFFER:
                 var->Set(reinterpret_cast<IBuffer*>(res.handle_ptr));
                 break;
-            case CRYSTAL_RESOURCE_KIND_STORAGE_BUFFER: {
+            case SUMMIT_RESOURCE_KIND_STORAGE_BUFFER: {
                 auto* buf = reinterpret_cast<IBuffer*>(res.handle_ptr);
                 var->Set(buf->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
                 break;
             }
-            case CRYSTAL_RESOURCE_KIND_STORAGE_BUFFER_RW: {
+            case SUMMIT_RESOURCE_KIND_STORAGE_BUFFER_RW: {
                 auto* buf = reinterpret_cast<IBuffer*>(res.handle_ptr);
                 var->Set(buf->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
                 break;
             }
-            case CRYSTAL_RESOURCE_KIND_TEXTURE: {
+            case SUMMIT_RESOURCE_KIND_TEXTURE: {
                 auto* tex = reinterpret_cast<ITexture*>(res.handle_ptr);
                 var->Set(tex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
                 break;
             }
-            case CRYSTAL_RESOURCE_KIND_SAMPLER:
+            case SUMMIT_RESOURCE_KIND_SAMPLER:
                 var->Set(reinterpret_cast<ISampler*>(res.handle_ptr));
                 break;
         }
@@ -621,8 +621,8 @@ void diligent_pipeline_apply_bindings(CrystalDiligentDeviceHandle handle, Crysta
     handle->context->CommitShaderResources(pipeline->srb, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 }
 
-CrystalShaderHandle diligent_create_shader(CrystalDiligentDeviceHandle handle, CrystalShaderDesc desc) {
-    auto* pair = new CrystalDiligentShader;
+SummitShaderHandle diligent_create_shader(SummitDiligentDeviceHandle handle, SummitShaderDesc desc) {
+    auto* pair = new SummitDiligentShader;
 
     ShaderCreateInfo shaderCI;
     shaderCI.SourceLanguage = SHADER_SOURCE_LANGUAGE_BYTECODE;
@@ -630,7 +630,7 @@ CrystalShaderHandle diligent_create_shader(CrystalDiligentDeviceHandle handle, C
 
     for (size_t i = 0; i < desc.stages_len; i++) {
         auto stageDesc = desc.stages[i];
-        auto stageType = crystalShaderStageToDiligent(stageDesc.stage);
+        auto stageType = summitShaderStageToDiligent(stageDesc.stage);
 
         shaderCI.Desc.ShaderType = stageType;
         shaderCI.Desc.Name = stageDesc.name;
@@ -641,7 +641,7 @@ CrystalShaderHandle diligent_create_shader(CrystalDiligentDeviceHandle handle, C
         IShader* shader = nullptr;
         handle->device->CreateShader(shaderCI, &shader);
         if (!shader) {
-            std::cerr << "Crystal C++ [FATAL]: Shader creation failed\n";
+            std::cerr << "Summit C++ [FATAL]: Shader creation failed\n";
             exit(EXIT_FAILURE);
         }
 
@@ -657,18 +657,18 @@ CrystalShaderHandle diligent_create_shader(CrystalDiligentDeviceHandle handle, C
     return { .ptr = pair };
 }
 
-void diligent_destroy_shader(CrystalDiligentDeviceHandle handle, CrystalShaderHandle shdH) {
-    auto shader = reinterpret_cast<CrystalDiligentShader*>(shdH.ptr);
+void diligent_destroy_shader(SummitDiligentDeviceHandle handle, SummitShaderHandle shdH) {
+    auto shader = reinterpret_cast<SummitDiligentShader*>(shdH.ptr);
     if (shader->vs) shader->vs->Release();
     if (shader->ps) shader->ps->Release();
 
     delete shader;
 }
 
-CrystalComputePipelineHandle diligent_create_compute_pipeline(CrystalDiligentDeviceHandle handle, CrystalComputePipelineDesc desc) {
-    auto* shaderSet = reinterpret_cast<CrystalDiligentShader*>(desc.shader.ptr);
+SummitComputePipelineHandle diligent_create_compute_pipeline(SummitDiligentDeviceHandle handle, SummitComputePipelineDesc desc) {
+    auto* shaderSet = reinterpret_cast<SummitDiligentShader*>(desc.shader.ptr);
     if (!shaderSet->cs) {
-        std::cerr << "Crystal C++ [FATAL]: Compute pipeline created with no compute shader stage\n";
+        std::cerr << "Summit C++ [FATAL]: Compute pipeline created with no compute shader stage\n";
         exit(EXIT_FAILURE);
     }
 
@@ -687,61 +687,61 @@ CrystalComputePipelineHandle diligent_create_compute_pipeline(CrystalDiligentDev
     IPipelineState* pso = nullptr;
     handle->device->CreateComputePipelineState(psoCreateInfo, &pso);
     if (!pso) {
-        std::cerr << "Crystal C++ [FATAL]: Compute pipeline state creation failed\n";
+        std::cerr << "Summit C++ [FATAL]: Compute pipeline state creation failed\n";
         exit(EXIT_FAILURE);
     }
 
-    auto* pipeline = new CrystalDiligentComputePipeline;
+    auto* pipeline = new SummitDiligentComputePipeline;
     pipeline->pso = pso;
     pso->CreateShaderResourceBinding(&pipeline->srb, true);
 
     return { .ptr = pipeline };
 }
 
-void diligent_destroy_compute_pipeline(CrystalDiligentDeviceHandle handle, CrystalComputePipelineHandle pipeH) {
-    auto pipeline = static_cast<CrystalDiligentComputePipeline*>(pipeH.ptr);
+void diligent_destroy_compute_pipeline(SummitDiligentDeviceHandle handle, SummitComputePipelineHandle pipeH) {
+    auto pipeline = static_cast<SummitDiligentComputePipeline*>(pipeH.ptr);
     pipeline->srb->Release();
     pipeline->pso->Release();
     delete pipeline;
 }
 
-void diligent_apply_compute_pipeline(CrystalDiligentDeviceHandle handle, CrystalComputePipelineHandle pipeH) {
-    auto pipeline = static_cast<CrystalDiligentComputePipeline*>(pipeH.ptr);
+void diligent_apply_compute_pipeline(SummitDiligentDeviceHandle handle, SummitComputePipelineHandle pipeH) {
+    auto pipeline = static_cast<SummitDiligentComputePipeline*>(pipeH.ptr);
     handle->context->SetPipelineState(pipeline->pso);
 }
 
-void diligent_apply_compute_bindings(CrystalDiligentDeviceHandle handle, CrystalComputePipelineHandle pipeH, CrystalBindings bindings) {
-    auto* pipeline = static_cast<CrystalDiligentComputePipeline*>(pipeH.ptr);
+void diligent_apply_compute_bindings(SummitDiligentDeviceHandle handle, SummitComputePipelineHandle pipeH, SummitBindings bindings) {
+    auto* pipeline = static_cast<SummitDiligentComputePipeline*>(pipeH.ptr);
 
     for (size_t i = 0; i < bindings.resources_len; i++) {
         auto& res = bindings.resources[i];
 
         auto* var = pipeline->srb->GetVariableByName(SHADER_TYPE_COMPUTE, res.name);
         if (!var) {
-            std::cerr << "Crystal C++: No compute shader variable named '" << res.name << "'\n";
+            std::cerr << "Summit C++: No compute shader variable named '" << res.name << "'\n";
             continue;
         }
 
         switch (res.kind) {
-            case CRYSTAL_RESOURCE_KIND_UNIFORM_BUFFER:
+            case SUMMIT_RESOURCE_KIND_UNIFORM_BUFFER:
                 var->Set(reinterpret_cast<IBuffer*>(res.handle_ptr));
                 break;
-            case CRYSTAL_RESOURCE_KIND_STORAGE_BUFFER: {
+            case SUMMIT_RESOURCE_KIND_STORAGE_BUFFER: {
                 auto* buf = reinterpret_cast<IBuffer*>(res.handle_ptr);
                 var->Set(buf->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
                 break;
             }
-            case CRYSTAL_RESOURCE_KIND_STORAGE_BUFFER_RW: {
+            case SUMMIT_RESOURCE_KIND_STORAGE_BUFFER_RW: {
                 auto* buf = reinterpret_cast<IBuffer*>(res.handle_ptr);
                 var->Set(buf->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
                 break;
             }
-            case CRYSTAL_RESOURCE_KIND_TEXTURE: {
+            case SUMMIT_RESOURCE_KIND_TEXTURE: {
                 auto* tex = reinterpret_cast<ITexture*>(res.handle_ptr);
                 var->Set(tex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
                 break;
             }
-            case CRYSTAL_RESOURCE_KIND_SAMPLER:
+            case SUMMIT_RESOURCE_KIND_SAMPLER:
                 var->Set(reinterpret_cast<ISampler*>(res.handle_ptr));
                 break;
         }
@@ -750,8 +750,8 @@ void diligent_apply_compute_bindings(CrystalDiligentDeviceHandle handle, Crystal
     handle->context->CommitShaderResources(pipeline->srb, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 }
 
-void diligent_dispatch_compute(CrystalDiligentDeviceHandle handle, CrystalComputePipelineHandle pipeH, uint32_t groupsX, uint32_t groupsY, uint32_t groupsZ) {
-    auto pipeline = static_cast<CrystalDiligentComputePipeline*>(pipeH.ptr);
+void diligent_dispatch_compute(SummitDiligentDeviceHandle handle, SummitComputePipelineHandle pipeH, uint32_t groupsX, uint32_t groupsY, uint32_t groupsZ) {
+    auto pipeline = static_cast<SummitDiligentComputePipeline*>(pipeH.ptr);
 
     DispatchComputeAttribs attrs;
     attrs.ThreadGroupCountX = groupsX;
@@ -761,7 +761,7 @@ void diligent_dispatch_compute(CrystalDiligentDeviceHandle handle, CrystalComput
     handle->context->DispatchCompute(attrs);
 }
 
-void diligent_begin_pass(CrystalDiligentDeviceHandle handle, CrystalPassDesc desc) {
+void diligent_begin_pass(SummitDiligentDeviceHandle handle, SummitPassDesc desc) {
     ITextureView* pRTV = desc.has_color_target ? reinterpret_cast<ITextureView*>(desc.color_target.ptr) : nullptr;
     ITextureView* pDSV = desc.has_depth_target ? reinterpret_cast<ITextureView*>(desc.depth_target.ptr) : nullptr;
 
@@ -779,7 +779,7 @@ void diligent_begin_pass(CrystalDiligentDeviceHandle handle, CrystalPassDesc des
     handle->context->SetViewports(1, &VP, desc.width, desc.height);
 }
 
-CrystalSwapchainHandle diligent_create_swapchain(CrystalDiligentDeviceHandle handle, CrystalSwapchainDesc desc) {
+SummitSwapchainHandle diligent_create_swapchain(SummitDiligentDeviceHandle handle, SummitSwapchainDesc desc) {
     OS_WINDOW window{desc.surface_handle};
     
     ISwapChain* swapchain = nullptr;
@@ -788,16 +788,16 @@ CrystalSwapchainHandle diligent_create_swapchain(CrystalDiligentDeviceHandle han
     SCDesc.Width = desc.size[0];
     SCDesc.Height = desc.size[1];
     
-#ifdef CRYSTAL_D3D11_BACKEND
+#ifdef SUMMIT_D3D11_BACKEND
     auto factoryD3D11 = reinterpret_cast<IEngineFactoryD3D11*>(handle->factory);
     factoryD3D11->CreateSwapChainD3D11(handle->device, handle->context, SCDesc, FullScreenModeDesc{}, Window, &swapchain);
-#elif CRYSTAL_D3D12_BACKEND
+#elif SUMMIT_D3D12_BACKEND
     auto factoryD3D12 = reinterpret_cast<IEngineFactoryD3D12*>(handle->factory);
     factoryD3D12->CreateSwapChainD3D12(handle->device, handle->context, SCDesc, FullScreenModeDesc{}, Window, &swapchain);
-#elif CRYSTAL_OPENGL_BACKEND
+#elif SUMMIT_OPENGL_BACKEND
     std::cerr << "OpenGL support is temporarily broken, sorry\n";
     exit(EXIT_FAILURE);
-#elif CRYSTAL_VULKAN_BACKEND
+#elif SUMMIT_VULKAN_BACKEND
     auto factoryVk = reinterpret_cast<IEngineFactoryVk*>(handle->factory);
     factoryVk->CreateSwapChainVk(handle->device, handle->context, SCDesc, window, &swapchain);
 #endif
@@ -810,7 +810,7 @@ CrystalSwapchainHandle diligent_create_swapchain(CrystalDiligentDeviceHandle han
     return { .ptr = swapchain };
 }
 
-void diligent_resize_swapchain(CrystalDiligentDeviceHandle handle, CrystalSwapchainHandle swapH, uint32_t width, uint32_t height) {
+void diligent_resize_swapchain(SummitDiligentDeviceHandle handle, SummitSwapchainHandle swapH, uint32_t width, uint32_t height) {
     if (width == 0 || height == 0) return;
     handle->context->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE);
 
@@ -818,19 +818,19 @@ void diligent_resize_swapchain(CrystalDiligentDeviceHandle handle, CrystalSwapch
     swapchain->Resize(width, height);
 }
 
-void diligent_present_swapchain(CrystalDiligentDeviceHandle handle, CrystalSwapchainHandle swapH, uint32_t sync_interval) {
+void diligent_present_swapchain(SummitDiligentDeviceHandle handle, SummitSwapchainHandle swapH, uint32_t sync_interval) {
     auto swapchain = reinterpret_cast<ISwapChain*>(swapH.ptr);
     swapchain->Present(sync_interval);
 }
 
-CrystalRenderTargetHandle diligent_get_swapchain_backbuffer(CrystalDiligentDeviceHandle handle, CrystalSwapchainHandle swapH) {
+SummitRenderTargetHandle diligent_get_swapchain_backbuffer(SummitDiligentDeviceHandle handle, SummitSwapchainHandle swapH) {
     auto swapchain = reinterpret_cast<ISwapChain*>(swapH.ptr);
     auto backbuffer = swapchain->GetCurrentBackBufferRTV();
 
     return { .ptr = backbuffer };
 }
 
-void diligent_destroy_swapchain(CrystalDiligentDeviceHandle handle, CrystalSwapchainHandle swapH) {
+void diligent_destroy_swapchain(SummitDiligentDeviceHandle handle, SummitSwapchainHandle swapH) {
     handle->context->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE);
     handle->context->Flush();
     handle->context->WaitForIdle();
@@ -839,7 +839,7 @@ void diligent_destroy_swapchain(CrystalDiligentDeviceHandle handle, CrystalSwapc
     swapchain->Release();
 }
 
-CrystalRenderTargetHandle diligent_image_get_rtv(CrystalDiligentDeviceHandle handle, CrystalImageHandle img) {
+SummitRenderTargetHandle diligent_image_get_rtv(SummitDiligentDeviceHandle handle, SummitImageHandle img) {
     auto* tex = reinterpret_cast<ITexture*>(img.ptr);
     auto* view = tex->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET);
     if (!view) {
@@ -850,7 +850,7 @@ CrystalRenderTargetHandle diligent_image_get_rtv(CrystalDiligentDeviceHandle han
     return { .ptr = view };
 }
 
-CrystalDepthTargetHandle diligent_image_get_dsv(CrystalDiligentDeviceHandle handle, CrystalImageHandle img) {
+SummitDepthTargetHandle diligent_image_get_dsv(SummitDiligentDeviceHandle handle, SummitImageHandle img) {
     auto* tex = reinterpret_cast<ITexture*>(img.ptr);
     auto* view = tex->GetDefaultView(TEXTURE_VIEW_DEPTH_STENCIL);
     if (!view) {
@@ -861,14 +861,14 @@ CrystalDepthTargetHandle diligent_image_get_dsv(CrystalDiligentDeviceHandle hand
     return { .ptr = view };
 }
 
-CrystalBackend diligent_query_backend() {
-#ifdef CRYSTAL_D3D11_BACKEND
-    return CRYSTAL_BACKEND_DIRECT3D11;
-#elif CRYSTAL_D3D12_BACKEND
-    return CRYSTAL_BACKEND_DIRECT3D12;
-#elif CRYSTAL_OPENGL_BACKEND
-    return CRYSTAL_BACKEND_OPENGL;
-#elif CRYSTAL_VULKAN_BACKEND
-    return CRYSTAL_BACKEND_VULKAN;
+SummitBackend diligent_query_backend() {
+#ifdef SUMMIT_D3D11_BACKEND
+    return SUMMIT_BACKEND_DIRECT3D11;
+#elif SUMMIT_D3D12_BACKEND
+    return SUMMIT_BACKEND_DIRECT3D12;
+#elif SUMMIT_OPENGL_BACKEND
+    return SUMMIT_BACKEND_OPENGL;
+#elif SUMMIT_VULKAN_BACKEND
+    return SUMMIT_BACKEND_VULKAN;
 #endif
 }

@@ -5,7 +5,7 @@ const desc = @import("../desc.zig");
 const types = @import("../types.zig");
 const c = @import("diligent");
 
-fn buildResourceDescs(buf: []c.CrystalResourceDesc, resources: []const desc.ResourceDesc) []c.CrystalResourceDesc {
+fn buildResourceDescs(buf: []c.SummitResourceDesc, resources: []const desc.ResourceDesc) []c.SummitResourceDesc {
     for (resources, 0..) |r, i| {
         buf[i] = .{
             .name = r.name.ptr,
@@ -17,7 +17,7 @@ fn buildResourceDescs(buf: []c.CrystalResourceDesc, resources: []const desc.Reso
     return buf[0..resources.len];
 }
 
-fn buildBoundResources(buf: []c.CrystalBoundResource, resources: []const desc.BoundResource) []c.CrystalBoundResource {
+fn buildBoundResources(buf: []c.SummitBoundResource, resources: []const desc.BoundResource) []c.SummitBoundResource {
     for (resources, 0..) |r, i| {
         const handle_ptr = switch (r.handle) { inline else => |h| h.ptr };
 
@@ -32,7 +32,7 @@ fn buildBoundResources(buf: []c.CrystalBoundResource, resources: []const desc.Bo
 }
 
 const DiligentBackend = @This();
-handle: c.CrystalDiligentDeviceHandle = undefined,
+handle: c.SummitDiligentDeviceHandle = undefined,
 
 pub fn init() DiligentBackend {
     return .{
@@ -97,7 +97,7 @@ pub fn destroyImage(self: DiligentBackend, h: types.ImageHandle) void {
 
 pub fn createPipeline(self: DiligentBackend, d: desc.PipelineDesc) types.PipelineHandle { 
     std.debug.assert(d.resources.len <= 16);
-    var resource_buf: [16]c.CrystalResourceDesc = undefined;
+    var resource_buf: [16]c.SummitResourceDesc = undefined;
     const resources = buildResourceDescs(&resource_buf, d.resources);
 
     const pipe_h = c.diligent_create_pipeline(self.handle, .{
@@ -141,7 +141,7 @@ pub fn destroyShader(self: DiligentBackend, h: types.ShaderHandle) void {
 
 pub fn createComputePipeline(self: DiligentBackend, d: desc.ComputePipelineDesc) types.ComputePipelineHandle {
     std.debug.assert(d.resources.len <= 16);
-    var resource_buf: [16]c.CrystalResourceDesc = undefined;
+    var resource_buf: [16]c.SummitResourceDesc = undefined;
     const resources = buildResourceDescs(&resource_buf, d.resources);
 
     const pipe_h = c.diligent_create_compute_pipeline(self.handle, .{
@@ -169,7 +169,7 @@ pub fn dispatchCompute(self: DiligentBackend, h: types.ComputePipelineHandle, gr
 pub fn createShader(self: DiligentBackend, d: desc.ShaderDesc) types.ShaderHandle {
     // might need to bump this up in the future
     std.debug.assert(d.stages.len <= 8);
-    var stages: [8]c.CrystalShaderStageDesc = undefined;
+    var stages: [8]c.SummitShaderStageDesc = undefined;
     for (d.stages, 0..) |stage, i| {
         stages[i] = .{
             .name = stage.name,
@@ -214,13 +214,13 @@ pub fn drawPipeline(self: DiligentBackend, h: types.PipelineHandle, base: u32, c
 }
 
 pub fn applyPipelineBindings(self: DiligentBackend, h: types.PipelineHandle, d: desc.Bindings) void {
-    var vertex_buffers: [4]c.CrystalBufferHandle = undefined;
+    var vertex_buffers: [4]c.SummitBufferHandle = undefined;
     for (d.vertex_buffers, 0..) |vb, i| {
         vertex_buffers[i] = .{ .ptr = if (vb) |handle| handle.ptr else @ptrFromInt(0) };
     }
 
     std.debug.assert(d.resources.len <= 16);
-    var resource_buf: [16]c.CrystalBoundResource = undefined;
+    var resource_buf: [16]c.SummitBoundResource = undefined;
     const resources = buildBoundResources(&resource_buf, d.resources);
 
     c.diligent_pipeline_apply_bindings(self.handle, .{ .ptr = h.ptr }, .{
@@ -233,7 +233,7 @@ pub fn applyPipelineBindings(self: DiligentBackend, h: types.PipelineHandle, d: 
 
 pub fn applyComputeBindings(self: DiligentBackend, h: types.ComputePipelineHandle, d: desc.Bindings) void {
     std.debug.assert(d.resources.len <= 16);
-    var resource_buf: [16]c.CrystalBoundResource = undefined;
+    var resource_buf: [16]c.SummitBoundResource = undefined;
     const resources = buildBoundResources(&resource_buf, d.resources);
 
     c.diligent_apply_compute_bindings(self.handle, .{ .ptr = h.ptr }, .{
@@ -286,10 +286,10 @@ pub fn imageGetDsv(self: DiligentBackend, h: types.ImageHandle) types.DepthTarge
 
 pub fn queryBackend(_: DiligentBackend) desc.Backend {
     return switch (c.diligent_query_backend()) {
-        c.CRYSTAL_BACKEND_OPENGL => .opengl,
-        c.CRYSTAL_BACKEND_DIRECT3D11 => .direct3d11,
-        c.CRYSTAL_BACKEND_DIRECT3D12 => .direct3d12,
-        c.CRYSTAL_BACKEND_VULKAN => .vulkan,
+        c.SUMMIT_BACKEND_OPENGL => .opengl,
+        c.SUMMIT_BACKEND_DIRECT3D11 => .direct3d11,
+        c.SUMMIT_BACKEND_DIRECT3D12 => .direct3d12,
+        c.SUMMIT_BACKEND_VULKAN => .vulkan,
         else => unreachable
     };
 }

@@ -13,7 +13,7 @@ pub fn build(b: *std.Build) void {
     const check_only = b.option(bool, "check_only", "Only build the `check` step (skips engine build)") orelse false;
 
     // For ZLS
-    const check = b.step("check", "Check if crystal compiles");
+    const check = b.step("check", "Check if summit compiles");
 
     if (check_only) {
         const dep_engine_check = b.dependency("engine", .{
@@ -34,7 +34,7 @@ pub fn build(b: *std.Build) void {
             .link_libc = true,
         });
 
-        const exe_check = b.addExecutable(.{ .name = "crystal", .root_module = exe_check_mod });
+        const exe_check = b.addExecutable(.{ .name = "summit", .root_module = exe_check_mod });
         check.dependOn(&exe_check.step);
         return;
     }
@@ -56,12 +56,12 @@ pub fn build(b: *std.Build) void {
     exe_mod.linkLibrary(dep_engine.artifact("engine"));
 
     const exe = b.addExecutable(.{
-        .name = "crystal",
+        .name = "summit",
         .root_module = exe_mod
     });
     b.installArtifact(exe);
 
-    const exe_check = b.addExecutable(.{ .name = "crystal", .root_module = exe_mod });
+    const exe_check = b.addExecutable(.{ .name = "summit", .root_module = exe_mod });
     check.dependOn(&exe_check.step);
 
     if (target.result.os.tag == .macos and sdk_path != null) {
@@ -87,7 +87,7 @@ pub fn build(b: *std.Build) void {
     run_docgen.addArg("--out");
     run_docgen.addDirectoryArg(b.path("docs/api"));
 
-    const docs_step = b.step("docs", "Regenerate the Crystal Lua API docs from source.");
+    const docs_step = b.step("docs", "Regenerate the Summit Lua API docs from source.");
     docs_step.dependOn(&run_docgen.step);
 
     // invoked when running `zig build`

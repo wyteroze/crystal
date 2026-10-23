@@ -8,10 +8,10 @@ pub const Backend = enum {
 
     pub fn toCFlag(self: Backend) []const u8 {
         return switch (self) {
-            .gl => "CRYSTAL_OPENGL_BACKEND",
-            .vulkan => "CRYSTAL_VULKAN_BACKEND",
-            .d3d11 => "CRYSTAL_D3D11_BACKEND",
-            .d3d12 => "CRYSTAL_D3D12_BACKEND"
+            .gl => "SUMMIT_OPENGL_BACKEND",
+            .vulkan => "SUMMIT_VULKAN_BACKEND",
+            .d3d11 => "SUMMIT_D3D11_BACKEND",
+            .d3d12 => "SUMMIT_D3D12_BACKEND"
         };
     }
 };

@@ -11,9 +11,9 @@ pub const TargetKind = enum {
 
     fn toC(self: TargetKind) c_uint {
         return switch (self) {
-            .hlsl => c.CRYSTAL_SLANG_TARGET_HLSL,
-            .glsl => c.CRYSTAL_SLANG_TARGET_GLSL,
-            .spirv => c.CRYSTAL_SLANG_TARGET_SPIRV
+            .hlsl => c.SUMMIT_SLANG_TARGET_HLSL,
+            .glsl => c.SUMMIT_SLANG_TARGET_GLSL,
+            .spirv => c.SUMMIT_SLANG_TARGET_SPIRV
         };
     }
 
@@ -33,16 +33,16 @@ pub const StageKind = enum {
 
     fn toC(self: StageKind) c_uint {
         return switch (self) {
-            .vertex => c.CRYSTAL_SLANG_STAGE_VERTEX,
-            .fragment => c.CRYSTAL_SLANG_STAGE_FRAGMENT,
-            .compute => c.CRYSTAL_SLANG_STAGE_COMPUTE
+            .vertex => c.SUMMIT_SLANG_STAGE_VERTEX,
+            .fragment => c.SUMMIT_SLANG_STAGE_FRAGMENT,
+            .compute => c.SUMMIT_SLANG_STAGE_COMPUTE
         };
     }
 };
 
 pub const CompileResult = struct {
     code: []const u8,
-    raw: c.CrystalSlangCompileResult,
+    raw: c.SummitSlangCompileResult,
 
     pub fn deinit(self: *CompileResult) void {
         c.slang_free_result(self.raw);
@@ -52,7 +52,7 @@ pub const CompileResult = struct {
 pub const ModuleLookupFn = *const fn (name: []const u8) ?[:0]const u8;
 
 pub const Compiler = struct {
-    handle: c.CrystalSlangCompilerHandle,
+    handle: c.SummitSlangCompilerHandle,
     vfs: ?*anyopaque = null,
     lookup_fn: ?ModuleLookupFn = null,
 

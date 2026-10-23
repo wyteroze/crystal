@@ -1,25 +1,25 @@
 <p align="center">
-  <img src="assets/icons/CrystalLogo.svg" alt="Crystal Engine logo" width="200"><br><br>
-  <img src="assets/headers/CrystalHeader.svg" alt="crystal engine" width="350"><br>
-  <img src="assets/headers/CrystalOneLiner.svg" alt="A simple, fast game engine that scripts in Lua and never takes control out of your hands." width="600"><br><br>
+  <img src="assets/icons/SummitLogo.svg" alt="Summit Engine logo" width="200"><br><br>
+  <img src="assets/headers/SummitHeader.svg" alt="summit engine" width="350"><br>
+  <img src="assets/headers/SummitOneLiner.svg" alt="A simple, fast game engine that scripts in Lua and never takes control out of your hands." width="600"><br><br>
   <img src="assets/badges/version.svg" alt="Version">&ensp;<img src="assets/badges/zig.svg" alt="Zig version">
 </p>
 
-> <img src="assets/headers/crystalWarning.svg" alt="Warning" width="138"><br>
-> Crystal is still in early development. This means APIs are unstable, and breaking changes occur often. Features like physics and an editor also don't exist yet. See the Roadmap below.
+> <img src="assets/headers/summitWarning.svg" alt="Warning" width="138"><br>
+> Summit is still in early development. This means APIs are unstable, and breaking changes occur often. Features like physics and an editor also don't exist yet. See the Roadmap below.
 
-> <img src="assets/headers/crystalNote.svg" alt="Note" width="99"><br>
-> This fork of the repository (/rewrite) is for the revamp of Crystal. Some major changes include moving to hardware-rendering, a paradigm shift to ECS, a more pragmatic Lua API, support for common filetypes, and more.
+> <img src="assets/headers/summitNote.svg" alt="Note" width="99"><br>
+> This fork of the repository (/rewrite) is for the revamp of Summit. Some major changes include moving to hardware-rendering, a paradigm shift to ECS, a more pragmatic Lua API, support for common filetypes, and more.
 
-<br><img src="assets/headers/crystalAbout.svg" alt="About" width="114">
+<br><img src="assets/headers/summitAbout.svg" alt="About" width="114">
 
 ---
 
-Crystal is a game engine written from scratch in Zig, with Lua as its scripting layer. It renders everything through its own custom software rasterizer, so there's no GPU between you and the engine; only SDL for windowing and input, and Lua for scripting.
+Summit is a game engine written from scratch in Zig, with Lua as its scripting layer. It renders everything through its own custom software rasterizer, so there's no GPU between you and the engine; only SDL for windowing and input, and Lua for scripting.
 
-Crystal's goal is to be a game engine that's simple and understandable, but still fast and powerful enough to make actual games in.
+Summit's goal is to be a game engine that's simple and understandable, but still fast and powerful enough to make actual games in.
 
-<br><img src="assets/headers/crystalFeatures.svg" alt="Features" width="153">
+<br><img src="assets/headers/summitFeatures.svg" alt="Features" width="153">
 
 ---
 
@@ -30,25 +30,25 @@ Crystal's goal is to be a game engine that's simple and understandable, but stil
 - Widget system with custom bitmap font rendering
 - Built-in support for .obj models, .bmp images, and .toml data/configs
 
-<br><img src="assets/headers/crystalRoadmap.svg" alt="Roadmap" width="147">
+<br><img src="assets/headers/summitRoadmap.svg" alt="Roadmap" width="147">
 
 ---
 
-Crystal is missing some important things before it's ready for real use:
+Summit is missing some important things before it's ready for real use:
 1. A physics engine
 2. A visual editor for building and playtesting games, importing assets, and more
 3. General quality-of-life and polish work across the board as systems expand
 
-<br><img src="assets/headers/crystalGettingStarted.svg" alt="Getting started" width="240">
+<br><img src="assets/headers/summitGettingStarted.svg" alt="Getting started" width="240">
 
 ---
 
-> <img src="assets/headers/crystalNote.svg" alt="Note" width="99"><br>
+> <img src="assets/headers/summitNote.svg" alt="Note" width="99"><br>
 > Currently only built and tested on macOS. Other platforms may work but aren't verified yet.
 
 1. Clone the repo
 ```sh
-git clone https://github.com/wyteroze/crystal.git
+git clone https://github.com/wyteroze/summit.git
 ```
 2. Install [SDL3](https://github.com/libsdl-org/SDL/releases) for your system
 3. Build and run the project
@@ -56,11 +56,11 @@ git clone https://github.com/wyteroze/crystal.git
 zig build run
 ```
 
-<br><img src="assets/headers/crystalExample.svg" alt="Example" width="138">
+<br><img src="assets/headers/summitExample.svg" alt="Example" width="138">
 
 ---
 
-This is what scripting a scene looks like in Crystal:
+This is what scripting a scene looks like in Summit:
 
 ```lua
 local camera = Object.camera()
@@ -82,12 +82,12 @@ window:OnUpdate(function(dt)
 end)
 ```
 
-<br><img src="assets/headers/crystalLicense.svg" alt="License" width="126">
+<br><img src="assets/headers/summitLicense.svg" alt="License" width="126">
 
 ---
 Licensed under the [Apache 2.0 License](LICENSE)
 
-<br><img src="assets/headers/crystalCredits.svg" alt="Credits" width="129">
+<br><img src="assets/headers/summitCredits.svg" alt="Credits" width="129">
 
 ---
 
