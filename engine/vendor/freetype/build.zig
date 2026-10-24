@@ -21,9 +21,9 @@ pub fn build(b: *std.Build) !void {
 
     const cmake_configure = b.addSystemCommand(&.{ "cmake" });
     cmake_configure.addArg("-S");
-    cmake_configure.addDirectoryArg(src_path);
+    cmake_configure.addDirectoryArg2(src_path, .{ .make_absolute = true });
     cmake_configure.addArg("-B");
-    cmake_configure.addDirectoryArg(build_path);
+    cmake_configure.addDirectoryArg2(build_path, .{ .make_absolute = true });
     cmake_configure.addArgs(&.{ "-G", "Ninja" });
     cmake_configure.setCwd(src_path);
     const install_out = cmake_configure.addPrefixedOutputDirectoryArg("-DCMAKE_INSTALL_PREFIX=", "install");
