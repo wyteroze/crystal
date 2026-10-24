@@ -49,6 +49,7 @@
             "**/zig-pkg": true,
             "**/*.code-search": true
         },
-        "stylua.targetReleaseVersion": "latest"
+        "stylua.targetReleaseVersion": "latest",
+        "git.ignoreLimitWarning": true
 	}
 }
